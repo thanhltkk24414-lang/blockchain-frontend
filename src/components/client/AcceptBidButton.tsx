@@ -65,10 +65,11 @@ export function AcceptBidButton({ bid, onchainJobId, jobStatus, onAccepted }: Ac
         onClick={handleAccept}
         disabled={loading || txStatus === 'pending'}
       >
-        {loading || txStatus === 'pending' ? 'Accepting…' : 'Accept & assign on-chain'}
+        {loading || txStatus === 'pending' ? 'Accepting…' : 'Accept bid'}
       </button>
       <p className="muted phase-note">
-        Gán freelancer on-chain qua backend (INDEXER wallet) — không cần ký MetaMask.
+        Chấp nhận trong DB — gán freelancer + nạp escrow on-chain ở bước Fund escrow (MetaMask, ví
+        client on-chain).
       </p>
       {error && <p className="error">{error}</p>}
       <TxStatusModal

@@ -1,9 +1,11 @@
 import { useCallback, useState } from 'react';
 import { useAccount, useWriteContract } from 'wagmi';
 import { waitForTransactionReceipt } from 'wagmi/actions';
+import type { Abi } from 'viem';
 import { wagmiConfig } from '@/config/wagmi';
 import { contracts } from '@/lib/contracts/config';
 import { toUsdcUnits } from '@/lib/utils/usdc';
+import { executeContractWrite, decodeContractError } from '@/lib/utils/contractWrite';
 import type { TxStatus } from '@/components/shared/TxStatusModal';
 
 /** Default demo mint — enough for several escrow deposits. */
@@ -32,10 +34,12 @@ export function useMockUsdcMint() {
       setTxStatus('pending');
 
       try {
-        const hash = await writeContractAsync({
-          ...contracts.mockUsdc,
+        const hash = await executeContractWrite(writeContractAsync, {
+          address: contracts.mockUsdc.address,
+          abi: contracts.mockUsdc.abi as Abi,
           functionName: 'mint',
           args: [address, toUsdcUnits(amountUsdc)],
+          account: address,
         });
         setTxHash(hash);
         await waitForTransactionReceipt(wagmiConfig, { hash });
@@ -43,7 +47,11 @@ export function useMockUsdcMint() {
         return hash;
       } catch (err) {
         setTxStatus('failed');
-        setTxError(err instanceof Error ? err.message : 'Mint failed');
+        setTxError(
+          err instanceof Error
+            ? err.message
+            : decodeContractError(err, contracts.mockUsdc.abi as Abi),
+        );
         throw err;
       } finally {
         setMinting(false);

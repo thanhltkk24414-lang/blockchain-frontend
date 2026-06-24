@@ -10,7 +10,22 @@ Hướng dẫn ngắn cho demo Fapex trên Sepolia testnet.
 | **Client on-chain** | Ví thực sự gọi `createJob` trên JobRegistry — hiện là **INDEXER_PRIVATE_KEY** trên backend Railway. |
 | **Freelancer** | Ví gửi proposal / nhận tiền sau khi hoàn thành. |
 
-Nếu SIWE user ≠ client on-chain, **accept bid** vẫn OK (backend relay `assignFreelancer`), nhưng **nạp escrow** phải dùng ví client on-chain trong MetaMask.
+Nếu SIWE user ≠ client on-chain, **accept bid** chỉ cập nhật DB; **nạp escrow** phải dùng ví client on-chain trong MetaMask (`depositEscrow` vừa gán freelancer vừa khóa tiền).
+
+## Circle USDC vs MockUSDC (quan trọng)
+
+| Token | Địa chỉ Sepolia (ví dụ) | Dùng với Fapex? |
+|-------|-------------------------|-----------------|
+| **MockUSDC (Fapex)** | `0x2293193Eaa5CE5253d5e081046a06dB077f26f8e` | **Có** — EscrowVault đã deploy cố định token này |
+| **USDC Circle (testnet)** | `0x1c7D4B196Cb581C9057cb0A81F2F4b8D5F4b8D5F` (khác theo mạng) | **Không** — ERC20 khác, contract không nhận |
+
+**Tóm lại:** Bạn **không thể** thay MockUSDC bằng USDC Circle trên deployment hiện tại mà không **deploy lại** hệ thống (hoặc đổi token qua admin — không có trên bản demo). Demo Sepolia dùng **mint MockUSDC** trong UI. Trên **mainnet production**, có thể deploy bản mới trỏ vào USDC thật (Circle) — đó là bước triển khai riêng, không phải cấu hình frontend.
+
+## Luồng accept bid + escrow (đã sửa)
+
+1. **Accept bid** → chỉ DB (freelancer được chọn).
+2. **Fund escrow** (`depositEscrow`) → job on-chain phải còn **OPEN**; hàm này **gán freelancer + khóa MockUSDC**.
+3. **Không** gọi `assignFreelancer` trước `depositEscrow` — nếu job đã ASSIGNED on-chain mà chưa nạp tiền, escrow sẽ revert `WrongStatus` (ví dụ job #3 cũ). Tạo job mới để demo.
 
 ## Sepolia ETH ≠ MockUSDC (quan trọng)
 
@@ -73,8 +88,8 @@ Tiền nằm trong escrow cho đến khi client approve bàn giao hoặc hết t
 1. Đăng nhập SIWE (`/profile`) — Sepolia.
 2. Tạo job (`/client`) — backend IPFS + `createJob` on-chain.
 3. Freelancer bid (`/jobs/:id`).
-4. Client **Accept & assign** — backend relay, không cần MetaMask cho bước này.
-5. Chuyển MetaMask sang **ví client on-chain**, **mint MockUSDC** (nút UI hoặc Etherscan), rồi **Fund escrow**.
+4. Client **Accept bid** — chỉ DB, không cần MetaMask.
+5. Chuyển MetaMask sang **ví client on-chain**, **mint MockUSDC** (nút UI hoặc Etherscan), rồi **Fund escrow** (`depositEscrow` gán freelancer on-chain).
 6. Freelancer `startWork` → `submitWork` → client `approveAndRelease`.
 
 ## Job mẫu
