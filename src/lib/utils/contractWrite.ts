@@ -10,13 +10,15 @@ import { withGasLimit, type GasEstimateInput } from '@/lib/utils/contractGas';
 
 const REVERT_HINTS: Record<string, string> = {
   WrongStatus:
-    'Trạng thái job on-chain không hợp lệ. Nạp escrow cần job OPEN; nếu đã ASSIGNED mà chưa nạp tiền, tạo job mới.',
+    'Trạng thái job on-chain không hợp lệ. depositEscrow cần job OPEN; nếu đã ASSIGNED (thường do gọi assignFreelancer / Retry assign trước đó), tạo job mới.',
   OnlyClient: 'Chỉ ví client on-chain (người tạo job trên JobRegistry) mới gọi được hàm này.',
   OnlyFreelancer: 'Chỉ freelancer được gán mới gọi được hàm này.',
   Unauthorized: 'Ví không có quyền thực hiện giao dịch này.',
   ContractPaused: 'Hợp đồng đang tạm dừng (emergency pause).',
-  TransferFailed: 'Chuyển USDC thất bại — kiểm tra số dư MockUSDC và allowance.',
+  TransferFailed:
+    'Chuyển USDC thất bại — kiểm tra số dư MockUSDC và allowance (cần đủ giá job on-chain + 3% phí).',
   LowReputationTier: 'Reputation tier không đủ để thực hiện thao tác này.',
+  JobNotOpen: 'Job không còn OPEN — không thể gán freelancer qua depositEscrow.',
 };
 
 export function decodeContractError(err: unknown, _abi?: Abi): string {

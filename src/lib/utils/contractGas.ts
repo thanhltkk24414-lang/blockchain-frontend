@@ -5,6 +5,13 @@ import { wagmiConfig } from '@/config/wagmi';
 const GAS_BUFFER_NUM = 12n;
 const GAS_BUFFER_DEN = 10n;
 
+/** Minimum gas for heavy escrow/registry writes (avoid under-estimate reverts). */
+const GAS_MIN: Record<string, bigint> = {
+  depositEscrow: 200_000n,
+  approveAndRelease: 200_000n,
+  raiseDispute: 200_000n,
+};
+
 /** Per-function caps — avoids Infura "gas limit too high" on failed estimates. */
 const GAS_CAPS: Record<string, bigint> = {
   approve: 80_000n,
@@ -51,7 +58,9 @@ export async function withGasLimit(params: GasEstimateInput): Promise<{ gas: big
       account,
     } as Parameters<typeof estimateGas>[1]);
     const buffered = (estimated * GAS_BUFFER_NUM) / GAS_BUFFER_DEN;
-    const gas = buffered > cap ? cap : buffered;
+    const min = GAS_MIN[params.functionName] ?? 0n;
+    let gas = buffered > cap ? cap : buffered;
+    if (gas < min) gas = min > cap ? cap : min;
     return { gas: gas > 0n ? gas : cap };
   } catch {
     return { gas: cap };

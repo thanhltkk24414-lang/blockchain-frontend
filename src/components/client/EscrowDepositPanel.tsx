@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { isAddress, zeroAddress } from 'viem';
 import type { Bid, Job } from '@/lib/api';
-import { retryAssignFreelancer } from '@/lib/api';
 import { useEscrowDeposit } from '@/hooks/useEscrowDeposit';
+import { computeTotalDeposit, fromUsdcUnits } from '@/lib/utils/usdc';
 import { DEMO_MINT_USDC, useMockUsdcMint } from '@/hooks/useMockUsdcMint';
 import { useUsdcBalance } from '@/hooks/contracts/useContracts';
 import { TxStatusModal } from '@/components/shared/TxStatusModal';
@@ -77,12 +77,14 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
   const [freelancerInput, setFreelancerInput] = useState(acceptedFreelancer ?? '');
   const [localError, setLocalError] = useState<string | null>(null);
   const [depositing, setDepositing] = useState(false);
-  const [retryingAssign, setRetryingAssign] = useState(false);
   const [onchainStatus, setOnchainStatus] = useState<number | null>(null);
   const [onchainFreelancer, setOnchainFreelancer] = useState<string | null>(null);
   const [onchainBlocker, setOnchainBlocker] = useState<string | null>(null);
 
-  const { deposit, readOnChainJob, txStatus, txHash, txLabel, txError, resetTx, totalDepositUsdc } =
+  const [onchainContractValueUsdc, setOnchainContractValueUsdc] = useState<number | null>(null);
+  const [onchainTotalDepositUsdc, setOnchainTotalDepositUsdc] = useState<number | null>(null);
+
+  const { deposit, readOnChainJob, txStatus, txHash, txLabel, txError, resetTx, escrowTotalFromOnChain } =
     useEscrowDeposit();
   const {
     mint,
@@ -105,6 +107,11 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
           isNonZeroAddress(onChainJob.freelancer) ? onChainJob.freelancer : null,
         );
         setOnchainBlocker(explainDepositBlocker(onChainJob));
+        const onChainCv = fromUsdcUnits(onChainJob.contractValue);
+        setOnchainContractValueUsdc(onChainCv);
+        setOnchainTotalDepositUsdc(
+          fromUsdcUnits(escrowTotalFromOnChain(onChainJob.contractValue)),
+        );
         if (!acceptedFreelancer && isNonZeroAddress(onChainJob.freelancer)) {
           setFreelancerInput(onChainJob.freelancer);
         }
@@ -113,7 +120,7 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
     return () => {
       cancelled = true;
     };
-  }, [acceptedFreelancer, job.onchainJobId, readOnChainJob]);
+  }, [acceptedFreelancer, escrowTotalFromOnChain, job.onchainJobId, readOnChainJob]);
 
   useEffect(() => {
     if (acceptedFreelancer) {
@@ -126,7 +133,12 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
   }
 
   const contractValue = job.contractValue ?? 0;
-  const totalDeposit = job.totalDeposit ?? totalDepositUsdc(contractValue);
+  const totalDeposit =
+    onchainTotalDepositUsdc ?? job.totalDeposit ?? computeTotalDeposit(contractValue);
+  const onChainValueMismatch =
+    onchainContractValueUsdc != null &&
+    contractValue > 0 &&
+    Math.abs(onchainContractValueUsdc - contractValue) > 0.01;
   const balanceUsdc =
     balance != null ? Number(balance) / 1_000_000 : null;
   const insufficientUsdc =
@@ -146,34 +158,6 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
       await refetchBalance();
     } catch {
       // tx state handled in hook
-    }
-  }
-
-  async function handleRetryAssign() {
-    setLocalError(null);
-    const freelancer = acceptedFreelancer ?? freelancerInput.trim();
-    if (!isAddress(freelancer) || freelancer.toLowerCase() === zeroAddress) {
-      setLocalError('Cần địa chỉ freelancer hợp lệ để retry assign.');
-      return;
-    }
-    setRetryingAssign(true);
-    try {
-      const res = await retryAssignFreelancer(job._id, freelancer);
-      if (!res.success) {
-        throw new Error(res.error || 'Retry assign failed');
-      }
-      if (job.onchainJobId) {
-        const onChainJob = await readOnChainJob(job.onchainJobId);
-        setOnchainStatus(onChainJob.status);
-        setOnchainFreelancer(
-          isNonZeroAddress(onChainJob.freelancer) ? onChainJob.freelancer : null,
-        );
-        setOnchainBlocker(explainDepositBlocker(onChainJob));
-      }
-    } catch (err) {
-      setLocalError(err instanceof Error ? err.message : 'Retry assign failed');
-    } finally {
-      setRetryingAssign(false);
     }
   }
 
@@ -214,7 +198,6 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
       await deposit({
         onchainJobId: job.onchainJobId,
         freelancerAddress: freelancer as `0x${string}`,
-        contractValue,
       });
       if (job.onchainJobId) {
         const onChainJob = await readOnChainJob(job.onchainJobId);
@@ -242,7 +225,8 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
 
       {onchainStatus != null && (
         <p className="muted phase-note">
-          Trạng thái on-chain JobRegistry: <strong>{onchainStatusLabel(onchainStatus)}</strong>
+          On-chain job id: <strong>{job.onchainJobId}</strong> · JobRegistry:{' '}
+          <strong>{onchainStatusLabel(onchainStatus)}</strong>
           {onchainFreelancer && (
             <>
               {' '}
@@ -252,6 +236,14 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
               </code>
             </>
           )}
+        </p>
+      )}
+
+      {onChainValueMismatch && (
+        <p className="error">
+          Giá on-chain ({onchainContractValueUsdc} USDC) khác DB ({contractValue} USDC). Job này
+          được tạo trước khi sửa đơn vị USDC — escrow sẽ khóa số tiền on-chain thực tế (
+          {onchainTotalDepositUsdc ?? '—'} USDC). Tạo job mới để demo đúng số tiền.
         </p>
       )}
 
@@ -269,17 +261,10 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
       {onchainStatus === ONCHAIN_JOB_STATUS.OPEN && !acceptedFreelancer && (
         <div className="escrow-mint-hint">
           <p className="muted">
-            Chưa có địa chỉ freelancer từ bid đã accept. Nếu assign relay thất bại trước đây, có
-            thể thử lại (chỉ khi job vẫn OPEN):
+            Chưa có địa chỉ freelancer từ bid đã accept. <strong>Không</strong> dùng Retry assign —
+            gọi <code>assignFreelancer</code> sẽ chuyển job sang ASSIGNED và chặn{' '}
+            <code>depositEscrow</code>. Nhập địa chỉ freelancer và bấm Approve &amp; deposit.
           </p>
-          <button
-            className="btn outline"
-            type="button"
-            onClick={handleRetryAssign}
-            disabled={retryingAssign}
-          >
-            {retryingAssign ? 'Retrying…' : 'Retry assign on-chain'}
-          </button>
         </div>
       )}
 
