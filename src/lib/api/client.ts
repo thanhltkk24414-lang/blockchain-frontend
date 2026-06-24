@@ -1,6 +1,13 @@
 import { API_URL } from '@/config/env';
 import { getStoredToken } from '@/lib/auth';
-import type { Job, JobsResponse, UserProfile } from './types';
+import type {
+  CreateJobResponse,
+  Job,
+  JobDetailResponse,
+  JobsResponse,
+  UserProfile,
+} from './types';
+import type { CreateJobPayload } from '@/lib/validation/jobForm';
 
 function authHeaders(): HeadersInit {
   const token = getStoredToken();
@@ -42,7 +49,16 @@ export async function searchJobs(q: string, category?: string) {
 
 export async function fetchJobById(id: string) {
   const res = await fetch(`${API_URL}/api/jobs/${id}`);
-  return parseJson<{ success: boolean; job: Job }>(res);
+  return parseJson<JobDetailResponse>(res);
+}
+
+export async function createJob(payload: CreateJobPayload) {
+  const res = await fetch(`${API_URL}/api/jobs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  return parseJson<CreateJobResponse>(res);
 }
 
 export async function fetchJobsByClient(address: string, status?: string) {

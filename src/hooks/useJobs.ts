@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { fetchJobs, type Job } from '@/lib/api';
 
 export function useJobs() {
@@ -6,31 +6,34 @@ export function useJobs() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const refetch = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetchJobs();
+      if (res.success) {
+        setJobs(res.jobs || []);
+      } else {
+        setError(res.error || 'Failed to load jobs');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load jobs');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
-    fetchJobs()
-      .then((res) => {
-        if (cancelled) return;
-        if (res.success) {
-          setJobs(res.jobs || []);
-        } else {
-          setError(res.error || 'Failed to load jobs');
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load jobs');
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    refetch().then(() => {
+      if (cancelled) return;
+    });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refetch]);
 
-  return { jobs, loading, error };
+  return { jobs, loading, error, refetch };
 }

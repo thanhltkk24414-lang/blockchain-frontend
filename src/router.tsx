@@ -6,6 +6,7 @@ import { ClientDashboardPage } from '@/pages/ClientDashboardPage';
 import { FreelancerDashboardPage } from '@/pages/FreelancerDashboardPage';
 import { ArbitratorDashboardPage } from '@/pages/ArbitratorDashboardPage';
 import { ProfilePage } from '@/pages/ProfilePage';
+import { JobDetailPage } from '@/pages/JobDetailPage';
 
 export const router = createBrowserRouter([
   {
@@ -14,6 +15,8 @@ export const router = createBrowserRouter([
       { path: '/', element: <LandingPage /> },
       { path: '/browse', element: <BrowsePage /> },
       { path: '/client', element: <ClientDashboardPage /> },
+      { path: '/client/jobs/:id', element: <JobDetailPage /> },
+      { path: '/jobs/:id', element: <JobDetailPage /> },
       { path: '/freelancer', element: <FreelancerDashboardPage /> },
       { path: '/arbitrator', element: <ArbitratorDashboardPage /> },
       { path: '/profile', element: <ProfilePage /> },

@@ -13,10 +13,47 @@ export interface Job {
   status: string;
   contractValue?: number;
   onchainJobId?: number;
+  metadataCID?: string;
+  clientAddress?: string;
+  freelancerAddress?: string;
+  duration?: number;
+  deadline?: number;
+  totalDeposit?: number;
+  platformFee?: number;
+  deliverables?: string;
+  acceptanceCriteria?: string;
   createdAt?: string;
   skills?: string[];
   client?: JobClient | string;
   freelancer?: JobClient | string;
+}
+
+export interface JobMetadata {
+  title?: string;
+  description?: string;
+  category?: string;
+  skills?: string[];
+  deliverables?: string;
+  acceptanceCriteria?: string;
+  clientAddress?: string;
+  createdAt?: string;
+}
+
+export interface CreateJobResponse {
+  success: boolean;
+  message?: string;
+  jobId?: number;
+  onchainJobId?: number;
+  metadataCID?: string;
+  job?: Job;
+  error?: string;
+}
+
+export interface JobDetailResponse {
+  success: boolean;
+  job: Job;
+  metadata?: JobMetadata | null;
+  error?: string;
 }
 
 export interface JobsResponse {
