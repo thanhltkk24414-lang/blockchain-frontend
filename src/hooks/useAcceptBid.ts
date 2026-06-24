@@ -1,6 +1,4 @@
 import { useCallback, useState } from 'react';
-import { waitForTransactionReceipt } from 'wagmi/actions';
-import { wagmiConfig } from '@/config/wagmi';
 import { acceptBid } from '@/lib/api';
 import type { TxStatus } from '@/components/shared/TxStatusModal';
 
@@ -28,23 +26,16 @@ export function useAcceptBid() {
 
       resetTx();
       setTxStatus('pending');
-      setTxLabel('Accepting bid & assigning on-chain…');
+      setTxLabel('Accepting bid…');
 
       try {
         const apiRes = await acceptBid(params.bidId);
         if (!apiRes.success) {
-          throw new Error(apiRes.hint || 'Failed to accept bid on server');
-        }
-
-        if (apiRes.assignTxHash) {
-          setTxHash(apiRes.assignTxHash);
-          await waitForTransactionReceipt(wagmiConfig, {
-            hash: apiRes.assignTxHash as `0x${string}`,
-          });
+          throw new Error(apiRes.hint || apiRes.error || 'Failed to accept bid on server');
         }
 
         setTxStatus('success');
-        setTxLabel('Freelancer assigned on JobRegistry');
+        setTxLabel('Bid accepted — fund escrow with on-chain client wallet');
         return apiRes;
       } catch (err) {
         setTxStatus('failed');

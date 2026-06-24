@@ -102,6 +102,22 @@ export async function acceptBid(bidId: string) {
     onchainJobId?: number;
     code?: string;
     hint?: string;
+    error?: string;
+  }>(res);
+}
+
+export async function retryAssignFreelancer(jobId: string, freelancerAddress: string) {
+  const res = await fetch(`${API_URL}/api/jobs/${jobId}/assign-freelancer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ freelancerAddress }),
+  });
+  return parseJson<{
+    success: boolean;
+    message?: string;
+    assignTxHash?: string;
+    error?: string;
+    code?: string;
   }>(res);
 }
 

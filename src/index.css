@@ -633,6 +633,16 @@ body {
   font-size: 0.85em;
 }
 
+.escrow-mint-hint {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  border: 1px dashed hsl(var(--border));
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;

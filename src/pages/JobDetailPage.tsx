@@ -289,7 +289,7 @@ export function JobDetailPage() {
       )}
 
       {canManageJob && <ClientJobActionsPanel job={job} onActionComplete={reloadJob} />}
-      {canManageJob && <EscrowDepositPanel job={job} />}
+      {canManageJob && <EscrowDepositPanel job={job} bids={bids} />}
     </main>
   );
 }

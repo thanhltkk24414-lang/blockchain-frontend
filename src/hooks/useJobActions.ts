@@ -2,10 +2,12 @@ import { useCallback } from 'react';
 import { readContract } from 'wagmi/actions';
 import { useWriteContract } from 'wagmi';
 import { useAccount } from 'wagmi';
+import type { Abi } from 'viem';
 import { wagmiConfig } from '@/config/wagmi';
 import { uploadIpfsFile, uploadIpfsMetadata } from '@/lib/api';
 import { contracts } from '@/lib/contracts/config';
 import { CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
+import { executeContractWrite } from '@/lib/utils/contractWrite';
 import { useContractTx } from './useContractTx';
 
 export function useDeliverableSubmit() {
@@ -51,19 +53,23 @@ export function useDeliverableSubmit() {
       // 1 = ASSIGNED — freelancer must start work before submitting
       if (job.status === 1) {
         await tx.runTx('Starting work on-chain…', () =>
-          writeContractAsync({
-            ...contracts.escrowVault,
+          executeContractWrite(writeContractAsync, {
+            address: contracts.escrowVault.address,
+            abi: contracts.escrowVault.abi as Abi,
             functionName: 'startWork',
             args: [jobId],
+            account: address,
           }),
         );
       }
 
       await tx.runTx('Submitting deliverable on-chain…', () =>
-        writeContractAsync({
-          ...contracts.escrowVault,
+        executeContractWrite(writeContractAsync, {
+          address: contracts.escrowVault.address,
+          abi: contracts.escrowVault.abi as Abi,
           functionName: 'submitWork',
           args: [jobId, deliverableCID],
+          account: address,
         }),
       );
 
@@ -82,15 +88,18 @@ export function useClientJobActions() {
 
   const approveAndRelease = useCallback(
     async (onchainJobId: number) => {
+      if (!address) throw new Error('Connect your wallet first');
       await tx.runTx('Approving deliverable and releasing funds…', () =>
-        writeContractAsync({
-          ...contracts.escrowVault,
+        executeContractWrite(writeContractAsync, {
+          address: contracts.escrowVault.address,
+          abi: contracts.escrowVault.abi as Abi,
           functionName: 'approveAndRelease',
           args: [BigInt(onchainJobId)],
+          account: address,
         }),
       );
     },
-    [tx, writeContractAsync],
+    [address, tx, writeContractAsync],
   );
 
   const raiseDispute = useCallback(
@@ -107,19 +116,23 @@ export function useClientJobActions() {
 
       if (allowance < fee) {
         await tx.runTx('Approving USDC dispute fee…', () =>
-          writeContractAsync({
-            ...contracts.mockUsdc,
+          executeContractWrite(writeContractAsync, {
+            address: contracts.mockUsdc.address,
+            abi: contracts.mockUsdc.abi as Abi,
             functionName: 'approve',
             args: [CONTRACT_ADDRESSES.EscrowVault, fee],
+            account: address,
           }),
         );
       }
 
       await tx.runTx('Raising dispute on-chain…', () =>
-        writeContractAsync({
-          ...contracts.escrowVault,
+        executeContractWrite(writeContractAsync, {
+          address: contracts.escrowVault.address,
+          abi: contracts.escrowVault.abi as Abi,
           functionName: 'raiseDispute',
           args: [BigInt(onchainJobId)],
+          account: address,
         }),
       );
     },

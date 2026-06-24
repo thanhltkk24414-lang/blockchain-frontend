@@ -2,9 +2,31 @@ import { estimateGas } from 'viem/actions';
 import type { Abi, Address } from 'viem';
 import { wagmiConfig } from '@/config/wagmi';
 
-const DEFAULT_GAS_CAP = 300_000n;
 const GAS_BUFFER_NUM = 12n;
 const GAS_BUFFER_DEN = 10n;
+
+/** Minimum gas for heavy escrow/registry writes (avoid under-estimate reverts). */
+const GAS_MIN: Record<string, bigint> = {
+  depositEscrow: 200_000n,
+  approveAndRelease: 200_000n,
+  raiseDispute: 200_000n,
+};
+
+/** Per-function caps — avoids Infura "gas limit too high" on failed estimates. */
+const GAS_CAPS: Record<string, bigint> = {
+  approve: 80_000n,
+  mint: 120_000n,
+  transfer: 80_000n,
+  depositEscrow: 400_000n,
+  startWork: 180_000n,
+  submitWork: 250_000n,
+  approveAndRelease: 350_000n,
+  raiseDispute: 400_000n,
+  assignFreelancer: 200_000n,
+  createJob: 350_000n,
+  submitProposal: 250_000n,
+  default: 300_000n,
+};
 
 export type GasEstimateInput = {
   address: Address;
@@ -15,15 +37,19 @@ export type GasEstimateInput = {
   value?: bigint;
 };
 
+function capForFunction(functionName: string): bigint {
+  return GAS_CAPS[functionName] ?? GAS_CAPS.default;
+}
+
 /**
- * Estimate gas with a 20% buffer and cap at 300k to avoid Infura "gas limit too high"
- * on reverts that wagmi/MetaMask may over-estimate.
+ * Estimate gas with a 20% buffer and per-function cap.
  */
 export async function withGasLimit(params: GasEstimateInput): Promise<{ gas: bigint }> {
+  const cap = capForFunction(params.functionName);
   const client = wagmiConfig.getClient();
   const account = params.account ?? client.account?.address;
   if (!account) {
-    return { gas: DEFAULT_GAS_CAP };
+    return { gas: cap };
   }
 
   try {
@@ -32,9 +58,11 @@ export async function withGasLimit(params: GasEstimateInput): Promise<{ gas: big
       account,
     } as Parameters<typeof estimateGas>[1]);
     const buffered = (estimated * GAS_BUFFER_NUM) / GAS_BUFFER_DEN;
-    const gas = buffered > DEFAULT_GAS_CAP ? DEFAULT_GAS_CAP : buffered;
-    return { gas: gas > 0n ? gas : DEFAULT_GAS_CAP };
+    const min = GAS_MIN[params.functionName] ?? 0n;
+    let gas = buffered > cap ? cap : buffered;
+    if (gas < min) gas = min > cap ? cap : min;
+    return { gas: gas > 0n ? gas : cap };
   } catch {
-    return { gas: DEFAULT_GAS_CAP };
+    return { gas: cap };
   }
 }
