@@ -20,6 +20,10 @@ function resolveClientAddress(job: Job): string | null {
   return null;
 }
 
+function resolveOnchainClientAddress(job: Job): string | null {
+  return job.onchainClientAddress?.toLowerCase() ?? null;
+}
+
 function resolveFreelancerAddress(job: Job): string | null {
   if (job.freelancerAddress) return job.freelancerAddress;
   if (typeof job.freelancer === 'object' && job.freelancer?.walletAddress) {
@@ -31,8 +35,17 @@ function resolveFreelancerAddress(job: Job): string | null {
 export function EscrowDepositPanel({ job }: EscrowDepositPanelProps) {
   const { address, isConnected } = useAccount();
   const clientAddr = resolveClientAddress(job);
-  const isClient = Boolean(
+  const onchainClientAddr = resolveOnchainClientAddress(job);
+  const isSiweClient = Boolean(
     address && clientAddr && address.toLowerCase() === clientAddr,
+  );
+  const isOnchainClient = Boolean(
+    address &&
+      onchainClientAddr &&
+      address.toLowerCase() === onchainClientAddr,
+  );
+  const walletMismatch = Boolean(
+    isConnected && onchainClientAddr && address && !isOnchainClient,
   );
   const existingFreelancer = resolveFreelancerAddress(job);
   const [freelancerInput, setFreelancerInput] = useState(existingFreelancer ?? '');
@@ -43,7 +56,7 @@ export function EscrowDepositPanel({ job }: EscrowDepositPanelProps) {
     useEscrowDeposit();
   const { data: balance } = useUsdcBalance(address);
 
-  if (!isValidOnchainJobId(job.onchainJobId) || !isClient) {
+  if (!isValidOnchainJobId(job.onchainJobId) || !isSiweClient) {
     return null;
   }
 
@@ -51,20 +64,34 @@ export function EscrowDepositPanel({ job }: EscrowDepositPanelProps) {
   const totalDeposit = job.totalDeposit ?? totalDepositUsdc(contractValue);
   const balanceUsdc =
     balance != null ? Number(balance) / 1_000_000 : null;
+  const insufficientUsdc =
+    balanceUsdc != null && balanceUsdc < totalDeposit;
 
   async function handleDeposit() {
     setLocalError(null);
     if (!isConnected || !address) {
-      setLocalError('Connect your wallet on Sepolia.');
+      setLocalError('Kết nối ví MetaMask trên mạng Sepolia.');
+      return;
+    }
+    if (walletMismatch && onchainClientAddr) {
+      setLocalError(
+        `Ví đang kết nối không phải client on-chain. Hãy chuyển sang ${onchainClientAddr.slice(0, 6)}…${onchainClientAddr.slice(-4)} (ví backend tạo job).`,
+      );
+      return;
+    }
+    if (insufficientUsdc) {
+      setLocalError(
+        `Số dư MockUSDC không đủ (cần ${totalDeposit} USDC). Mint testnet USDC trên Sepolia trước.`,
+      );
       return;
     }
     if (!job.onchainJobId || !contractValue) {
-      setLocalError('Job is missing on-chain id or contract value.');
+      setLocalError('Job thiếu on-chain id hoặc giá trị hợp đồng.');
       return;
     }
     const freelancer = freelancerInput.trim();
     if (!isAddress(freelancer)) {
-      setLocalError('Enter a valid freelancer wallet address (0x…).');
+      setLocalError('Nhập địa chỉ ví freelancer hợp lệ (0x…).');
       return;
     }
 
@@ -85,10 +112,27 @@ export function EscrowDepositPanel({ job }: EscrowDepositPanelProps) {
   return (
     <section className="panel escrow-panel">
       <h3>Fund escrow (USDC)</h3>
-      <p className="muted">
-        Approve MockUSDC and call <code>depositEscrow</code> on EscrowVault. Total includes 3%
-        platform fee.
+      <p className="muted" title="Nạp tiền ký quỹ on-chain">
+        <strong>Nạp ký quỹ (Fund escrow):</strong> Client gửi MockUSDC vào hợp đồng{' '}
+        <code>EscrowVault</code> để khóa tiền cho freelancer. Tổng nạp = giá job + 3% phí
+        nền tảng. Bước này gồm <em>approve</em> USDC rồi <em>depositEscrow</em> — chỉ ví{' '}
+        <strong>client on-chain</strong> (người tạo job trên JobRegistry) mới gọi được.
       </p>
+
+      {onchainClientAddr && (
+        <p className="muted phase-note">
+          Client on-chain:{' '}
+          <code>
+            {onchainClientAddr.slice(0, 6)}…{onchainClientAddr.slice(-4)}
+          </code>
+          {walletMismatch && (
+            <span className="error">
+              {' '}
+              — ví MetaMask hiện tại khác ví này; giao dịch sẽ revert.
+            </span>
+          )}
+        </p>
+      )}
 
       <dl className="detail-grid">
         <dt>Contract value</dt>
@@ -98,7 +142,10 @@ export function EscrowDepositPanel({ job }: EscrowDepositPanelProps) {
         {balanceUsdc != null && (
           <>
             <dt>Your USDC balance</dt>
-            <dd>{balanceUsdc.toLocaleString()} USDC</dd>
+            <dd className={insufficientUsdc ? 'error' : undefined}>
+              {balanceUsdc.toLocaleString()} USDC
+              {insufficientUsdc && ' — cần mint MockUSDC trên Sepolia'}
+            </dd>
           </>
         )}
       </dl>
@@ -111,10 +158,10 @@ export function EscrowDepositPanel({ job }: EscrowDepositPanelProps) {
             className="input full"
             value={freelancerInput}
             onChange={(e) => setFreelancerInput(e.target.value)}
-            placeholder="0x… (from accepted proposal — manual for demo)"
+            placeholder="0x… (từ proposal đã chấp nhận)"
           />
           <span className="muted phase-note">
-            Pre-filled from accepted proposal when available.
+            Tự điền từ proposal đã accept khi có trong DB.
           </span>
         </div>
       )}
@@ -125,7 +172,7 @@ export function EscrowDepositPanel({ job }: EscrowDepositPanelProps) {
         className="btn primary"
         type="button"
         onClick={handleDeposit}
-        disabled={depositing || txStatus === 'pending'}
+        disabled={depositing || txStatus === 'pending' || walletMismatch || insufficientUsdc}
       >
         {depositing || txStatus === 'pending' ? 'Processing…' : 'Approve & deposit escrow'}
       </button>

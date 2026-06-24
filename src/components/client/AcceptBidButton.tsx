@@ -67,6 +67,9 @@ export function AcceptBidButton({ bid, onchainJobId, jobStatus, onAccepted }: Ac
       >
         {loading || txStatus === 'pending' ? 'Accepting…' : 'Accept & assign on-chain'}
       </button>
+      <p className="muted phase-note">
+        Gán freelancer on-chain qua backend (INDEXER wallet) — không cần ký MetaMask.
+      </p>
       {error && <p className="error">{error}</p>}
       <TxStatusModal
         open={txStatus !== 'idle'}

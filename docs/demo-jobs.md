@@ -55,8 +55,8 @@ Create these via **Client dashboard → Create job** (or `POST /api/jobs` with S
 1. Sign in on `/profile` (SIWE) with Sepolia wallet.
 2. Create a job on `/client` — backend uploads metadata to IPFS and calls `createJob` on-chain.
 3. Open `/client/jobs/:id` — confirm `onchainJobId` links to JobRegistry on Etherscan.
-4. Mint MockUSDC on Sepolia if needed (testnet faucet / contract `mint`).
-5. **Approve & deposit escrow** — enter freelancer `0x…` address (manual until bids API in Phase 3).
+4. Mint MockUSDC on Sepolia if needed (testnet faucet / contract `mint`) — **use the on-chain client wallet** (INDEXER) for escrow in production demos.
+5. **Approve & deposit escrow** — connect the **on-chain client** wallet in MetaMask; enter freelancer `0x…` from accepted bid.
 6. Confirm txs in `TxStatusModal` and on [Sepolia Etherscan](https://sepolia.etherscan.io).
 
 ## Optional local seed (manual)

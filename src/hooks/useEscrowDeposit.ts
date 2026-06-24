@@ -5,6 +5,8 @@ import { wagmiConfig } from '@/config/wagmi';
 import { contracts } from '@/lib/contracts/config';
 import { CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 import { computeTotalDeposit, toUsdcUnits } from '@/lib/utils/usdc';
+import { withGasLimit } from '@/lib/utils/contractGas';
+import type { Abi } from 'viem';
 import type { TxStatus } from '@/components/shared/TxStatusModal';
 
 interface EscrowDepositParams {
@@ -49,20 +51,36 @@ export function useEscrowDeposit() {
 
         if (allowance < totalAmount) {
           setTxLabel('Approving USDC for EscrowVault…');
+          const approveGas = await withGasLimit({
+            address: contracts.mockUsdc.address,
+            abi: contracts.mockUsdc.abi as Abi,
+            functionName: 'approve',
+            args: [CONTRACT_ADDRESSES.EscrowVault, totalAmount],
+            account: address,
+          });
           const approveHash = await writeContractAsync({
             ...contracts.mockUsdc,
             functionName: 'approve',
             args: [CONTRACT_ADDRESSES.EscrowVault, totalAmount],
+            gas: approveGas.gas,
           });
           setTxHash(approveHash);
           await waitForTransactionReceipt(wagmiConfig, { hash: approveHash });
         }
 
         setTxLabel('Depositing escrow on-chain…');
+        const depositGas = await withGasLimit({
+          address: contracts.escrowVault.address,
+          abi: contracts.escrowVault.abi as Abi,
+          functionName: 'depositEscrow',
+          args: [BigInt(onchainJobId), freelancerAddress],
+          account: address,
+        });
         const depositHash = await writeContractAsync({
           ...contracts.escrowVault,
           functionName: 'depositEscrow',
           args: [BigInt(onchainJobId), freelancerAddress],
+          gas: depositGas.gas,
         });
         setTxHash(depositHash);
         await waitForTransactionReceipt(wagmiConfig, { hash: depositHash });

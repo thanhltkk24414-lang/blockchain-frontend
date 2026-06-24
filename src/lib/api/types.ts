@@ -13,6 +13,7 @@ export interface Job {
   status: string;
   contractValue?: number;
   onchainJobId?: number;
+  onchainClientAddress?: string;
   metadataCID?: string;
   clientAddress?: string;
   freelancerAddress?: string;
@@ -44,6 +45,7 @@ export interface CreateJobResponse {
   message?: string;
   jobId?: number;
   onchainJobId?: number;
+  onchainClientAddress?: string;
   metadataCID?: string;
   job?: Job;
   error?: string;

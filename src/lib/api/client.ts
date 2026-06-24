@@ -58,7 +58,7 @@ export async function searchJobs(params: {
   if (params.minBudget != null) qs.set('minBudget', String(params.minBudget));
   if (params.maxBudget != null) qs.set('maxBudget', String(params.maxBudget));
   const res = await fetch(`${API_URL}/api/jobs/search?${qs}`);
-  return parseJson<{ success: boolean; jobs: Job[] }>(res);
+  return parseJson<{ success: boolean; jobs: Job[]; error?: string }>(res);
 }
 
 export async function submitBid(payload: {
@@ -94,7 +94,15 @@ export async function acceptBid(bidId: string) {
     method: 'PATCH',
     headers: { ...authHeaders() },
   });
-  return parseJson<{ success: boolean; bid?: Bid; message?: string }>(res);
+  return parseJson<{
+    success: boolean;
+    bid?: Bid;
+    message?: string;
+    assignTxHash?: string;
+    onchainJobId?: number;
+    code?: string;
+    hint?: string;
+  }>(res);
 }
 
 export async function rejectBid(bidId: string) {
@@ -142,13 +150,13 @@ export async function createJob(payload: CreateJobPayload) {
 export async function fetchJobsByClient(address: string, status?: string) {
   const qs = status ? `?status=${encodeURIComponent(status)}` : '';
   const res = await fetch(`${API_URL}/api/jobs/client/${address}${qs}`);
-  return parseJson<{ success: boolean; jobs: Job[] }>(res);
+  return parseJson<{ success: boolean; jobs: Job[]; error?: string }>(res);
 }
 
 export async function fetchJobsByFreelancer(address: string, status?: string) {
   const qs = status ? `?status=${encodeURIComponent(status)}` : '';
   const res = await fetch(`${API_URL}/api/jobs/freelancer/${address}${qs}`);
-  return parseJson<{ success: boolean; jobs: Job[] }>(res);
+  return parseJson<{ success: boolean; jobs: Job[]; error?: string }>(res);
 }
 
 export async function fetchUserProfile(address: string) {
