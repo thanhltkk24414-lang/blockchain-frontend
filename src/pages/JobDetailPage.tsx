@@ -200,6 +200,7 @@ export function JobDetailPage() {
       {showBidForm && (
         <BidForm
           jobId={job._id}
+          onchainJobId={job.onchainJobId}
           jobTitle={job.title}
           suggestedBudget={job.contractValue}
           onSubmitted={loadBids}

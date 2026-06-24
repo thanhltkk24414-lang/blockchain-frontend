@@ -63,6 +63,7 @@ export async function searchJobs(params: {
 
 export async function submitBid(payload: {
   jobId: string;
+  onchainJobId: number;
   bidAmount: number;
   title: string;
   description: string;

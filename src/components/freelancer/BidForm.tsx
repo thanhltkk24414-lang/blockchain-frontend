@@ -4,12 +4,13 @@ import { submitBid } from '@/lib/api';
 
 interface BidFormProps {
   jobId: string;
+  onchainJobId?: number;
   jobTitle: string;
   suggestedBudget?: number;
   onSubmitted?: () => void;
 }
 
-export function BidForm({ jobId, jobTitle, suggestedBudget, onSubmitted }: BidFormProps) {
+export function BidForm({ jobId, onchainJobId, jobTitle, suggestedBudget, onSubmitted }: BidFormProps) {
   const { isAuthenticated, user } = useAuth();
   const [title, setTitle] = useState(`Proposal for ${jobTitle}`.slice(0, 100));
   const [description, setDescription] = useState('');
@@ -32,8 +33,22 @@ export function BidForm({ jobId, jobTitle, suggestedBudget, onSubmitted }: BidFo
     );
   }
 
+  const resolvedOnchainJobId =
+    onchainJobId != null ? Number(onchainJobId) : undefined;
+  const canSubmitBid =
+    resolvedOnchainJobId != null &&
+    Number.isFinite(resolvedOnchainJobId) &&
+    resolvedOnchainJobId > 0;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canSubmitBid) {
+      setError(
+        'This job has no on-chain ID yet. Bids cannot be submitted until the job is registered on-chain.',
+      );
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setMessage(null);
@@ -41,6 +56,7 @@ export function BidForm({ jobId, jobTitle, suggestedBudget, onSubmitted }: BidFo
     try {
       const res = await submitBid({
         jobId,
+        onchainJobId: resolvedOnchainJobId,
         title: title.trim(),
         description: description.trim(),
         bidAmount: parseInt(bidAmount, 10),
@@ -100,7 +116,13 @@ export function BidForm({ jobId, jobTitle, suggestedBudget, onSubmitted }: BidFo
           />
         </label>
       </div>
-      <button className="btn primary" type="submit" disabled={loading}>
+      {!canSubmitBid && (
+        <p className="error">
+          This job has no on-chain ID yet. Bids cannot be submitted until the job is registered
+          on-chain.
+        </p>
+      )}
+      <button className="btn primary" type="submit" disabled={loading || !canSubmitBid}>
         {loading ? 'Submitting…' : 'Submit bid'}
       </button>
       {message && <p className="badge success">{message}</p>}
