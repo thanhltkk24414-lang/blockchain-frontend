@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { fetchBidsByJob, fetchJobById, type Bid, type Job, type JobMetadata } from '@/lib/api';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { MilestoneProgress } from '@/components/shared/MilestoneProgress';
@@ -26,9 +26,19 @@ function formatDate(iso?: string): string {
   return new Date(iso).toLocaleString();
 }
 
+function resolveClientAddress(job: Job): string | null {
+  if (job.clientAddress) return job.clientAddress.toLowerCase();
+  if (typeof job.client === 'object' && job.client?.walletAddress) {
+    return job.client.walletAddress.toLowerCase();
+  }
+  if (typeof job.client === 'string') return job.client.toLowerCase();
+  return null;
+}
+
 export function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
+  const location = useLocation();
+  const { address, user, isAuthenticated } = useAuth();
   const [job, setJob] = useState<Job | null>(null);
   const [metadata, setMetadata] = useState<JobMetadata | null>(null);
   const [bids, setBids] = useState<Bid[]>([]);
@@ -111,14 +121,19 @@ export function JobDetailPage() {
   const deliverables = metadata?.deliverables ?? job.deliverables;
   const acceptance = metadata?.acceptanceCriteria ?? job.acceptanceCriteria;
   const skills = metadata?.skills ?? job.skills;
-  const isClientView = user?.role === 'client';
+  const clientAddr = resolveClientAddress(job);
+  const isJobOwner = Boolean(
+    address && clientAddr && address.toLowerCase() === clientAddr,
+  );
+  const canManageJob = isJobOwner && isAuthenticated;
+  const isOnPublicJobRoute = /^\/jobs\/[^/]+$/.test(location.pathname);
   const showBidForm = job.status === 'OPEN' && user?.role === 'freelancer';
 
   return (
     <main className="page job-detail">
       <div className="page-header">
-        <Link to={isClientView ? '/client' : '/browse'} className="muted back-link">
-          ← {isClientView ? 'Client dashboard' : 'Browse jobs'}
+        <Link to={isJobOwner ? '/client' : '/browse'} className="muted back-link">
+          ← {isJobOwner ? 'Client dashboard' : 'Browse jobs'}
         </Link>
         <div className="job-detail-header">
           <h2>{job.title}</h2>
@@ -126,6 +141,26 @@ export function JobDetailPage() {
         </div>
         <p className="muted">{job.description}</p>
       </div>
+
+      {isJobOwner && isOnPublicJobRoute && (
+        <section className="panel client-manage-banner">
+          <p>
+            You posted this job.{' '}
+            <Link to={`/client/jobs/${job._id}`} className="etherscan-link">
+              Manage as client →
+            </Link>
+          </p>
+          <p className="muted phase-note">
+            Accept proposals, fund escrow, and review deliverables from the client job view.
+          </p>
+        </section>
+      )}
+
+      {isJobOwner && !isAuthenticated && (
+        <section className="panel">
+          <p className="muted">Connect your wallet and sign in to accept proposals and manage this job.</p>
+        </section>
+      )}
 
       <div className="job-detail-grid">
         <section className="panel">
@@ -224,9 +259,14 @@ export function JobDetailPage() {
 
       <DeliverableSubmitPanel job={job} onSubmitted={reloadJob} />
 
-      {isClientView && bids.length > 0 && (
+      {canManageJob && bids.length > 0 && (
         <section className="panel">
           <h3>Proposals ({bids.length})</h3>
+          {job.status !== 'OPEN' && (
+            <p className="muted phase-note">
+              This job is no longer open — new accepts are disabled.
+            </p>
+          )}
           <ul className="bids-list">
             {bids.map((bid) => (
               <li key={bid._id} className="bid-item">
@@ -236,22 +276,20 @@ export function JobDetailPage() {
                 </span>
                 <p>{bid.description}</p>
                 <span className="muted mono">{bid.freelancerAddress}</span>
-                {isValidOnchainJobId(job.onchainJobId) && (
-                  <AcceptBidButton
-                    bid={bid}
-                    onchainJobId={job.onchainJobId!}
-                    jobStatus={job.status}
-                    onAccepted={reloadJob}
-                  />
-                )}
+                <AcceptBidButton
+                  bid={bid}
+                  onchainJobId={job.onchainJobId}
+                  jobStatus={job.status}
+                  onAccepted={reloadJob}
+                />
               </li>
             ))}
           </ul>
         </section>
       )}
 
-      {isClientView && <ClientJobActionsPanel job={job} onActionComplete={reloadJob} />}
-      {isClientView && <EscrowDepositPanel job={job} />}
+      {canManageJob && <ClientJobActionsPanel job={job} onActionComplete={reloadJob} />}
+      {canManageJob && <EscrowDepositPanel job={job} />}
     </main>
   );
 }
