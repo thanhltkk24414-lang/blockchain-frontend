@@ -44,7 +44,8 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
       const payload = formValuesToPayload(values);
       const res = await createJob(payload);
       if (!res.success || !res.job) {
-        throw new Error(res.error || 'Failed to create job');
+        const detail = [res.error, res.hint].filter(Boolean).join(' — ');
+        throw new Error(detail || 'Failed to create job');
       }
       onCreated(res.job);
       setValues(EMPTY_CREATE_JOB_FORM);

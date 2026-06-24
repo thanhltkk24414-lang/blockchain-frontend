@@ -25,9 +25,10 @@ export function FreelancerDashboardPage() {
         fetchMyBids(address),
       ]);
       if (jobsRes.success) setJobs(jobsRes.jobs || []);
-      else setError('Failed to load freelancer jobs');
+      else setError(jobsRes.error || 'Failed to load freelancer jobs');
       if (statsRes.success) setStats(statsRes.stats || null);
       if (bidsRes.success) setBids(bidsRes.bids || []);
+      else setError(bidsRes.error || 'Failed to load your proposals');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
@@ -76,17 +77,23 @@ export function FreelancerDashboardPage() {
         <section className="panel">
           <h3>Recent proposals</h3>
           <ul className="bids-list">
-            {bids.slice(0, 5).map((bid) => (
+            {bids.slice(0, 5).map((bid) => {
+              const jobLinkId =
+                typeof bid.jobId === 'object' && bid.jobId && '_id' in bid.jobId
+                  ? (bid.jobId as { _id: string })._id
+                  : bid.jobId;
+              return (
               <li key={bid._id} className="bid-item">
                 <strong>{bid.title || 'Proposal'}</strong>
                 <span className="muted">
                   {bid.bidAmount} USDC · {bid.status}
                 </span>
-                <Link to={`/jobs/${bid.jobId}`} className="btn ghost">
+                <Link to={`/jobs/${jobLinkId}`} className="btn ghost">
                   View job
                 </Link>
               </li>
-            ))}
+              );
+            })}
           </ul>
         </section>
       )}

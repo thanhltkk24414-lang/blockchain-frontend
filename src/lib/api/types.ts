@@ -47,6 +47,8 @@ export interface CreateJobResponse {
   metadataCID?: string;
   job?: Job;
   error?: string;
+  code?: string;
+  hint?: string;
 }
 
 export interface JobDetailResponse {
@@ -101,7 +103,7 @@ export interface ApiError {
 
 export interface Bid {
   _id: string;
-  jobId: string;
+  jobId: string | Pick<Job, '_id' | 'title' | 'status' | 'contractValue' | 'clientAddress'>;
   onchainJobId?: number;
   freelancerAddress: string;
   proposalCID?: string;
