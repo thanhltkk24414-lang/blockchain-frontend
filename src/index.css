@@ -663,3 +663,77 @@ body {
 .milestone-steps li.done .milestone-dot {
   background: #6ee7a8;
 }
+
+.filters-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+}
+
+.job-filters h3 {
+  margin-top: 0;
+}
+
+.skill-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.5rem 0;
+}
+
+.skill-tag {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: #232936;
+  color: #aeb6c8;
+}
+
+.job-budget {
+  color: #6ee7a8;
+  font-weight: 600;
+}
+
+.role-badge {
+  text-transform: capitalize;
+}
+
+.bids-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.bid-item {
+  padding: 0.75rem;
+  border: 1px solid #2a2f3a;
+  border-radius: 8px;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.form-row {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 1fr 1fr;
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 6rem;
+}
+
+.mono {
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+}
+
+.coming-soon-panel {
+  margin-top: 1rem;
+}
+
+.checklist {
+  padding-left: 1.25rem;
+}

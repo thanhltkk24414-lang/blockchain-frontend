@@ -3,11 +3,14 @@ import { API_URL } from '../config/env';
 const TOKEN_KEY = 'fapex_jwt';
 const USER_KEY = 'fapex_user';
 
+export type RegistrationRole = 'client' | 'freelancer';
+
 export interface AuthUser {
   walletAddress: string;
   username?: string;
-  role?: string;
-  reputation?: number;
+  /** Registration role from User.role — not arbitrator (stake-gated separately). */
+  role?: RegistrationRole | 'admin';
+  reputation?: { score?: number; tier?: string } | number;
 }
 
 export interface NonceResponse {

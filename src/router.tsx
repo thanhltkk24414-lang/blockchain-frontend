@@ -1,5 +1,6 @@
 import { createBrowserRouter } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
+import { RoleGuard } from '@/components/auth/RoleGuard';
 import { LandingPage } from '@/pages/LandingPage';
 import { BrowsePage } from '@/pages/BrowsePage';
 import { ClientDashboardPage } from '@/pages/ClientDashboardPage';
@@ -14,11 +15,39 @@ export const router = createBrowserRouter([
     children: [
       { path: '/', element: <LandingPage /> },
       { path: '/browse', element: <BrowsePage /> },
-      { path: '/client', element: <ClientDashboardPage /> },
-      { path: '/client/jobs/:id', element: <JobDetailPage /> },
+      {
+        path: '/client',
+        element: (
+          <RoleGuard requireRole="client">
+            <ClientDashboardPage />
+          </RoleGuard>
+        ),
+      },
+      {
+        path: '/client/jobs/:id',
+        element: (
+          <RoleGuard requireRole="client">
+            <JobDetailPage />
+          </RoleGuard>
+        ),
+      },
       { path: '/jobs/:id', element: <JobDetailPage /> },
-      { path: '/freelancer', element: <FreelancerDashboardPage /> },
-      { path: '/arbitrator', element: <ArbitratorDashboardPage /> },
+      {
+        path: '/freelancer',
+        element: (
+          <RoleGuard requireRole="freelancer">
+            <FreelancerDashboardPage />
+          </RoleGuard>
+        ),
+      },
+      {
+        path: '/arbitrator',
+        element: (
+          <RoleGuard requireArbitrator>
+            <ArbitratorDashboardPage />
+          </RoleGuard>
+        ),
+      },
       { path: '/profile', element: <ProfilePage /> },
     ],
   },

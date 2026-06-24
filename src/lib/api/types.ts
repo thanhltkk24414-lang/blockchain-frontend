@@ -68,9 +68,12 @@ export interface JobsResponse {
   error?: string;
 }
 
+export type RegistrationRole = 'client' | 'freelancer';
+
 export interface UserProfile {
   walletAddress: string;
   username?: string;
+  role?: RegistrationRole | 'admin';
   profile?: {
     fullName?: string;
     bio?: string;
@@ -78,7 +81,6 @@ export interface UserProfile {
     hourlyRate?: number;
     location?: string;
     avatar?: string;
-    role?: 'client' | 'freelancer' | 'arbitrator';
   };
   reputation?: {
     score?: number;
@@ -95,4 +97,25 @@ export interface UserProfile {
 export interface ApiError {
   success: false;
   error: string;
+}
+
+export interface Bid {
+  _id: string;
+  jobId: string;
+  onchainJobId?: number;
+  freelancerAddress: string;
+  proposalCID?: string;
+  bidAmount: number;
+  title?: string;
+  description?: string;
+  timeline?: number;
+  status: 'pending' | 'accepted' | 'rejected';
+  createdAt?: string;
+}
+
+export interface BidsResponse {
+  success: boolean;
+  bids: Bid[];
+  count?: number;
+  error?: string;
 }

@@ -15,9 +15,15 @@ function resolveClientAddress(job: Job): string | null {
   return null;
 }
 
+function formatPosted(iso?: string): string | null {
+  if (!iso) return null;
+  return new Date(iso).toLocaleDateString();
+}
+
 export function JobCard({ job, detailPath }: JobCardProps) {
   const clientAddr = resolveClientAddress(job);
   const href = detailPath ?? `/jobs/${job._id}`;
+  const posted = formatPosted(job.createdAt);
 
   return (
     <li className="job-card">
@@ -29,22 +35,30 @@ export function JobCard({ job, detailPath }: JobCardProps) {
         </h3>
         <StatusBadge status={job.status} />
       </div>
-      <p className="job-desc">{job.description}</p>
+      <p className="job-desc">{job.description?.slice(0, 200)}{job.description && job.description.length > 200 ? '…' : ''}</p>
+      {job.skills && job.skills.length > 0 && (
+        <div className="skill-tags">
+          {job.skills.slice(0, 5).map((skill) => (
+            <span key={skill} className="skill-tag">
+              {skill}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="job-meta">
         <span className="job-category">{job.category}</span>
-        {job.contractValue != null && <span>{job.contractValue} USDC</span>}
+        {job.contractValue != null && <span className="job-budget">{job.contractValue} USDC</span>}
+        {job.duration != null && <span>{Math.round(job.duration / 86400)}d</span>}
         {isValidOnchainJobId(job.onchainJobId) && <span>On-chain #{job.onchainJobId}</span>}
-        {job.skills && job.skills.length > 0 && (
-          <span>{job.skills.slice(0, 3).join(', ')}</span>
-        )}
+        {posted && <span>Posted {posted}</span>}
         {clientAddr && (
           <span>
-            Client: {clientAddr.slice(0, 6)}…{clientAddr.slice(-4)}
+            Client {clientAddr.slice(0, 6)}…{clientAddr.slice(-4)}
           </span>
         )}
       </div>
       <Link to={href} className="btn ghost job-card-cta">
-        View details
+        View details →
       </Link>
     </li>
   );

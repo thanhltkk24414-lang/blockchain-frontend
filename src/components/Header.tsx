@@ -22,7 +22,7 @@ export function Header() {
           <div className="auth-status">
             <span className="badge success">Authenticated</span>
             <span className="wallet">{user?.walletAddress}</span>
-            <button className="btn ghost" onClick={signOut}>
+            <button className="btn ghost" onClick={() => signOut(true)} type="button">
               Sign out
             </button>
           </div>

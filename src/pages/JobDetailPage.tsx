@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { fetchJobById, type Job, type JobMetadata } from '@/lib/api';
+import { fetchBidsByJob, fetchJobById, type Bid, type Job, type JobMetadata } from '@/lib/api';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { MilestoneProgress } from '@/components/shared/MilestoneProgress';
 import { EscrowDepositPanel } from '@/components/client/EscrowDepositPanel';
+import { BidForm } from '@/components/freelancer/BidForm';
+import { DeliverableSubmitPanel } from '@/components/freelancer/DeliverableSubmitPanel';
+import { useAuth } from '@/context/AuthContext';
 import {
   etherscanAddressUrl,
   isValidOnchainJobId,
@@ -23,10 +26,21 @@ function formatDate(iso?: string): string {
 
 export function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
   const [job, setJob] = useState<Job | null>(null);
   const [metadata, setMetadata] = useState<JobMetadata | null>(null);
+  const [bids, setBids] = useState<Bid[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const loadBids = () => {
+    if (!id) return;
+    fetchBidsByJob(id)
+      .then((res) => {
+        if (res.success) setBids(res.bids || []);
+      })
+      .catch(() => {});
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -52,6 +66,8 @@ export function JobDetailPage() {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+
+    loadBids();
 
     return () => {
       cancelled = true;
@@ -80,12 +96,14 @@ export function JobDetailPage() {
   const deliverables = metadata?.deliverables ?? job.deliverables;
   const acceptance = metadata?.acceptanceCriteria ?? job.acceptanceCriteria;
   const skills = metadata?.skills ?? job.skills;
+  const isClientView = user?.role === 'client';
+  const showBidForm = job.status === 'OPEN' && user?.role === 'freelancer';
 
   return (
     <main className="page job-detail">
       <div className="page-header">
-        <Link to="/client" className="muted back-link">
-          ← Client dashboard
+        <Link to={isClientView ? '/client' : '/browse'} className="muted back-link">
+          ← {isClientView ? 'Client dashboard' : 'Browse jobs'}
         </Link>
         <div className="job-detail-header">
           <h2>{job.title}</h2>
@@ -179,7 +197,36 @@ export function JobDetailPage() {
         </section>
       </div>
 
-      <EscrowDepositPanel job={job} />
+      {showBidForm && (
+        <BidForm
+          jobId={job._id}
+          jobTitle={job.title}
+          suggestedBudget={job.contractValue}
+          onSubmitted={loadBids}
+        />
+      )}
+
+      <DeliverableSubmitPanel job={job} />
+
+      {isClientView && bids.length > 0 && (
+        <section className="panel">
+          <h3>Proposals ({bids.length})</h3>
+          <ul className="bids-list">
+            {bids.map((bid) => (
+              <li key={bid._id} className="bid-item">
+                <strong>{bid.title || 'Proposal'}</strong>
+                <span className="muted">
+                  {bid.bidAmount} USDC · {bid.timeline} days · {bid.status}
+                </span>
+                <p>{bid.description}</p>
+                <span className="muted mono">{bid.freelancerAddress}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {isClientView && <EscrowDepositPanel job={job} />}
     </main>
   );
 }
