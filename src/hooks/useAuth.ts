@@ -84,11 +84,25 @@ export function useAuth() {
     }
   }, [address, signMessageAsync]);
 
-  const signOut = useCallback(() => {
+  const refreshSession = useCallback(async () => {
+    const stored = getStoredToken();
+    if (!stored) return;
+    const res = await fetchMe(stored);
+    if (res.success && res.user) {
+      setToken(stored);
+      setUser(res.user);
+      storeAuth(stored, res.user);
+    }
+  }, []);
+
+  const signOut = useCallback((redirectHome = false) => {
     clearAuth();
     setToken(null);
     setUser(null);
     setError(null);
+    if (redirectHome && typeof window !== 'undefined') {
+      window.location.assign('/');
+    }
   }, []);
 
   return {
@@ -101,5 +115,6 @@ export function useAuth() {
     error,
     signIn,
     signOut,
+    refreshSession,
   };
 }

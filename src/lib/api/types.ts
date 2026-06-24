@@ -13,10 +13,51 @@ export interface Job {
   status: string;
   contractValue?: number;
   onchainJobId?: number;
+  onchainClientAddress?: string;
+  metadataCID?: string;
+  clientAddress?: string;
+  freelancerAddress?: string;
+  duration?: number;
+  deadline?: number;
+  totalDeposit?: number;
+  platformFee?: number;
+  deliverables?: string;
+  acceptanceCriteria?: string;
   createdAt?: string;
   skills?: string[];
   client?: JobClient | string;
   freelancer?: JobClient | string;
+}
+
+export interface JobMetadata {
+  title?: string;
+  description?: string;
+  category?: string;
+  skills?: string[];
+  deliverables?: string;
+  acceptanceCriteria?: string;
+  clientAddress?: string;
+  createdAt?: string;
+}
+
+export interface CreateJobResponse {
+  success: boolean;
+  message?: string;
+  jobId?: number;
+  onchainJobId?: number;
+  onchainClientAddress?: string;
+  metadataCID?: string;
+  job?: Job;
+  error?: string;
+  code?: string;
+  hint?: string;
+}
+
+export interface JobDetailResponse {
+  success: boolean;
+  job: Job;
+  metadata?: JobMetadata | null;
+  error?: string;
 }
 
 export interface JobsResponse {
@@ -31,9 +72,12 @@ export interface JobsResponse {
   error?: string;
 }
 
+export type RegistrationRole = 'client' | 'freelancer';
+
 export interface UserProfile {
   walletAddress: string;
   username?: string;
+  role?: RegistrationRole | 'admin';
   profile?: {
     fullName?: string;
     bio?: string;
@@ -41,7 +85,6 @@ export interface UserProfile {
     hourlyRate?: number;
     location?: string;
     avatar?: string;
-    role?: 'client' | 'freelancer' | 'arbitrator';
   };
   reputation?: {
     score?: number;
@@ -58,4 +101,25 @@ export interface UserProfile {
 export interface ApiError {
   success: false;
   error: string;
+}
+
+export interface Bid {
+  _id: string;
+  jobId: string | Pick<Job, '_id' | 'title' | 'status' | 'contractValue' | 'clientAddress'>;
+  onchainJobId?: number;
+  freelancerAddress: string;
+  proposalCID?: string;
+  bidAmount: number;
+  title?: string;
+  description?: string;
+  timeline?: number;
+  status: 'pending' | 'accepted' | 'rejected';
+  createdAt?: string;
+}
+
+export interface BidsResponse {
+  success: boolean;
+  bids: Bid[];
+  count?: number;
+  error?: string;
 }

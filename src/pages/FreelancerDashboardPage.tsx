@@ -1,46 +1,55 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { fetchJobsByFreelancer, fetchUserStats, type Job } from '@/lib/api';
+import { fetchJobsByFreelancer, fetchMyBids, fetchUserStats, type Bid, type Job } from '@/lib/api';
 import { JobCard } from '@/components/shared/JobCard';
 import { useJobCounter } from '@/hooks/contracts/useContracts';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 
 export function FreelancerDashboardPage() {
   const { address, isAuthenticated } = useAuth();
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [bids, setBids] = useState<Bid[]>([]);
   const [stats, setStats] = useState<{ jobsCompleted?: number; totalEarned?: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { data: jobCounter } = useJobCounter();
 
-  useEffect(() => {
+  const loadData = useCallback(async () => {
     if (!address) return;
-    let cancelled = false;
     setLoading(true);
-
-    Promise.all([fetchJobsByFreelancer(address), fetchUserStats(address)])
-      .then(([jobsRes, statsRes]) => {
-        if (cancelled) return;
-        if (jobsRes.success) setJobs(jobsRes.jobs || []);
-        else setError('Failed to load freelancer jobs');
-        if (statsRes.success) setStats(statsRes.stats || null);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load data');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
+    try {
+      const [jobsRes, statsRes, bidsRes] = await Promise.all([
+        fetchJobsByFreelancer(address),
+        fetchUserStats(address),
+        fetchMyBids(address),
+      ]);
+      if (jobsRes.success) setJobs(jobsRes.jobs || []);
+      else setError(jobsRes.error || 'Failed to load freelancer jobs');
+      if (statsRes.success) setStats(statsRes.stats || null);
+      if (bidsRes.success) setBids(bidsRes.bids || []);
+      else setError(bidsRes.error || 'Failed to load your proposals');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
   }, [address]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  useAutoRefresh(loadData);
 
   return (
     <main className="page">
       <div className="page-header">
         <h2>Freelancer dashboard</h2>
-        <p className="muted">Active jobs, history, reputation — bid & deliverable flows in Phase 2.</p>
+        <p className="muted">
+          Your assignments and submitted bids. Browse open jobs to propose on{' '}
+          <Link to="/browse">Browse</Link>.
+        </p>
       </div>
       <div className="stats-row">
         <div className="stat-card">
@@ -55,11 +64,44 @@ export function FreelancerDashboardPage() {
           <span className="stat-label">Total earned</span>
           <strong>{stats?.totalEarned != null ? `${stats.totalEarned} USDC` : '—'}</strong>
         </div>
+        <div className="stat-card">
+          <span className="stat-label">My bids</span>
+          <strong>{bids.length}</strong>
+        </div>
       </div>
       {!isAuthenticated && <p className="muted">Connect wallet and sign in to see your assignments.</p>}
       {loading && <p className="muted">Loading…</p>}
       {error && <p className="error">{error}</p>}
-      {isAuthenticated && !loading && jobs.length === 0 && <p className="muted">No active jobs yet.</p>}
+
+      {bids.length > 0 && (
+        <section className="panel">
+          <h3>Recent proposals</h3>
+          <ul className="bids-list">
+            {bids.slice(0, 5).map((bid) => {
+              const jobLinkId =
+                typeof bid.jobId === 'object' && bid.jobId && '_id' in bid.jobId
+                  ? (bid.jobId as { _id: string })._id
+                  : bid.jobId;
+              return (
+              <li key={bid._id} className="bid-item">
+                <strong>{bid.title || 'Proposal'}</strong>
+                <span className="muted">
+                  {bid.bidAmount} USDC · {bid.status}
+                </span>
+                <Link to={`/jobs/${jobLinkId}`} className="btn ghost">
+                  View job
+                </Link>
+              </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      <h3>Assigned jobs</h3>
+      {isAuthenticated && !loading && jobs.length === 0 && (
+        <p className="muted">No active assignments yet — submit bids on open jobs.</p>
+      )}
       <ul className="jobs-list">
         {jobs.map((job) => (
           <JobCard key={job._id} job={job} />

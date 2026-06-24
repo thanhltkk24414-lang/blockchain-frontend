@@ -1,6 +1,15 @@
 import { API_URL } from '@/config/env';
 import { getStoredToken } from '@/lib/auth';
-import type { Job, JobsResponse, UserProfile } from './types';
+import type {
+  BidsResponse,
+  Bid,
+  CreateJobResponse,
+  Job,
+  JobDetailResponse,
+  JobsResponse,
+  UserProfile,
+} from './types';
+import type { CreateJobPayload } from '@/lib/validation/jobForm';
 
 function authHeaders(): HeadersInit {
   const token = getStoredToken();
@@ -21,6 +30,8 @@ export async function fetchJobs(params?: {
   status?: string;
   category?: string;
   search?: string;
+  sortBy?: string;
+  order?: string;
 }): Promise<JobsResponse> {
   const qs = new URLSearchParams();
   if (params?.page) qs.set('page', String(params.page));
@@ -28,33 +39,124 @@ export async function fetchJobs(params?: {
   if (params?.status) qs.set('status', params.status);
   if (params?.category) qs.set('category', params.category);
   if (params?.search) qs.set('search', params.search);
+  if (params?.sortBy) qs.set('sortBy', params.sortBy);
+  if (params?.order) qs.set('order', params.order);
 
   const res = await fetch(`${API_URL}/api/jobs?${qs}`);
   return parseJson<JobsResponse>(res);
 }
 
-export async function searchJobs(q: string, category?: string) {
-  const qs = new URLSearchParams({ q });
-  if (category) qs.set('category', category);
+export async function searchJobs(params: {
+  q?: string;
+  category?: string;
+  minBudget?: number;
+  maxBudget?: number;
+}) {
+  const qs = new URLSearchParams();
+  if (params.q) qs.set('q', params.q);
+  if (params.category) qs.set('category', params.category);
+  if (params.minBudget != null) qs.set('minBudget', String(params.minBudget));
+  if (params.maxBudget != null) qs.set('maxBudget', String(params.maxBudget));
   const res = await fetch(`${API_URL}/api/jobs/search?${qs}`);
-  return parseJson<{ success: boolean; jobs: Job[] }>(res);
+  return parseJson<{ success: boolean; jobs: Job[]; error?: string }>(res);
+}
+
+export async function submitBid(payload: {
+  jobId: string;
+  onchainJobId: number;
+  bidAmount: number;
+  title: string;
+  description: string;
+  timeline: number;
+  proposalCID?: string;
+}) {
+  const res = await fetch(`${API_URL}/api/bids`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  return parseJson<{ success: boolean; bid?: Bid; message?: string }>(res);
+}
+
+export async function fetchBidsByJob(jobId: string) {
+  const res = await fetch(`${API_URL}/api/bids/job/${jobId}`);
+  return parseJson<BidsResponse>(res);
+}
+
+export async function fetchMyBids(address: string, status?: string) {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : '';
+  const res = await fetch(`${API_URL}/api/bids/my/${address}${qs}`);
+  return parseJson<BidsResponse>(res);
+}
+
+export async function acceptBid(bidId: string) {
+  const res = await fetch(`${API_URL}/api/bids/${bidId}/accept`, {
+    method: 'PATCH',
+    headers: { ...authHeaders() },
+  });
+  return parseJson<{
+    success: boolean;
+    bid?: Bid;
+    message?: string;
+    assignTxHash?: string;
+    onchainJobId?: number;
+    code?: string;
+    hint?: string;
+  }>(res);
+}
+
+export async function rejectBid(bidId: string) {
+  const res = await fetch(`${API_URL}/api/bids/${bidId}/reject`, {
+    method: 'PATCH',
+    headers: { ...authHeaders() },
+  });
+  return parseJson<{ success: boolean; bid?: Bid; message?: string }>(res);
+}
+
+export async function uploadIpfsMetadata(payload: Record<string, unknown>) {
+  const res = await fetch(`${API_URL}/api/ipfs/upload/metadata`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  return parseJson<{ success: boolean; cid: string }>(res);
+}
+
+export async function uploadIpfsFile(file: File) {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${API_URL}/api/ipfs/upload/file`, {
+    method: 'POST',
+    headers: { ...authHeaders() },
+    body: form,
+  });
+  return parseJson<{ success: boolean; cid: string }>(res);
 }
 
 export async function fetchJobById(id: string) {
   const res = await fetch(`${API_URL}/api/jobs/${id}`);
-  return parseJson<{ success: boolean; job: Job }>(res);
+  return parseJson<JobDetailResponse>(res);
+}
+
+export async function createJob(payload: CreateJobPayload) {
+  const res = await fetch(`${API_URL}/api/jobs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  return parseJson<CreateJobResponse>(res);
 }
 
 export async function fetchJobsByClient(address: string, status?: string) {
   const qs = status ? `?status=${encodeURIComponent(status)}` : '';
   const res = await fetch(`${API_URL}/api/jobs/client/${address}${qs}`);
-  return parseJson<{ success: boolean; jobs: Job[] }>(res);
+  return parseJson<{ success: boolean; jobs: Job[]; error?: string }>(res);
 }
 
 export async function fetchJobsByFreelancer(address: string, status?: string) {
   const qs = status ? `?status=${encodeURIComponent(status)}` : '';
   const res = await fetch(`${API_URL}/api/jobs/freelancer/${address}${qs}`);
-  return parseJson<{ success: boolean; jobs: Job[] }>(res);
+  return parseJson<{ success: boolean; jobs: Job[]; error?: string }>(res);
 }
 
 export async function fetchUserProfile(address: string) {
@@ -80,7 +182,9 @@ export async function registerUser(payload: {
   return parseJson<{ success: boolean; user?: UserProfile }>(res);
 }
 
-export async function updateUserProfile(payload: Partial<UserProfile['profile']>) {
+export async function updateUserProfile(
+  payload: Partial<UserProfile['profile']> & { role?: UserProfile['role'] },
+) {
   const res = await fetch(`${API_URL}/api/users/profile`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
