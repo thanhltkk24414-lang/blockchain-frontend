@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { useAccount } from 'wagmi';
 import type { Job } from '@/lib/api';
 import { useEscrowDeposit } from '@/hooks/useEscrowDeposit';
+import { DEMO_MINT_USDC, useMockUsdcMint } from '@/hooks/useMockUsdcMint';
 import { useUsdcBalance } from '@/hooks/contracts/useContracts';
 import { TxStatusModal } from '@/components/shared/TxStatusModal';
-import { isValidOnchainJobId } from '@/lib/utils/etherscan';
+import { CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
+import { etherscanAddressUrl, isValidOnchainJobId } from '@/lib/utils/etherscan';
 import { isAddress } from 'viem';
 
 interface EscrowDepositPanelProps {
@@ -54,7 +56,15 @@ export function EscrowDepositPanel({ job }: EscrowDepositPanelProps) {
 
   const { deposit, txStatus, txHash, txLabel, txError, resetTx, totalDepositUsdc } =
     useEscrowDeposit();
-  const { data: balance } = useUsdcBalance(address);
+  const {
+    mint,
+    minting,
+    txStatus: mintTxStatus,
+    txHash: mintTxHash,
+    txError: mintTxError,
+    resetTx: resetMintTx,
+  } = useMockUsdcMint();
+  const { data: balance, refetch: refetchBalance } = useUsdcBalance(address);
 
   if (!isValidOnchainJobId(job.onchainJobId) || !isSiweClient) {
     return null;
@@ -66,6 +76,20 @@ export function EscrowDepositPanel({ job }: EscrowDepositPanelProps) {
     balance != null ? Number(balance) / 1_000_000 : null;
   const insufficientUsdc =
     balanceUsdc != null && balanceUsdc < totalDeposit;
+
+  async function handleMint() {
+    setLocalError(null);
+    if (!isConnected || !address) {
+      setLocalError('Kết nối ví MetaMask trên mạng Sepolia.');
+      return;
+    }
+    try {
+      await mint(DEMO_MINT_USDC);
+      await refetchBalance();
+    } catch {
+      // tx state handled in hook
+    }
+  }
 
   async function handleDeposit() {
     setLocalError(null);
@@ -141,14 +165,43 @@ export function EscrowDepositPanel({ job }: EscrowDepositPanelProps) {
         <dd>{totalDeposit} USDC</dd>
         {balanceUsdc != null && (
           <>
-            <dt>Your USDC balance</dt>
+            <dt>Your MockUSDC balance</dt>
             <dd className={insufficientUsdc ? 'error' : undefined}>
               {balanceUsdc.toLocaleString()} USDC
-              {insufficientUsdc && ' — cần mint MockUSDC trên Sepolia'}
+              {insufficientUsdc && ' — chưa đủ; mint token test bên dưới'}
             </dd>
           </>
         )}
+        <dt>MockUSDC contract</dt>
+        <dd>
+          <a
+            href={etherscanAddressUrl(CONTRACT_ADDRESSES.MockUSDC)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <code>{CONTRACT_ADDRESSES.MockUSDC.slice(0, 6)}…{CONTRACT_ADDRESSES.MockUSDC.slice(-4)}</code>
+          </a>
+        </dd>
       </dl>
+
+      {insufficientUsdc && (
+        <div className="escrow-mint-hint">
+          <p className="muted">
+            <strong>Sepolia ETH ≠ MockUSDC.</strong> ETH từ faucet chỉ trả phí gas. Fapex dùng token{' '}
+            <code>MockUSDC</code> tại địa chỉ trên — không phải USDC Circle hay token faucet khác.
+          </p>
+          <button
+            className="btn outline"
+            type="button"
+            onClick={handleMint}
+            disabled={minting || mintTxStatus === 'pending' || walletMismatch || !isConnected}
+          >
+            {minting || mintTxStatus === 'pending'
+              ? 'Minting…'
+              : `Mint ${DEMO_MINT_USDC.toLocaleString()} test USDC`}
+          </button>
+        </div>
+      )}
 
       {!existingFreelancer && (
         <div className="field">
@@ -184,6 +237,18 @@ export function EscrowDepositPanel({ job }: EscrowDepositPanelProps) {
         hash={txHash}
         error={txError}
         onClose={resetTx}
+      />
+
+      <TxStatusModal
+        open={mintTxStatus !== 'idle'}
+        status={mintTxStatus}
+        label={`Minting ${DEMO_MINT_USDC} MockUSDC…`}
+        hash={mintTxHash}
+        error={mintTxError}
+        onClose={() => {
+          resetMintTx();
+          void refetchBalance();
+        }}
       />
     </section>
   );

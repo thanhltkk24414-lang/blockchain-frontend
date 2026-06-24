@@ -39,7 +39,7 @@ export const CONTRACT_WRITE_ACTIONS = {
     'submitWork',
     'releaseFunds',
   ],
-  mockUsdc: ['approve', 'transfer'],
+  mockUsdc: ['approve', 'transfer', 'mint'],
   arbitratorPanel: ['stake', 'vote', 'finalizeVote'],
 } as const;
 
