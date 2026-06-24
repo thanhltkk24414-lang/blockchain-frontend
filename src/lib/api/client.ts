@@ -89,6 +89,42 @@ export async function fetchMyBids(address: string, status?: string) {
   return parseJson<BidsResponse>(res);
 }
 
+export async function acceptBid(bidId: string) {
+  const res = await fetch(`${API_URL}/api/bids/${bidId}/accept`, {
+    method: 'PATCH',
+    headers: { ...authHeaders() },
+  });
+  return parseJson<{ success: boolean; bid?: Bid; message?: string }>(res);
+}
+
+export async function rejectBid(bidId: string) {
+  const res = await fetch(`${API_URL}/api/bids/${bidId}/reject`, {
+    method: 'PATCH',
+    headers: { ...authHeaders() },
+  });
+  return parseJson<{ success: boolean; bid?: Bid; message?: string }>(res);
+}
+
+export async function uploadIpfsMetadata(payload: Record<string, unknown>) {
+  const res = await fetch(`${API_URL}/api/ipfs/upload/metadata`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  return parseJson<{ success: boolean; cid: string }>(res);
+}
+
+export async function uploadIpfsFile(file: File) {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${API_URL}/api/ipfs/upload/file`, {
+    method: 'POST',
+    headers: { ...authHeaders() },
+    body: form,
+  });
+  return parseJson<{ success: boolean; cid: string }>(res);
+}
+
 export async function fetchJobById(id: string) {
   const res = await fetch(`${API_URL}/api/jobs/${id}`);
   return parseJson<JobDetailResponse>(res);

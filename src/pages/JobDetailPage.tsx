@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { fetchBidsByJob, fetchJobById, type Bid, type Job, type JobMetadata } from '@/lib/api';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { MilestoneProgress } from '@/components/shared/MilestoneProgress';
 import { EscrowDepositPanel } from '@/components/client/EscrowDepositPanel';
+import { AcceptBidButton } from '@/components/client/AcceptBidButton';
+import { ClientJobActionsPanel } from '@/components/client/ClientJobActionsPanel';
 import { BidForm } from '@/components/freelancer/BidForm';
 import { DeliverableSubmitPanel } from '@/components/freelancer/DeliverableSubmitPanel';
 import { useAuth } from '@/context/AuthContext';
@@ -33,14 +35,27 @@ export function JobDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadBids = () => {
+  const loadBids = useCallback(() => {
     if (!id) return;
     fetchBidsByJob(id)
       .then((res) => {
         if (res.success) setBids(res.bids || []);
       })
       .catch(() => {});
-  };
+  }, [id]);
+
+  const reloadJob = useCallback(() => {
+    if (!id) return;
+    fetchJobById(id)
+      .then((res) => {
+        if (res.success && res.job) {
+          setJob(res.job);
+          setMetadata(res.metadata ?? null);
+        }
+      })
+      .catch(() => {});
+    loadBids();
+  }, [id, loadBids]);
 
   useEffect(() => {
     if (!id) return;
@@ -72,7 +87,7 @@ export function JobDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, loadBids]);
 
   if (loading) {
     return (
@@ -207,7 +222,7 @@ export function JobDetailPage() {
         />
       )}
 
-      <DeliverableSubmitPanel job={job} />
+      <DeliverableSubmitPanel job={job} onSubmitted={reloadJob} />
 
       {isClientView && bids.length > 0 && (
         <section className="panel">
@@ -221,12 +236,21 @@ export function JobDetailPage() {
                 </span>
                 <p>{bid.description}</p>
                 <span className="muted mono">{bid.freelancerAddress}</span>
+                {isValidOnchainJobId(job.onchainJobId) && (
+                  <AcceptBidButton
+                    bid={bid}
+                    onchainJobId={job.onchainJobId!}
+                    jobStatus={job.status}
+                    onAccepted={reloadJob}
+                  />
+                )}
               </li>
             ))}
           </ul>
         </section>
       )}
 
+      {isClientView && <ClientJobActionsPanel job={job} onActionComplete={reloadJob} />}
       {isClientView && <EscrowDepositPanel job={job} />}
     </main>
   );

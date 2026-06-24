@@ -5,6 +5,7 @@ import { fetchJobsByClient, type Job } from '@/lib/api';
 import { JobCard } from '@/components/shared/JobCard';
 import { LiveFeed } from '@/components/LiveFeed';
 import { CreateJobForm } from '@/components/client/CreateJobForm';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 
 export function ClientDashboardPage() {
   const navigate = useNavigate();
@@ -32,6 +33,8 @@ export function ClientDashboardPage() {
   useEffect(() => {
     loadJobs();
   }, [loadJobs]);
+
+  useAutoRefresh(loadJobs);
 
   function handleJobCreated(job: Job) {
     setShowCreate(false);

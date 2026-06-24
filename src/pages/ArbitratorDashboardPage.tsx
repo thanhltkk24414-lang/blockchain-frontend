@@ -50,9 +50,31 @@ export function ArbitratorDashboardPage() {
       <section className="panel coming-soon-panel">
         <h3>Dispute queue</h3>
         <p className="muted">
-          Dispute listing and on-chain voting via ArbitratorPanel are not wired yet. This dashboard
-          will show assigned disputes once <code>GET /api/disputes</code> is implemented.
+          <code>GET /api/disputes</code> is not implemented yet. Disputed jobs will appear here once
+          the backend indexes on-chain <code>DisputeRaised</code> events. You can still vote on
+          active disputes via ArbitratorPanel when assigned.
         </p>
+
+        <div className="panel" style={{ marginTop: '1rem', opacity: 0.85 }}>
+          <h4>Vote on dispute (preview)</h4>
+          <p className="muted phase-note">
+            Commit-reveal voting: <code>commitVote(jobId, hash)</code> during the evidence window,
+            then <code>revealVote(jobId, choice, salt)</code> after the commit phase. Choices: 1 =
+            freelancer win, 2 = client win, 3 = split.
+          </p>
+          <div className="form-actions">
+            <button className="btn ghost" type="button" disabled title="Requires active dispute assignment">
+              Commit vote
+            </button>
+            <button className="btn ghost" type="button" disabled title="After commit window closes">
+              Reveal vote
+            </button>
+            <button className="btn ghost" type="button" disabled title="After voting finalizes">
+              Submit evidence (IPFS)
+            </button>
+          </div>
+        </div>
+
         {address && (
           <button
             className="btn ghost"

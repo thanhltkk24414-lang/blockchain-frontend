@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { fetchJobs, searchJobs, type Job } from '@/lib/api';
 import { JobCard } from '@/components/shared/JobCard';
 import { JobFilters, type JobFilterState, DEFAULT_JOB_FILTERS } from '@/components/shared/JobFilters';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 
 function sortJobs(jobs: Job[], sortBy: JobFilterState['sortBy']): Job[] {
   const copy = [...jobs];
@@ -36,8 +37,7 @@ export function BrowsePage() {
     setFilters(next);
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadJobs = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -45,44 +45,42 @@ export function BrowsePage() {
     const minBudget = filters.minBudget ? parseInt(filters.minBudget, 10) : undefined;
     const maxBudget = filters.maxBudget ? parseInt(filters.maxBudget, 10) : undefined;
 
-    const load = hasSearch || minBudget || maxBudget
-      ? searchJobs({
-          q: filters.search.trim() || undefined,
-          category: filters.category || undefined,
-          minBudget,
-          maxBudget,
-        })
-      : fetchJobs({
-          status: filters.status || undefined,
-          category: filters.category || undefined,
-          limit: 50,
-        });
+    try {
+      const res = await (hasSearch || minBudget || maxBudget
+        ? searchJobs({
+            q: filters.search.trim() || undefined,
+            category: filters.category || undefined,
+            minBudget,
+            maxBudget,
+          })
+        : fetchJobs({
+            status: filters.status || undefined,
+            category: filters.category || undefined,
+            limit: 50,
+          }));
 
-    load
-      .then((res) => {
-        if (cancelled) return;
-        if (res.success) {
-          let list = res.jobs || [];
-          if (!hasSearch && !minBudget && !maxBudget && filters.status) {
-            list = list.filter((j) => j.status === filters.status);
-          }
-          list = filterBySkill(list, filters.skill);
-          setJobs(sortJobs(list, filters.sortBy));
-        } else {
-          setError('Failed to load jobs');
+      if (res.success) {
+        let list = res.jobs || [];
+        if (!hasSearch && !minBudget && !maxBudget && filters.status) {
+          list = list.filter((j) => j.status === filters.status);
         }
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load jobs');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
+        list = filterBySkill(list, filters.skill);
+        setJobs(sortJobs(list, filters.sortBy));
+      } else {
+        setError('Failed to load jobs');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load jobs');
+    } finally {
+      setLoading(false);
+    }
   }, [filters]);
+
+  useEffect(() => {
+    loadJobs();
+  }, [loadJobs]);
+
+  useAutoRefresh(loadJobs);
 
   return (
     <main className="page">

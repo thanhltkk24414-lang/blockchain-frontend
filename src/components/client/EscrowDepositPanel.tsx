@@ -114,7 +114,7 @@ export function EscrowDepositPanel({ job }: EscrowDepositPanelProps) {
             placeholder="0x… (from accepted proposal — manual for demo)"
           />
           <span className="muted phase-note">
-            Phase 3 will fill this from accepted bids. For demo, use your freelancer wallet.
+            Pre-filled from accepted proposal when available.
           </span>
         </div>
       )}

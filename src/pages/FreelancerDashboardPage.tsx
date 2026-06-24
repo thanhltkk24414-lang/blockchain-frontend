@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { fetchJobsByFreelancer, fetchMyBids, fetchUserStats, type Bid, type Job } from '@/lib/api';
 import { JobCard } from '@/components/shared/JobCard';
 import { useJobCounter } from '@/hooks/contracts/useContracts';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 
 export function FreelancerDashboardPage() {
   const { address, isAuthenticated } = useAuth();
@@ -14,30 +15,31 @@ export function FreelancerDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const { data: jobCounter } = useJobCounter();
 
-  useEffect(() => {
+  const loadData = useCallback(async () => {
     if (!address) return;
-    let cancelled = false;
     setLoading(true);
-
-    Promise.all([fetchJobsByFreelancer(address), fetchUserStats(address), fetchMyBids(address)])
-      .then(([jobsRes, statsRes, bidsRes]) => {
-        if (cancelled) return;
-        if (jobsRes.success) setJobs(jobsRes.jobs || []);
-        else setError('Failed to load freelancer jobs');
-        if (statsRes.success) setStats(statsRes.stats || null);
-        if (bidsRes.success) setBids(bidsRes.bids || []);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load data');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
+    try {
+      const [jobsRes, statsRes, bidsRes] = await Promise.all([
+        fetchJobsByFreelancer(address),
+        fetchUserStats(address),
+        fetchMyBids(address),
+      ]);
+      if (jobsRes.success) setJobs(jobsRes.jobs || []);
+      else setError('Failed to load freelancer jobs');
+      if (statsRes.success) setStats(statsRes.stats || null);
+      if (bidsRes.success) setBids(bidsRes.bids || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
   }, [address]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  useAutoRefresh(loadData);
 
   return (
     <main className="page">

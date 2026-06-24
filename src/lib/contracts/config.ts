@@ -30,10 +30,10 @@ export const contracts = {
 
 /** Write functions the UI will call (Phase 2+) */
 export const CONTRACT_WRITE_ACTIONS = {
-  jobRegistry: ['createJob', 'submitProposal', 'assignFreelancer', 'cancelOpenJob', 'submitDeliverable'],
+  jobRegistry: ['createJob', 'submitProposal', 'assignFreelancer', 'cancelOpenJob'],
   escrowVault: [
     'depositEscrow',
-    'approveMilestone',
+    'approveAndRelease',
     'raiseDispute',
     'startWork',
     'submitWork',

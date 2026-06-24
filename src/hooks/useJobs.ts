@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchJobs, type Job } from '@/lib/api';
+import { useAutoRefresh } from './useAutoRefresh';
 
 export function useJobs() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -24,16 +25,10 @@ export function useJobs() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-
-    refetch().then(() => {
-      if (cancelled) return;
-    });
-
-    return () => {
-      cancelled = true;
-    };
+    refetch();
   }, [refetch]);
+
+  useAutoRefresh(refetch);
 
   return { jobs, loading, error, refetch };
 }
