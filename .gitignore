@@ -6,6 +6,8 @@ dist/
 build/
 .next/
 out/
+fapex-frontend/.next/
+fapex-frontend/node_modules/
 *.pem
 *.log
 .DS_Store

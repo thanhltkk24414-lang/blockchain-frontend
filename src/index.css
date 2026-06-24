@@ -241,3 +241,191 @@ body {
   overflow-x: auto;
   color: #c5cad6;
 }
+
+.brand-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.nav-link {
+  color: #aeb6c8;
+  text-decoration: none;
+  font-size: 0.9rem;
+  padding: 0.25rem 0;
+  border-bottom: 2px solid transparent;
+}
+
+.nav-link.active,
+.nav-link:hover {
+  color: #e8eaed;
+  border-bottom-color: #4f7cff;
+}
+
+.page {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.page.two-col {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 900px) {
+  .page.two-col {
+    grid-template-columns: 1.2fr 1fr;
+    align-items: start;
+  }
+}
+
+.page-header h2 {
+  margin: 0;
+}
+
+.page-header .muted {
+  margin: 0.35rem 0 0;
+}
+
+.landing {
+  display: grid;
+  gap: 2.5rem;
+}
+
+.hero {
+  text-align: center;
+  padding: 2rem 0 1rem;
+}
+
+.eyebrow {
+  display: inline-block;
+  font-size: 0.8rem;
+  color: #6ee7a8;
+  border: 1px solid #1a3d2e;
+  border-radius: 999px;
+  padding: 0.25rem 0.75rem;
+  margin: 0;
+}
+
+.hero h2 {
+  margin: 1rem 0 0;
+  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  line-height: 1.15;
+}
+
+.lead {
+  max-width: 42rem;
+  margin: 1rem auto 0;
+  color: #aeb6c8;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.features-grid,
+.roles-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 768px) {
+  .features-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .roles-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.feature-card,
+.role-card {
+  background: #171b24;
+  border: 1px solid #2a2f3a;
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+
+.feature-card h3,
+.role-card h3 {
+  margin: 0 0 0.5rem;
+}
+
+.feature-card p,
+.role-card p {
+  margin: 0 0 1rem;
+  color: #aeb6c8;
+  font-size: 0.95rem;
+}
+
+.btn.outline {
+  background: transparent;
+  color: #7eb8ff;
+  border: 1px solid #3a4150;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.input {
+  background: #11151d;
+  border: 1px solid #2a2f3a;
+  border-radius: 8px;
+  color: #e8eaed;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  min-width: 12rem;
+}
+
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.stat-card {
+  background: #171b24;
+  border: 1px solid #2a2f3a;
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.stat-label {
+  display: block;
+  font-size: 0.8rem;
+  color: #8b93a7;
+  margin-bottom: 0.35rem;
+}
+
+.form-panel {
+  max-width: 28rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.phase-note {
+  font-size: 0.85rem;
+}
+
+.status-assigned { background: #2d2a1a; color: #e7d56e; }
+.status-progress { background: #1a2d3d; color: #7eb8ff; }
+.status-submitted { background: #2a1a3d; color: #c49bff; }
+.status-completed { background: #1a3d2e; color: #6ee7a8; }
+.status-cancelled { background: #3d1a1a; color: #ff8a8a; }
+.status-disputed { background: #3d2a1a; color: #ffb86c; }
