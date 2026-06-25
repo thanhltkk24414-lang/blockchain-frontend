@@ -1,6 +1,7 @@
 import type { Job } from '@/lib/api';
 import { useOnChainJob } from '@/hooks/useOnChainJob';
 import { isValidOnchainJobId } from '@/lib/utils/etherscan';
+import { DISPUTE_PHASES } from '@/lib/contracts/disputeTimings';
 import { ONCHAIN_JOB_STATUS } from '@/lib/utils/onchainJob';
 
 interface DisputeStatusPanelProps {
@@ -23,17 +24,24 @@ export function DisputeStatusPanel({ job }: DisputeStatusPanelProps) {
       </p>
       <ul className="muted phase-note">
         <li>
-          <strong>0–120h:</strong> Nộp bằng chứng (<code>submitEvidence</code>)
+          <strong>0–{DISPUTE_PHASES.evidenceRebuttalEndMin} phút:</strong> Nộp bằng chứng (
+          <code>submitEvidence</code>)
         </li>
         <li>
-          <strong>120–144h:</strong> Arbitrator commit vote
+          <strong>
+            {DISPUTE_PHASES.commitStartMin}–{DISPUTE_PHASES.commitEndMin} phút:
+          </strong>{' '}
+          Arbitrator commit vote
         </li>
         <li>
-          <strong>144–168h:</strong> Arbitrator reveal vote
+          <strong>
+            {DISPUTE_PHASES.revealStartMin}–{DISPUTE_PHASES.revealEndMin} phút:
+          </strong>{' '}
+          Arbitrator reveal vote
         </li>
         <li>
-          <strong>Sau 168h:</strong> <code>finalizeDisputeVoting</code> →{' '}
-          <code>executeArbitrationResult</code>
+          <strong>Sau {DISPUTE_PHASES.revealEndMin} phút:</strong>{' '}
+          <code>finalizeDisputeVoting</code> → <code>executeArbitrationResult</code>
         </li>
       </ul>
       <p className="muted">

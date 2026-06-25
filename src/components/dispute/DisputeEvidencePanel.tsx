@@ -7,6 +7,7 @@ import { useOnChainJob } from '@/hooks/useOnChainJob';
 import { TxStatusModal } from '@/components/shared/TxStatusModal';
 import { addressesEqual } from '@/lib/utils/address';
 import { isValidOnchainJobId } from '@/lib/utils/etherscan';
+import { DISPUTE_PHASES } from '@/lib/contracts/disputeTimings';
 import { ONCHAIN_JOB_STATUS } from '@/lib/utils/onchainJob';
 
 interface DisputeEvidencePanelProps {
@@ -77,7 +78,8 @@ export function DisputeEvidencePanel({ job }: DisputeEvidencePanelProps) {
       <h3>Tranh chấp — nộp bằng chứng</h3>
       <p className="muted">
         Job đang <strong>DISPUTED</strong>. Client hoặc freelancer có thể nộp bằng chứng trong{' '}
-        <strong>120 giờ</strong> đầu (on-chain <code>submitEvidence</code>).
+        <strong>{DISPUTE_PHASES.evidenceRebuttalEndMin} phút</strong> đầu (on-chain{' '}
+        <code>submitEvidence</code>).
       </p>
       {disputeInfo && <p className="muted phase-note">{disputeInfo}</p>}
 

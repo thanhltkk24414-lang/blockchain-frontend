@@ -10,6 +10,7 @@ import {
   VOTE_CHOICES,
 } from '@/hooks/useDisputeActions';
 import { TxStatusModal } from '@/components/shared/TxStatusModal';
+import { DISPUTE_PHASES } from '@/lib/contracts/disputeTimings';
 
 export function ArbitratorDashboardPage() {
   const { address, isAuthenticated } = useAuth();
@@ -131,8 +132,10 @@ export function ArbitratorDashboardPage() {
       <section className="panel">
         <h4>Vote on dispute</h4>
         <p className="muted phase-note">
-          Commit-reveal: hash = keccak256(choice, salt). Phases: evidence 0–120h → commit 120–144h →
-          reveal 144–168h. Trên Sepolia phải đợi đúng khung giờ contract.
+          Commit-reveal: hash = keccak256(choice, salt). Sepolia demo: evidence 0–
+          {DISPUTE_PHASES.evidenceRebuttalEndMin}m → commit {DISPUTE_PHASES.commitStartMin}–
+          {DISPUTE_PHASES.commitEndMin}m → reveal {DISPUTE_PHASES.revealStartMin}–
+          {DISPUTE_PHASES.revealEndMin}m → finalize sau {DISPUTE_PHASES.revealEndMin}m.
         </p>
 
         <label className="field">
