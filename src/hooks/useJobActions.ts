@@ -12,6 +12,7 @@ import { executeContractWrite } from '@/lib/utils/contractWrite';
 import {
   normalizeOnchainStatus,
   ONCHAIN_JOB_STATUS,
+  onchainStatusLabel,
   type OnChainJob,
   validateDeliverableSubmit,
 } from '@/lib/utils/onchainJob';
@@ -19,6 +20,14 @@ import { addressesEqual } from '@/lib/utils/address';
 import { useContractTx } from './useContractTx';
 
 const PREFLIGHT_CID = 'QmPreflightCheck000000000000000000000000000';
+const DISPUTE_FEE_BPS = 2n;
+const DISPUTE_FEE_CAP = 50_000_000n; // 50 USDC (6 decimals)
+
+function computeDisputeFee(contractValueMicro: bigint): bigint {
+  let fee = (contractValueMicro * DISPUTE_FEE_BPS) / 100n;
+  if (fee > DISPUTE_FEE_CAP) fee = DISPUTE_FEE_CAP;
+  return fee;
+}
 
 async function readOnchainJob(jobId: bigint): Promise<OnChainJob> {
   const raw = (await readContract(wagmiConfig, {
@@ -204,36 +213,59 @@ export function useClientJobActions() {
   );
 
   const raiseDispute = useCallback(
-    async (onchainJobId: number, contractValue: number) => {
-      if (!address) throw new Error('Connect your wallet first');
+    async (onchainJobId: number) => {
+      if (!address) throw new Error('Hãy kết nối ví MetaMask trước.');
 
-      const fee = BigInt(Math.ceil(contractValue * 0.02 * 1_000_000));
+      const wallet = getAddress(address);
+      const jobId = BigInt(onchainJobId);
+      const onchainJob = await readOnchainJob(jobId);
+      const isClient = addressesEqual(onchainJob.client, wallet);
+      const isFreelancer = addressesEqual(onchainJob.freelancer, wallet);
+
+      if (!isClient && !isFreelancer) {
+        throw new Error(
+          `Ví MetaMask (${wallet}) không phải client/freelancer của job on-chain. ` +
+            'Chỉ một trong hai bên mới được mở tranh chấp.',
+        );
+      }
+
+      if (
+        onchainJob.status !== ONCHAIN_JOB_STATUS.SUBMITTED &&
+        onchainJob.status !== ONCHAIN_JOB_STATUS.IN_PROGRESS
+      ) {
+        throw new Error(
+          `Job on-chain đang ${onchainStatusLabel(onchainJob.status)} — ` +
+            'chỉ khiếu nại khi SUBMITTED hoặc IN_PROGRESS.',
+        );
+      }
+
+      const fee = computeDisputeFee(onchainJob.contractValue);
 
       const allowance = (await readContract(wagmiConfig, {
         ...contracts.mockUsdc,
         functionName: 'allowance',
-        args: [address, CONTRACT_ADDRESSES.EscrowVault],
+        args: [wallet, CONTRACT_ADDRESSES.EscrowVault],
       })) as bigint;
 
       if (allowance < fee) {
-        await tx.runTx('Approving USDC dispute fee…', () =>
+        await tx.runTx('Đang approve phí tranh chấp USDC…', () =>
           executeContractWrite(writeContractAsync, {
             address: contracts.mockUsdc.address,
             abi: contracts.mockUsdc.abi as Abi,
             functionName: 'approve',
             args: [CONTRACT_ADDRESSES.EscrowVault, fee],
-            account: address,
+            account: wallet,
           }),
         );
       }
 
-      await tx.runTx('Raising dispute on-chain…', () =>
+      await tx.runTx('Đang mở tranh chấp on-chain…', () =>
         executeContractWrite(writeContractAsync, {
           address: contracts.escrowVault.address,
           abi: contracts.escrowVault.abi as Abi,
           functionName: 'raiseDispute',
-          args: [BigInt(onchainJobId)],
-          account: address,
+          args: [jobId],
+          account: wallet,
         }),
       );
     },

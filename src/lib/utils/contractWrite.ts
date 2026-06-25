@@ -46,6 +46,17 @@ const REVERT_HINTS_BY_FN: Record<string, Record<string, string>> = {
     ContractPaused: 'EscrowVault đang pause — thử lại sau.',
     TransferFailed: 'Chuyển USDC thất bại — escrow có thể chưa khóa đủ tiền cho job này.',
   },
+  raiseDispute: {
+    WrongStatus:
+      'raiseDispute chỉ gọi được khi job SUBMITTED hoặc IN_PROGRESS (chưa COMPLETED).',
+    NotAParty: 'Chỉ client hoặc freelancer on-chain mới mở tranh chấp — đổi ví MetaMask.',
+    AlreadyDisputed: 'Job đã từng mở tranh chấp — không thể mở lại.',
+    LowReputationTier: 'Reputation tier Warning/Restricted không được mở tranh chấp mới.',
+    TransferFailed:
+      'Chuyển phí tranh chấp USDC thất bại — kiểm tra số dư MockUSDC và allowance cho EscrowVault.',
+    NotEnoughArbitrators:
+      'Chưa đủ 5 arbitrator trong pool (ArbitratorPanel.poolSize). Admin cần joinPool trước khi demo dispute.',
+  },
 };
 
 export function decodeContractError(

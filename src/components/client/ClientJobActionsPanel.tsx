@@ -66,11 +66,11 @@ export function ClientJobActionsPanel({ job, onActionComplete }: ClientJobAction
   }
 
   async function handleDispute() {
-    if (!job.onchainJobId || !job.contractValue) return;
+    if (!job.onchainJobId) return;
     setBusy('dispute');
     setError(null);
     try {
-      await raiseDispute(job.onchainJobId, job.contractValue);
+      await raiseDispute(job.onchainJobId);
       await refetch();
       onActionComplete?.();
     } catch (err) {
