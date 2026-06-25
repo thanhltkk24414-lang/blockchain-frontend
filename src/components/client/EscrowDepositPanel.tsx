@@ -13,6 +13,8 @@ import { etherscanAddressUrl, isValidOnchainJobId } from '@/lib/utils/etherscan'
 import { addressesEqual, tryChecksumAddress } from '@/lib/utils/address';
 import {
   explainDepositBlocker,
+  explainRegistryMismatch,
+  hasRegistryClientMismatch,
   isNonZeroAddress,
   onchainStatusLabel,
   ONCHAIN_JOB_STATUS,
@@ -93,6 +95,21 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
     [onchainJob, onchainEscrowFunded],
   );
 
+  const registryMismatch = useMemo(
+    () => hasRegistryClientMismatch(onchainJob?.client, onchainClientAddr),
+    [onchainJob?.client, onchainClientAddr],
+  );
+
+  const registryMismatchMessage = useMemo(() => {
+    if (!registryMismatch || !onchainClientAddr || !job.onchainJobId) return null;
+    return explainRegistryMismatch(
+      job.onchainJobId,
+      CONTRACT_ADDRESSES.JobRegistry,
+      onchainClientAddr,
+      onchainJob?.client,
+    );
+  }, [registryMismatch, onchainClientAddr, job.onchainJobId, onchainJob?.client]);
+
   const { deposit, txStatus, txHash, txLabel, txError, resetTx, escrowTotalFromOnChain } =
     useEscrowDeposit();
 
@@ -144,7 +161,7 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
     balance != null ? Number(balance) / 1_000_000 : null;
   const insufficientUsdc =
     balanceUsdc != null && balanceUsdc < totalDeposit;
-  const depositBlocked = Boolean(onchainBlocker);
+  const depositBlocked = Boolean(onchainBlocker) || registryMismatch;
   const escrowFunded = onchainEscrowFunded || txStatus === 'success';
   const depositComplete =
     escrowFunded &&
@@ -232,6 +249,7 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
         onchainJobId: job.onchainJobId,
         freelancerAddress: freelancer,
         expectedFreelancer: acceptedFreelancer ?? undefined,
+        expectedOnchainClient: onchainClientAddr,
       });
       await refetchOnchain();
     } catch {
@@ -283,7 +301,11 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
         </p>
       )}
 
-      {depositBlocked && !depositComplete && (
+      {registryMismatchMessage && (
+        <p className="error">{registryMismatchMessage}</p>
+      )}
+
+      {depositBlocked && !depositComplete && !registryMismatchMessage && (
         <p className="error">{onchainBlocker}</p>
       )}
 
@@ -313,11 +335,23 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
 
       {onchainClientAddr && (
         <p className="muted phase-note">
-          Client on-chain:{' '}
+          Client on-chain (API):{' '}
           <code>
             {onchainClientAddr.slice(0, 6)}…{onchainClientAddr.slice(-4)}
           </code>
-          {walletMismatch && (
+          {onchainJob?.client && isNonZeroAddress(onchainJob.client) && (
+            <>
+              {' '}
+              · JobRegistry read:{' '}
+              <code>
+                {onchainJob.client.slice(0, 6)}…{onchainJob.client.slice(-4)}
+              </code>
+            </>
+          )}
+          {registryMismatch && (
+            <span className="error"> — lệch contract registry (xem cảnh báo trên).</span>
+          )}
+          {walletMismatch && !registryMismatch && (
             <span className="error">
               {' '}
               — ví MetaMask hiện tại khác ví này; giao dịch sẽ revert.
@@ -405,6 +439,7 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
           walletMismatch ||
           insufficientUsdc ||
           depositBlocked ||
+          registryMismatch ||
           acceptedVsOnchainMismatch ||
           depositComplete
         }

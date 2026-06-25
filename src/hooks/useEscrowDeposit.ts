@@ -10,6 +10,8 @@ import { executeContractWrite, decodeContractError } from '@/lib/utils/contractW
 import { addressesEqual } from '@/lib/utils/address';
 import {
   explainDepositBlocker,
+  explainRegistryMismatch,
+  hasRegistryClientMismatch,
   isNonZeroAddress,
   type OnChainJob,
 } from '@/lib/utils/onchainJob';
@@ -19,6 +21,8 @@ interface EscrowDepositParams {
   onchainJobId: number;
   freelancerAddress: `0x${string}`;
   expectedFreelancer?: string;
+  /** From API when backend registry differs from frontend read. */
+  expectedOnchainClient?: string | null;
 }
 
 export function useEscrowDeposit() {
@@ -56,7 +60,7 @@ export function useEscrowDeposit() {
   }, []);
 
   const deposit = useCallback(
-    async ({ onchainJobId, freelancerAddress, expectedFreelancer }: EscrowDepositParams) => {
+    async ({ onchainJobId, freelancerAddress, expectedFreelancer, expectedOnchainClient }: EscrowDepositParams) => {
       if (!address) throw new Error('Connect your wallet first');
       const freelancer = getAddress(freelancerAddress);
       if (!isNonZeroAddress(freelancer)) {
@@ -76,6 +80,19 @@ export function useEscrowDeposit() {
 
       try {
         const onChainJob = await readOnChainJob(onchainJobId);
+        if (
+          hasRegistryClientMismatch(onChainJob.client, expectedOnchainClient) &&
+          expectedOnchainClient
+        ) {
+          throw new Error(
+            explainRegistryMismatch(
+              onchainJobId,
+              CONTRACT_ADDRESSES.JobRegistry,
+              expectedOnchainClient,
+              onChainJob.client,
+            ),
+          );
+        }
         const escrowFunded = await checkEscrowFunded(onChainJob.contractValue);
         const blocker = explainDepositBlocker(onChainJob, { escrowFunded });
         if (blocker) {

@@ -24,6 +24,17 @@ export function useAuth() {
 
   const isAuthenticated = Boolean(token && user);
 
+  // MetaMask account switch must not reuse another wallet's JWT session.
+  useEffect(() => {
+    if (!isConnected || !address || !user?.walletAddress) return;
+    if (address.toLowerCase() !== user.walletAddress.toLowerCase()) {
+      clearAuth();
+      setToken(null);
+      setUser(null);
+      setError('Wallet changed — sign in again with the connected account.');
+    }
+  }, [address, isConnected, user?.walletAddress]);
+
   useEffect(() => {
     const stored = getStoredToken();
     if (!stored) return;

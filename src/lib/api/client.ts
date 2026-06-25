@@ -318,6 +318,8 @@ export async function fetchHealth() {
   return parseJson<{
     status: string;
     mongodb: string;
+    chainId?: number;
+    contracts?: Record<string, string | null>;
     websocket: { enabled: boolean; path: string };
   }>(res);
 }

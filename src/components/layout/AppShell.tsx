@@ -1,8 +1,11 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAuth } from '@/context/AuthContext';
 import { useArbitratorAccess } from '@/hooks/useArbitratorAccess';
 import { API_URL } from '@/config/env';
+import { fetchHealth } from '@/lib/api';
+import { CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 import type { RegistrationRole } from '@/lib/api';
 
 type NavItem = { to: string; label: string; roles?: RegistrationRole[]; arbitrator?: boolean };
@@ -18,6 +21,23 @@ const NAV: NavItem[] = [
 export function AppShell() {
   const { isConnected, isAuthenticated, user, loading, error, signIn, signOut } = useAuth();
   const arbitrator = useArbitratorAccess();
+  const [contractMismatch, setContractMismatch] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchHealth()
+      .then((health) => {
+        const backendRegistry = health.contracts?.JobRegistry?.toLowerCase();
+        const frontendRegistry = CONTRACT_ADDRESSES.JobRegistry.toLowerCase();
+        if (backendRegistry && backendRegistry !== frontendRegistry) {
+          setContractMismatch(
+            `Backend JobRegistry (${health.contracts?.JobRegistry}) ≠ frontend (${CONTRACT_ADDRESSES.JobRegistry}). Cập nhật Railway env.`,
+          );
+        } else {
+          setContractMismatch(null);
+        }
+      })
+      .catch(() => setContractMismatch(null));
+  }, []);
 
   const visibleNav = NAV.filter((item) => {
     if (item.arbitrator) return isAuthenticated && arbitrator.isValid;
@@ -61,7 +81,9 @@ export function AppShell() {
             <div className="auth-status">
               <span className="badge success">Authenticated</span>
               {user?.role && <span className="badge role-badge">{user.role}</span>}
-              <span className="wallet">{user?.walletAddress}</span>
+              <span className="wallet" title="SIWE session wallet">
+                {user?.walletAddress}
+              </span>
               <button className="btn ghost" onClick={handleSignOut} type="button">
                 Sign out
               </button>
@@ -69,6 +91,7 @@ export function AppShell() {
           )}
         </div>
         {error && <p className="error banner">{error}</p>}
+        {contractMismatch && <p className="error banner">{contractMismatch}</p>}
       </header>
       <Outlet />
     </div>

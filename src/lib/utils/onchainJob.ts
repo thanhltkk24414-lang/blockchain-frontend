@@ -75,6 +75,32 @@ export function isNonZeroAddress(addr?: string | null): addr is Address {
   return Boolean(addr && addr.toLowerCase() !== zeroAddress.toLowerCase());
 }
 
+/** True when frontend JobRegistry read disagrees with API-persisted on-chain client. */
+export function hasRegistryClientMismatch(
+  chainClient?: string | null,
+  apiClient?: string | null,
+): boolean {
+  if (!isNonZeroAddress(apiClient)) return false;
+  return !isNonZeroAddress(chainClient) || !addressesEqual(chainClient, apiClient);
+}
+
+export function explainRegistryMismatch(
+  onchainJobId: number,
+  frontendRegistry: string,
+  apiClient: string,
+  chainClient?: string | null,
+): string {
+  const chainLabel = isNonZeroAddress(chainClient)
+    ? shortAddress(chainClient)
+    : '0x0000…0000';
+  return (
+    `Job #${onchainJobId} trên JobRegistry frontend (${shortAddress(frontendRegistry)}) có client ${chainLabel}, ` +
+    `nhưng backend ghi client ${shortAddress(apiClient)}. ` +
+    'Railway backend và frontend đang trỏ khác địa chỉ contract — cập nhật env Railway theo deployments/sepolia.json, ' +
+    'rồi tạo job mới. Job cũ không nạp escrow được.'
+  );
+}
+
 export type DepositBlockerOptions = {
   /** True when EscrowVault holds at least the expected deposit for this job. */
   escrowFunded?: boolean;
