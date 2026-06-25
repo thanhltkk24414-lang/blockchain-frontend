@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useArbitratorAccess } from '@/hooks/useArbitratorAccess';
 
+import { hasChosenRegistrationRole } from '@/lib/utils/profile';
 type RegistrationRole = 'client' | 'freelancer';
 
 interface RoleGuardProps {
@@ -24,6 +25,10 @@ export function RoleGuard({
 
   if (requireAuth && !isAuthenticated) {
     return <Navigate to="/profile" replace state={{ from: location.pathname }} />;
+  }
+
+  if (requireRole && !hasChosenRegistrationRole(user)) {
+    return <Navigate to="/profile" replace state={{ from: location.pathname, needRole: requireRole }} />;
   }
 
   if (requireRole && user?.role !== requireRole) {

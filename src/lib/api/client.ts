@@ -8,6 +8,7 @@ import type {
   JobDetailResponse,
   JobsResponse,
   UserProfile,
+  RegistrationRole,
 } from './types';
 import type { CreateJobPayload } from '@/lib/validation/jobForm';
 import { normalizeBids, normalizeJob, normalizeJobs } from './normalize';
@@ -233,6 +234,7 @@ export async function checkUserExists(address: string) {
 export async function registerUser(payload: {
   walletAddress: string;
   username: string;
+  role: RegistrationRole;
   email?: string;
 }) {
   const res = await fetch(`${API_URL}/api/users/register`, {
