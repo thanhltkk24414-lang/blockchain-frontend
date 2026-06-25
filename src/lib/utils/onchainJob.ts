@@ -12,6 +12,11 @@ export const ONCHAIN_JOB_STATUS = {
   CANCELLED: 7,
 } as const;
 
+/** Coerce viem uint8 / bigint enum to a plain number for comparisons. */
+export function normalizeOnchainStatus(status: number | bigint): number {
+  return typeof status === 'bigint' ? Number(status) : status;
+}
+
 export type OnChainJob = {
   client: Address;
   status: number;

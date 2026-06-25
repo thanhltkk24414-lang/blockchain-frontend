@@ -7,6 +7,7 @@ import { escrowTotalFromOnChain } from '@/lib/utils/usdc';
 import { isValidOnchainJobId } from '@/lib/utils/etherscan';
 import {
   ONCHAIN_JOB_STATUS,
+  normalizeOnchainStatus,
   onchainStatusLabel,
   type OnChainJob,
 } from '@/lib/utils/onchainJob';
@@ -38,24 +39,29 @@ export function useOnChainJob(onchainJobId?: number, refreshKey?: string | numbe
         args: [BigInt(onchainJobId!)],
       })) as OnChainJob;
 
+      const normalizedJob: OnChainJob = {
+        ...job,
+        status: normalizeOnchainStatus(job.status),
+      };
+
       let escrowFunded = false;
       if (
-        job.contractValue > 0n &&
-        (job.status === ONCHAIN_JOB_STATUS.ASSIGNED ||
-          job.status === ONCHAIN_JOB_STATUS.IN_PROGRESS ||
-          job.status === ONCHAIN_JOB_STATUS.SUBMITTED)
+        normalizedJob.contractValue > 0n &&
+        (normalizedJob.status === ONCHAIN_JOB_STATUS.ASSIGNED ||
+          normalizedJob.status === ONCHAIN_JOB_STATUS.IN_PROGRESS ||
+          normalizedJob.status === ONCHAIN_JOB_STATUS.SUBMITTED)
       ) {
         const balance = (await readContract(wagmiConfig, {
           ...contracts.mockUsdc,
           functionName: 'balanceOf',
           args: [CONTRACT_ADDRESSES.EscrowVault],
         })) as bigint;
-        escrowFunded = balance >= escrowTotalFromOnChain(job.contractValue);
+        escrowFunded = balance >= escrowTotalFromOnChain(normalizedJob.contractValue);
       }
 
       const next: OnChainJobState = {
-        job,
-        statusLabel: onchainStatusLabel(job.status),
+        job: normalizedJob,
+        statusLabel: onchainStatusLabel(normalizedJob.status),
         escrowFunded,
       };
       setState(next);

@@ -27,7 +27,7 @@ const REVERT_HINTS: Record<string, string> = {
 const REVERT_HINTS_BY_FN: Record<string, Record<string, string>> = {
   submitWork: {
     WrongStatus:
-      'Job phải ở IN_PROGRESS. Nếu mới ASSIGNED, hệ thống sẽ gọi startWork trước — đợi giao dịch xác nhận rồi thử lại.',
+      'Job chưa startWork — đang gọi startWork trước... (submitWork chỉ chạy khi IN_PROGRESS).',
     OnlyFreelancer:
       'Ví MetaMask không trùng freelancer on-chain. Đổi sang ví đã được gán khi client nạp escrow.',
   },

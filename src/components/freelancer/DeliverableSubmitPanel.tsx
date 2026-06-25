@@ -63,10 +63,14 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
 
   if (!isAssignedFreelancer || !isValidOnchainJobId(job.onchainJobId)) return null;
 
+  const isOnchainAssigned = onchainStatus === ONCHAIN_JOB_STATUS.ASSIGNED;
+  const isOnchainInProgress = onchainStatus === ONCHAIN_JOB_STATUS.IN_PROGRESS;
+  const twoStepFlow = isOnchainAssigned && !walletMismatch;
+
   const canSubmit =
-    ['ASSIGNED', 'IN_PROGRESS'].includes(job.status) ||
-    onchainStatus === ONCHAIN_JOB_STATUS.ASSIGNED ||
-    onchainStatus === ONCHAIN_JOB_STATUS.IN_PROGRESS;
+    isOnchainAssigned ||
+    isOnchainInProgress ||
+    ['ASSIGNED', 'IN_PROGRESS'].includes(job.status);
 
   if (!canSubmit && !onchainSubmitted && !successCid) {
     return (
@@ -132,8 +136,9 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
     <form className="panel deliverable-panel" onSubmit={handleSubmit}>
       <h3>Nộp bàn giao</h3>
       <p className="muted">
-        Hệ thống kiểm tra ví và mô phỏng giao dịch on-chain <strong>trước</strong> khi upload IPFS.
-        Nếu job còn ASSIGNED, sẽ gọi <code>startWork</code> rồi <code>submitWork</code>.
+        Hệ thống mô phỏng giao dịch on-chain trước khi gửi ví. Khi job còn ASSIGNED, luồng nộp gồm{' '}
+        <strong>2 bước</strong>: <code>startWork</code> (chờ xác nhận) → upload IPFS →{' '}
+        <code>submitWork</code>.
       </p>
 
       {chainLoading && <p className="muted">Đang đọc trạng thái on-chain…</p>}
@@ -163,10 +168,18 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
         </p>
       )}
 
-      {onchainStatus === ONCHAIN_JOB_STATUS.ASSIGNED && !walletMismatch && (
-        <p className="muted">
-          Job đang ASSIGNED — lần nộp đầu gửi 2 giao dịch: <code>startWork</code> rồi{' '}
-          <code>submitWork</code>.
+      {twoStepFlow && (
+        <p className="badge info">
+          <strong>Bước 1/2:</strong> <code>startWork</code> (ASSIGNED → IN_PROGRESS) —{' '}
+          <strong>Bước 2/2:</strong> <code>submitWork</code>. MetaMask sẽ hỏi 2 lần; đừng bỏ qua bước
+          1.
+        </p>
+      )}
+
+      {isOnchainAssigned && walletMismatch && (
+        <p className="error muted">
+          Job đang ASSIGNED — cần <code>startWork</code> trước <code>submitWork</code>, nhưng ví không
+          khớp freelancer on-chain.
         </p>
       )}
 
@@ -211,10 +224,15 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
           txStatus === 'pending' ||
           chainLoading ||
           !isAuthenticated ||
-          Boolean(walletMismatch)
+          Boolean(walletMismatch) ||
+          (isOnchainAssigned && chainLoading)
         }
       >
-        {loading || txStatus === 'pending' ? 'Đang nộp…' : 'Kiểm tra & nộp on-chain'}
+        {loading || txStatus === 'pending'
+          ? txLabel || 'Đang nộp…'
+          : twoStepFlow
+            ? 'Bước 1–2: startWork + nộp bàn giao'
+            : 'Kiểm tra & nộp on-chain'}
       </button>
 
       {error && <p className="error">{error}</p>}
