@@ -1,9 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { readContract } from 'wagmi/actions';
+import type { Address } from 'viem';
 import type { Job } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useDeliverableSubmit } from '@/hooks/useJobActions';
 import { TxStatusModal } from '@/components/shared/TxStatusModal';
 import { isValidOnchainJobId } from '@/lib/utils/etherscan';
+import { wagmiConfig } from '@/config/wagmi';
+import { contracts } from '@/lib/contracts/config';
+import {
+  ONCHAIN_JOB_STATUS,
+  onchainStatusLabel,
+  shortAddress,
+  type OnChainJob,
+} from '@/lib/utils/onchainJob';
 
 interface DeliverableSubmitPanelProps {
   job: Job;
@@ -19,21 +29,50 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successCid, setSuccessCid] = useState<string | null>(null);
+  const [onchainFreelancer, setOnchainFreelancer] = useState<Address | null>(null);
+  const [onchainStatus, setOnchainStatus] = useState<number | null>(null);
 
   const isAssignedFreelancer =
     user?.role === 'freelancer' &&
     address &&
     job.freelancerAddress?.toLowerCase() === address.toLowerCase();
 
+  useEffect(() => {
+    if (!isValidOnchainJobId(job.onchainJobId)) return;
+    let cancelled = false;
+
+    readContract(wagmiConfig, {
+      ...contracts.jobRegistry,
+      functionName: 'getJob',
+      args: [BigInt(job.onchainJobId!)],
+    })
+      .then((raw) => {
+        if (cancelled) return;
+        const chainJob = raw as OnChainJob;
+        setOnchainFreelancer(chainJob.freelancer);
+        setOnchainStatus(chainJob.status);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [job.onchainJobId, job.status]);
+
   if (!isAssignedFreelancer || !isValidOnchainJobId(job.onchainJobId)) return null;
+
+  const walletMismatch =
+    address &&
+    onchainFreelancer &&
+    onchainFreelancer.toLowerCase() !== address.toLowerCase();
 
   const canSubmit = ['ASSIGNED', 'IN_PROGRESS'].includes(job.status);
 
   if (!canSubmit && job.status !== 'SUBMITTED') {
     return (
       <section className="panel deliverable-panel">
-        <h3>Submit deliverable</h3>
-        <p className="muted">Waiting for escrow funding before you can start work on-chain.</p>
+        <h3>Nộp bàn giao</h3>
+        <p className="muted">Chờ client nạp escrow trước khi bạn có thể bắt đầu làm việc on-chain.</p>
       </section>
     );
   }
@@ -41,8 +80,8 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
   if (job.status === 'SUBMITTED' || successCid) {
     return (
       <section className="panel deliverable-panel">
-        <h3>Deliverable</h3>
-        <p className="badge success">Work submitted on-chain.</p>
+        <h3>Bàn giao</h3>
+        <p className="badge success">Đã nộp bàn giao on-chain.</p>
         {successCid && (
           <a
             className="etherscan-link"
@@ -50,7 +89,7 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
             target="_blank"
             rel="noopener noreferrer"
           >
-            View on IPFS ↗
+            Xem trên IPFS ↗
           </a>
         )}
       </section>
@@ -61,7 +100,7 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
     e.preventDefault();
     if (!job.onchainJobId) return;
     if (!file && notes.trim().length < 10) {
-      setError('Add a file or at least 10 characters of delivery notes.');
+      setError('Thêm file hoặc ghi chú bàn giao ít nhất 10 ký tự.');
       return;
     }
 
@@ -78,7 +117,7 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
       setSuccessCid(cid);
       onSubmitted?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Submit failed');
+      setError(err instanceof Error ? err.message : 'Nộp bàn giao thất bại');
     } finally {
       setLoading(false);
     }
@@ -86,27 +125,53 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
 
   return (
     <form className="panel deliverable-panel" onSubmit={handleSubmit}>
-      <h3>Submit deliverable</h3>
+      <h3>Nộp bàn giao</h3>
       <p className="muted">
-        Upload to IPFS via the backend, then call <code>EscrowVault.submitWork</code> from your
-        wallet. Work is auto-started if the job is still in ASSIGNED status.
+        Upload lên IPFS qua backend, sau đó gọi <code>EscrowVault.submitWork</code> từ ví
+        freelancer. Nếu job còn ASSIGNED, hệ thống tự gọi <code>startWork</code> trước.
       </p>
 
-      {!isAuthenticated && <p className="muted">Sign in with SIWE to upload.</p>}
+      {onchainFreelancer && address && (
+        <p className="muted">
+          Freelancer on-chain: <code>{shortAddress(onchainFreelancer)}</code>
+          {onchainStatus != null && (
+            <>
+              {' '}
+              · Trạng thái: <strong>{onchainStatusLabel(onchainStatus)}</strong>
+            </>
+          )}
+        </p>
+      )}
+
+      {walletMismatch && (
+        <p className="error">
+          Ví MetaMask ({shortAddress(address!)}) không trùng freelancer on-chain (
+          {shortAddress(onchainFreelancer!)}). Đổi sang đúng ví đã được gán khi client nạp escrow.
+        </p>
+      )}
+
+      {onchainStatus === ONCHAIN_JOB_STATUS.ASSIGNED && !walletMismatch && (
+        <p className="muted">
+          Job đang ASSIGNED — lần nộp đầu sẽ gửi 2 giao dịch: <code>startWork</code> rồi{' '}
+          <code>submitWork</code>.
+        </p>
+      )}
+
+      {!isAuthenticated && <p className="muted">Đăng nhập SIWE để upload file.</p>}
 
       <label className="field">
-        Delivery notes
+        Ghi chú bàn giao
         <textarea
           className="input textarea"
           rows={4}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="Summary of what you delivered, links, or instructions…"
+          placeholder="Tóm tắt nội dung đã giao, link hoặc hướng dẫn…"
         />
       </label>
 
       <label className="field">
-        Repository / demo URL (optional)
+        Repository / demo URL (tùy chọn)
         <input
           className="input full"
           type="url"
@@ -117,7 +182,7 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
       </label>
 
       <label className="field">
-        Attach file (optional)
+        Đính kèm file (tùy chọn)
         <input
           className="input full"
           type="file"
@@ -128,9 +193,9 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
       <button
         className="btn primary"
         type="submit"
-        disabled={loading || txStatus === 'pending' || !isAuthenticated}
+        disabled={loading || txStatus === 'pending' || !isAuthenticated || Boolean(walletMismatch)}
       >
-        {loading || txStatus === 'pending' ? 'Submitting…' : 'Upload & submit on-chain'}
+        {loading || txStatus === 'pending' ? 'Đang nộp…' : 'Upload & nộp on-chain'}
       </button>
 
       {error && <p className="error">{error}</p>}

@@ -45,6 +45,33 @@ export type DepositBlockerOptions = {
   escrowFunded?: boolean;
 };
 
+export function shortAddress(addr: string): string {
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
+/** Throws with a Vietnamese message when the connected wallet cannot submit deliverables. */
+export function validateDeliverableSubmit(job: OnChainJob, wallet: Address): void {
+  if (job.freelancer.toLowerCase() !== wallet.toLowerCase()) {
+    throw new Error(
+      `Ví MetaMask (${shortAddress(wallet)}) không trùng freelancer on-chain (${shortAddress(job.freelancer)}). ` +
+        'Hãy đổi sang đúng ví đã được client gán khi nạp escrow (depositEscrow).',
+    );
+  }
+
+  if (job.status === ONCHAIN_JOB_STATUS.SUBMITTED) {
+    throw new Error('Bàn giao đã được nộp on-chain (SUBMITTED). Chờ client phê duyệt.');
+  }
+
+  if (
+    job.status !== ONCHAIN_JOB_STATUS.ASSIGNED &&
+    job.status !== ONCHAIN_JOB_STATUS.IN_PROGRESS
+  ) {
+    throw new Error(
+      `Job on-chain đang ở trạng thái ${onchainStatusLabel(job.status)} — chỉ nộp bàn giao khi ASSIGNED hoặc IN_PROGRESS.`,
+    );
+  }
+}
+
 export function explainDepositBlocker(
   job: OnChainJob,
   options?: DepositBlockerOptions,

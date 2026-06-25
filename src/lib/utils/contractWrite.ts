@@ -12,16 +12,39 @@ const REVERT_HINTS: Record<string, string> = {
   WrongStatus:
     'Trạng thái job on-chain không hợp lệ. depositEscrow cần job OPEN; nếu đã ASSIGNED (thường do gọi assignFreelancer / Retry assign trước đó), tạo job mới.',
   OnlyClient: 'Chỉ ví client on-chain (người tạo job trên JobRegistry) mới gọi được hàm này.',
-  OnlyFreelancer: 'Chỉ freelancer được gán mới gọi được hàm này.',
+  OnlyFreelancer:
+    'Chỉ ví freelancer được gán khi nạp escrow mới gọi được hàm này — kiểm tra ví MetaMask.',
   Unauthorized: 'Ví không có quyền thực hiện giao dịch này.',
   ContractPaused: 'Hợp đồng đang tạm dừng (emergency pause).',
   TransferFailed:
     'Chuyển USDC thất bại — kiểm tra số dư MockUSDC và allowance (cần đủ giá job on-chain + 3% phí).',
   LowReputationTier: 'Reputation tier không đủ để thực hiện thao tác này.',
   JobNotOpen: 'Job không còn OPEN — không thể gán freelancer qua depositEscrow.',
+  StartWindowExpired:
+    'Đã quá 72 giờ kể từ khi được gán — client có thể hủy hợp đồng. Liên hệ client.',
 };
 
-export function decodeContractError(err: unknown, _abi?: Abi): string {
+const REVERT_HINTS_BY_FN: Record<string, Record<string, string>> = {
+  submitWork: {
+    WrongStatus:
+      'Job phải ở IN_PROGRESS. Nếu mới ASSIGNED, hệ thống sẽ gọi startWork trước — đợi giao dịch xác nhận rồi thử lại.',
+    OnlyFreelancer:
+      'Ví MetaMask không trùng freelancer on-chain. Đổi sang ví đã được gán khi client nạp escrow.',
+  },
+  startWork: {
+    WrongStatus: 'startWork chỉ gọi được khi job ASSIGNED (sau depositEscrow).',
+    OnlyFreelancer:
+      'Ví MetaMask không trùng freelancer on-chain. Đổi sang ví đã được gán khi client nạp escrow.',
+    StartWindowExpired:
+      'Đã quá 72 giờ kể từ khi được gán — client có thể hủy hợp đồng.',
+  },
+};
+
+export function decodeContractError(
+  err: unknown,
+  _abi?: Abi,
+  functionName?: string,
+): string {
   if (err instanceof BaseError) {
     const revert = err.walk(
       (e) => e instanceof ContractFunctionRevertedError,
@@ -30,7 +53,8 @@ export function decodeContractError(err: unknown, _abi?: Abi): string {
     if (revert instanceof ContractFunctionRevertedError) {
       const name = revert.data?.errorName;
       if (name) {
-        const hint = REVERT_HINTS[name];
+        const fnHint = functionName ? REVERT_HINTS_BY_FN[functionName]?.[name] : undefined;
+        const hint = fnHint ?? REVERT_HINTS[name];
         return hint ? `${name}: ${hint}` : `Contract reverted: ${name}`;
       }
       if (revert.reason) {
@@ -38,14 +62,28 @@ export function decodeContractError(err: unknown, _abi?: Abi): string {
       }
     }
 
-    return err.shortMessage || err.message;
+    const msg = err.shortMessage || err.message;
+    if (/reverted.*unknown/i.test(msg)) {
+      return (
+        'Giao dịch bị contract từ chối (revert không decode được). ' +
+        'Thường do ví MetaMask không trùng freelancer on-chain, hoặc trạng thái job chưa IN_PROGRESS.'
+      );
+    }
+    return msg;
   }
 
   if (err instanceof Error) {
-    return err.message;
+    const msg = err.message;
+    if (/reverted.*unknown/i.test(msg)) {
+      return (
+        'Giao dịch bị contract từ chối (revert không decode được). ' +
+        'Thường do ví MetaMask không trùng freelancer on-chain, hoặc trạng thái job chưa IN_PROGRESS.'
+      );
+    }
+    return msg;
   }
 
-  return 'Transaction failed';
+  return 'Giao dịch thất bại';
 }
 
 export type ContractWriteInput = GasEstimateInput & {
@@ -68,7 +106,7 @@ export async function executeContractWrite(
       value: params.value,
     });
   } catch (simErr) {
-    throw new Error(decodeContractError(simErr, params.abi));
+    throw new Error(decodeContractError(simErr, params.abi, params.functionName));
   }
 
   return writeContractAsync({

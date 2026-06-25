@@ -8,7 +8,20 @@ import { uploadIpfsFile, uploadIpfsMetadata } from '@/lib/api';
 import { contracts } from '@/lib/contracts/config';
 import { CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 import { executeContractWrite } from '@/lib/utils/contractWrite';
+import {
+  ONCHAIN_JOB_STATUS,
+  type OnChainJob,
+  validateDeliverableSubmit,
+} from '@/lib/utils/onchainJob';
 import { useContractTx } from './useContractTx';
+
+async function readOnchainJob(jobId: bigint): Promise<OnChainJob> {
+  return (await readContract(wagmiConfig, {
+    ...contracts.jobRegistry,
+    functionName: 'getJob',
+    args: [jobId],
+  })) as OnChainJob;
+}
 
 export function useDeliverableSubmit() {
   const { address } = useAccount();
@@ -23,7 +36,11 @@ export function useDeliverableSubmit() {
       notes: string;
       repoUrl?: string;
     }) => {
-      if (!address) throw new Error('Connect your wallet first');
+      if (!address) throw new Error('Hãy kết nối ví MetaMask trước.');
+
+      const jobId = BigInt(params.onchainJobId);
+      let onchainJob = await readOnchainJob(jobId);
+      validateDeliverableSubmit(onchainJob, address);
 
       let deliverableCID: string;
 
@@ -42,17 +59,16 @@ export function useDeliverableSubmit() {
         deliverableCID = upload.cid;
       }
 
-      const jobId = BigInt(params.onchainJobId);
+      if (!deliverableCID?.trim()) {
+        throw new Error('IPFS không trả về CID — thử lại upload.');
+      }
 
-      const job = (await readContract(wagmiConfig, {
-        ...contracts.jobRegistry,
-        functionName: 'getJob',
-        args: [jobId],
-      })) as { status: number };
+      // Re-read after IPFS upload in case status changed
+      onchainJob = await readOnchainJob(jobId);
+      validateDeliverableSubmit(onchainJob, address);
 
-      // 1 = ASSIGNED — freelancer must start work before submitting
-      if (job.status === 1) {
-        await tx.runTx('Starting work on-chain…', () =>
+      if (onchainJob.status === ONCHAIN_JOB_STATUS.ASSIGNED) {
+        await tx.runTx('Đang bắt đầu làm việc on-chain (startWork)…', () =>
           executeContractWrite(writeContractAsync, {
             address: contracts.escrowVault.address,
             abi: contracts.escrowVault.abi as Abi,
@@ -61,14 +77,20 @@ export function useDeliverableSubmit() {
             account: address,
           }),
         );
+        onchainJob = await readOnchainJob(jobId);
+        if (onchainJob.status !== ONCHAIN_JOB_STATUS.IN_PROGRESS) {
+          throw new Error(
+            'startWork đã gửi nhưng job chưa chuyển sang IN_PROGRESS — đợi vài giây rồi bấm nộp lại.',
+          );
+        }
       }
 
-      await tx.runTx('Submitting deliverable on-chain…', () =>
+      await tx.runTx('Đang nộp bàn giao on-chain (submitWork)…', () =>
         executeContractWrite(writeContractAsync, {
           address: contracts.escrowVault.address,
           abi: contracts.escrowVault.abi as Abi,
           functionName: 'submitWork',
-          args: [jobId, deliverableCID],
+          args: [jobId, deliverableCID.trim()],
           account: address,
         }),
       );
