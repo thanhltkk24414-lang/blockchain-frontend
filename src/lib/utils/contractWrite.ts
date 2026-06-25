@@ -63,10 +63,11 @@ export function decodeContractError(
     }
 
     const msg = err.shortMessage || err.message;
-    if (/reverted.*unknown/i.test(msg)) {
+    if (/reverted.*unknown|out of gas|intrinsic gas too low/i.test(msg)) {
       return (
         'Giao dịch bị contract từ chối (revert không decode được). ' +
-        'Thường do ví MetaMask không trùng freelancer on-chain, hoặc trạng thái job chưa IN_PROGRESS.'
+        'Thường do gas limit quá thấp (submitWork cần ~180k+), ví MetaMask không trùng freelancer on-chain, ' +
+        'hoặc trạng thái job chưa IN_PROGRESS.'
       );
     }
     return msg;
@@ -74,10 +75,11 @@ export function decodeContractError(
 
   if (err instanceof Error) {
     const msg = err.message;
-    if (/reverted.*unknown/i.test(msg)) {
+    if (/reverted.*unknown|out of gas|intrinsic gas too low/i.test(msg)) {
       return (
         'Giao dịch bị contract từ chối (revert không decode được). ' +
-        'Thường do ví MetaMask không trùng freelancer on-chain, hoặc trạng thái job chưa IN_PROGRESS.'
+        'Thường do gas limit quá thấp (submitWork cần ~180k+), ví MetaMask không trùng freelancer on-chain, ' +
+        'hoặc trạng thái job chưa IN_PROGRESS.'
       );
     }
     return msg;
@@ -104,17 +106,21 @@ export async function executeContractWrite(
       args: params.args,
       account: params.account,
       value: params.value,
+      gas,
     });
   } catch (simErr) {
     throw new Error(decodeContractError(simErr, params.abi, params.functionName));
   }
 
-  return writeContractAsync({
+  const request = {
     address: params.address,
     abi: params.abi,
     functionName: params.functionName,
     args: params.args,
+    account: params.account,
     value: params.value,
     gas,
-  } as Parameters<typeof writeContractAsync>[0]);
+  };
+
+  return writeContractAsync(request as Parameters<typeof writeContractAsync>[0]);
 }
