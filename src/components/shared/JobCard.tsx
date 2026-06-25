@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import type { Job } from '@/lib/api';
 import { StatusBadge } from './StatusBadge';
 import { isValidOnchainJobId } from '@/lib/utils/etherscan';
+import { formatApiDateShort } from '@/lib/utils/dates';
 
 interface JobCardProps {
   job: Job;
@@ -15,15 +16,10 @@ function resolveClientAddress(job: Job): string | null {
   return null;
 }
 
-function formatPosted(iso?: string): string | null {
-  if (!iso) return null;
-  return new Date(iso).toLocaleDateString();
-}
-
 export function JobCard({ job, detailPath }: JobCardProps) {
   const clientAddr = resolveClientAddress(job);
   const href = detailPath ?? `/jobs/${job._id}`;
-  const posted = formatPosted(job.createdAt);
+  const posted = formatApiDateShort(job.createdAt);
 
   return (
     <li className="job-card">

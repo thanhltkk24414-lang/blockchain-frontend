@@ -14,6 +14,8 @@ import {
   isValidOnchainJobId,
 } from '@/lib/utils/etherscan';
 import { CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
+import { OnchainEscrowStatus } from '@/components/shared/OnchainEscrowStatus';
+import { formatApiDate } from '@/lib/utils/dates';
 
 function formatDuration(seconds?: number): string {
   if (!seconds) return '—';
@@ -21,13 +23,7 @@ function formatDuration(seconds?: number): string {
   return days >= 1 ? `${days} day${days === 1 ? '' : 's'}` : `${seconds} sec`;
 }
 
-function formatDate(iso?: string): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString();
-}
-
 function resolveClientAddress(job: Job): string | null {
-  if (job.clientAddress) return job.clientAddress.toLowerCase();
   if (typeof job.client === 'object' && job.client?.walletAddress) {
     return job.client.walletAddress.toLowerCase();
   }
@@ -171,13 +167,19 @@ export function JobDetailPage() {
             <dt>Status</dt>
             <dd>
               <StatusBadge status={job.status} />
+              {job.status?.toUpperCase() === 'ASSIGNED' && (
+                <OnchainEscrowStatus
+                  onchainJobId={job.onchainJobId}
+                  dbStatus={job.status}
+                />
+              )}
             </dd>
             <dt>Budget</dt>
             <dd>{job.contractValue != null ? `${job.contractValue} USDC` : '—'}</dd>
             <dt>Duration</dt>
             <dd>{formatDuration(job.duration)}</dd>
             <dt>Created</dt>
-            <dd>{formatDate(job.createdAt)}</dd>
+            <dd>{formatApiDate(job.createdAt)}</dd>
             {skills && skills.length > 0 && (
               <>
                 <dt>Skills</dt>

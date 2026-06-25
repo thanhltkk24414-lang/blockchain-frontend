@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { fetchJobsByFreelancer, fetchMyBids, fetchUserStats, type Bid, type Job } from '@/lib/api';
 import { JobCard } from '@/components/shared/JobCard';
 import { useJobCounter } from '@/hooks/contracts/useContracts';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { compareByDateDesc } from '@/lib/utils/dates';
 
 export function FreelancerDashboardPage() {
   const { address, isAuthenticated } = useAuth();
@@ -42,6 +43,16 @@ export function FreelancerDashboardPage() {
 
   useAutoRefresh(loadData);
 
+  const recentBids = useMemo(
+    () => [...bids].sort((a, b) => compareByDateDesc(a.createdAt, b.createdAt)).slice(0, 5),
+    [bids],
+  );
+
+  const assignedJobs = useMemo(
+    () => [...jobs].sort((a, b) => compareByDateDesc(a.createdAt, b.createdAt)),
+    [jobs],
+  );
+
   return (
     <main className="page">
       <div className="page-header">
@@ -73,11 +84,11 @@ export function FreelancerDashboardPage() {
       {loading && <p className="muted">Loading…</p>}
       {error && <p className="error">{error}</p>}
 
-      {bids.length > 0 && (
+      {recentBids.length > 0 && (
         <section className="panel">
           <h3>Recent proposals</h3>
           <ul className="bids-list">
-            {bids.slice(0, 5).map((bid) => {
+            {recentBids.map((bid) => {
               const jobLinkId =
                 typeof bid.jobId === 'object' && bid.jobId && '_id' in bid.jobId
                   ? (bid.jobId as { _id: string })._id
@@ -99,11 +110,11 @@ export function FreelancerDashboardPage() {
       )}
 
       <h3>Assigned jobs</h3>
-      {isAuthenticated && !loading && jobs.length === 0 && (
+      {isAuthenticated && !loading && assignedJobs.length === 0 && (
         <p className="muted">No active assignments yet — submit bids on open jobs.</p>
       )}
       <ul className="jobs-list">
-        {jobs.map((job) => (
+        {assignedJobs.map((job) => (
           <JobCard key={job._id} job={job} />
         ))}
       </ul>
