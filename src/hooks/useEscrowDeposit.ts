@@ -42,6 +42,17 @@ export function useEscrowDeposit() {
     })) as OnChainJob;
   }, []);
 
+  /** Heuristic: vault USDC balance covers this job's expected deposit (demo-friendly). */
+  const checkEscrowFunded = useCallback(async (contractValueUnits: bigint): Promise<boolean> => {
+    if (contractValueUnits <= 0n) return false;
+    const balance = (await readContract(wagmiConfig, {
+      ...contracts.mockUsdc,
+      functionName: 'balanceOf',
+      args: [CONTRACT_ADDRESSES.EscrowVault],
+    })) as bigint;
+    return balance >= escrowTotalFromOnChain(contractValueUnits);
+  }, []);
+
   const deposit = useCallback(
     async ({ onchainJobId, freelancerAddress }: EscrowDepositParams) => {
       if (!address) throw new Error('Connect your wallet first');
@@ -57,7 +68,8 @@ export function useEscrowDeposit() {
 
       try {
         const onChainJob = await readOnChainJob(onchainJobId);
-        const blocker = explainDepositBlocker(onChainJob);
+        const escrowFunded = await checkEscrowFunded(onChainJob.contractValue);
+        const blocker = explainDepositBlocker(onChainJob, { escrowFunded });
         if (blocker) {
           throw new Error(blocker);
         }
@@ -123,12 +135,13 @@ export function useEscrowDeposit() {
         throw err;
       }
     },
-    [address, readOnChainJob, resetTx, writeContractAsync],
+    [address, checkEscrowFunded, readOnChainJob, resetTx, writeContractAsync],
   );
 
   return {
     deposit,
     readOnChainJob,
+    checkEscrowFunded,
     txStatus,
     txHash,
     txLabel,

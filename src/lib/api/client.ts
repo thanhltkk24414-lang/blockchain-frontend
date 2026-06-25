@@ -10,6 +10,8 @@ import type {
   UserProfile,
 } from './types';
 import type { CreateJobPayload } from '@/lib/validation/jobForm';
+import { normalizeBids, normalizeJob, normalizeJobs } from './normalize';
+import { parseApiDate } from '@/lib/utils/dates';
 
 function authHeaders(): HeadersInit {
   const token = getStoredToken();
@@ -43,7 +45,11 @@ export async function fetchJobs(params?: {
   if (params?.order) qs.set('order', params.order);
 
   const res = await fetch(`${API_URL}/api/jobs?${qs}`);
-  return parseJson<JobsResponse>(res);
+  const data = await parseJson<JobsResponse>(res);
+  if (data.success && data.jobs) {
+    data.jobs = normalizeJobs(data.jobs);
+  }
+  return data;
 }
 
 export async function searchJobs(params: {
@@ -58,7 +64,11 @@ export async function searchJobs(params: {
   if (params.minBudget != null) qs.set('minBudget', String(params.minBudget));
   if (params.maxBudget != null) qs.set('maxBudget', String(params.maxBudget));
   const res = await fetch(`${API_URL}/api/jobs/search?${qs}`);
-  return parseJson<{ success: boolean; jobs: Job[]; error?: string }>(res);
+  const data = await parseJson<{ success: boolean; jobs: Job[]; error?: string }>(res);
+  if (data.success && data.jobs) {
+    data.jobs = normalizeJobs(data.jobs);
+  }
+  return data;
 }
 
 export async function submitBid(payload: {
@@ -80,13 +90,21 @@ export async function submitBid(payload: {
 
 export async function fetchBidsByJob(jobId: string) {
   const res = await fetch(`${API_URL}/api/bids/job/${jobId}`);
-  return parseJson<BidsResponse>(res);
+  const data = await parseJson<BidsResponse>(res);
+  if (data.success && data.bids) {
+    data.bids = normalizeBids(data.bids);
+  }
+  return data;
 }
 
 export async function fetchMyBids(address: string, status?: string) {
   const qs = status ? `?status=${encodeURIComponent(status)}` : '';
   const res = await fetch(`${API_URL}/api/bids/my/${address}${qs}`);
-  return parseJson<BidsResponse>(res);
+  const data = await parseJson<BidsResponse>(res);
+  if (data.success && data.bids) {
+    data.bids = normalizeBids(data.bids);
+  }
+  return data;
 }
 
 export async function acceptBid(bidId: string) {
@@ -151,7 +169,17 @@ export async function uploadIpfsFile(file: File) {
 
 export async function fetchJobById(id: string) {
   const res = await fetch(`${API_URL}/api/jobs/${id}`);
-  return parseJson<JobDetailResponse>(res);
+  const data = await parseJson<JobDetailResponse>(res);
+  if (data.success && data.job) {
+    data.job = normalizeJob(data.job);
+    if (data.metadata) {
+      data.metadata = {
+        ...data.metadata,
+        createdAt: parseApiDate(data.metadata.createdAt),
+      };
+    }
+  }
+  return data;
 }
 
 export async function createJob(payload: CreateJobPayload) {
@@ -166,13 +194,21 @@ export async function createJob(payload: CreateJobPayload) {
 export async function fetchJobsByClient(address: string, status?: string) {
   const qs = status ? `?status=${encodeURIComponent(status)}` : '';
   const res = await fetch(`${API_URL}/api/jobs/client/${address}${qs}`);
-  return parseJson<{ success: boolean; jobs: Job[]; error?: string }>(res);
+  const data = await parseJson<{ success: boolean; jobs: Job[]; error?: string }>(res);
+  if (data.success && data.jobs) {
+    data.jobs = normalizeJobs(data.jobs);
+  }
+  return data;
 }
 
 export async function fetchJobsByFreelancer(address: string, status?: string) {
   const qs = status ? `?status=${encodeURIComponent(status)}` : '';
   const res = await fetch(`${API_URL}/api/jobs/freelancer/${address}${qs}`);
-  return parseJson<{ success: boolean; jobs: Job[]; error?: string }>(res);
+  const data = await parseJson<{ success: boolean; jobs: Job[]; error?: string }>(res);
+  if (data.success && data.jobs) {
+    data.jobs = normalizeJobs(data.jobs);
+  }
+  return data;
 }
 
 export async function fetchUserProfile(address: string) {

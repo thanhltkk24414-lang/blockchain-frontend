@@ -80,11 +80,12 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
   const [onchainStatus, setOnchainStatus] = useState<number | null>(null);
   const [onchainFreelancer, setOnchainFreelancer] = useState<string | null>(null);
   const [onchainBlocker, setOnchainBlocker] = useState<string | null>(null);
+  const [onchainEscrowFunded, setOnchainEscrowFunded] = useState(false);
 
   const [onchainContractValueUsdc, setOnchainContractValueUsdc] = useState<number | null>(null);
   const [onchainTotalDepositUsdc, setOnchainTotalDepositUsdc] = useState<number | null>(null);
 
-  const { deposit, readOnChainJob, txStatus, txHash, txLabel, txError, resetTx, escrowTotalFromOnChain } =
+  const { deposit, readOnChainJob, checkEscrowFunded, txStatus, txHash, txLabel, txError, resetTx, escrowTotalFromOnChain } =
     useEscrowDeposit();
   const {
     mint,
@@ -100,13 +101,16 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
     if (!isValidOnchainJobId(job.onchainJobId)) return;
     let cancelled = false;
     void readOnChainJob(job.onchainJobId!)
-      .then((onChainJob) => {
+      .then(async (onChainJob) => {
+        if (cancelled) return;
+        const escrowFunded = await checkEscrowFunded(onChainJob.contractValue);
         if (cancelled) return;
         setOnchainStatus(onChainJob.status);
+        setOnchainEscrowFunded(escrowFunded);
         setOnchainFreelancer(
           isNonZeroAddress(onChainJob.freelancer) ? onChainJob.freelancer : null,
         );
-        setOnchainBlocker(explainDepositBlocker(onChainJob));
+        setOnchainBlocker(explainDepositBlocker(onChainJob, { escrowFunded }));
         const onChainCv = fromUsdcUnits(onChainJob.contractValue);
         setOnchainContractValueUsdc(onChainCv);
         setOnchainTotalDepositUsdc(
@@ -120,7 +124,7 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
     return () => {
       cancelled = true;
     };
-  }, [acceptedFreelancer, escrowTotalFromOnChain, job.onchainJobId, readOnChainJob]);
+  }, [acceptedFreelancer, checkEscrowFunded, escrowTotalFromOnChain, job.onchainJobId, readOnChainJob]);
 
   useEffect(() => {
     if (acceptedFreelancer) {
@@ -144,6 +148,11 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
   const insufficientUsdc =
     balanceUsdc != null && balanceUsdc < totalDeposit;
   const depositBlocked = Boolean(onchainBlocker);
+  const escrowFunded = onchainEscrowFunded || txStatus === 'success';
+  const depositComplete =
+    escrowFunded &&
+    onchainStatus === ONCHAIN_JOB_STATUS.ASSIGNED &&
+    isNonZeroAddress(onchainFreelancer ?? acceptedFreelancer);
   const readyToDeposit =
     onchainStatus === ONCHAIN_JOB_STATUS.OPEN && !depositBlocked;
 
@@ -201,8 +210,10 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
       });
       if (job.onchainJobId) {
         const onChainJob = await readOnChainJob(job.onchainJobId);
+        const escrowFundedAfter = await checkEscrowFunded(onChainJob.contractValue);
         setOnchainStatus(onChainJob.status);
-        setOnchainBlocker(explainDepositBlocker(onChainJob));
+        setOnchainEscrowFunded(escrowFundedAfter);
+        setOnchainBlocker(explainDepositBlocker(onChainJob, { escrowFunded: escrowFundedAfter }));
       }
     } catch {
       // tx state handled in hook
@@ -247,7 +258,15 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
         </p>
       )}
 
-      {depositBlocked && (
+      {depositComplete && (
+        <p className="success escrow-success">
+          <span className="badge success">Escrow funded</span>{' '}
+          Deposit confirmed on-chain. Job is <strong>ASSIGNED</strong> with USDC locked in{' '}
+          <code>EscrowVault</code> — freelancer can start work.
+        </p>
+      )}
+
+      {depositBlocked && !depositComplete && (
         <p className="error">{onchainBlocker}</p>
       )}
 
@@ -361,10 +380,15 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
           txStatus === 'pending' ||
           walletMismatch ||
           insufficientUsdc ||
-          depositBlocked
+          depositBlocked ||
+          depositComplete
         }
       >
-        {depositing || txStatus === 'pending' ? 'Processing…' : 'Approve & deposit escrow'}
+        {depositComplete
+          ? 'Escrow funded'
+          : depositing || txStatus === 'pending'
+            ? 'Processing…'
+            : 'Approve & deposit escrow'}
       </button>
 
       <TxStatusModal

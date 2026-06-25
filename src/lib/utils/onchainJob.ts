@@ -40,13 +40,24 @@ export function isNonZeroAddress(addr?: string | null): addr is Address {
   return Boolean(addr && addr.toLowerCase() !== zeroAddress.toLowerCase());
 }
 
-export function explainDepositBlocker(job: OnChainJob): string | null {
+export type DepositBlockerOptions = {
+  /** True when EscrowVault holds at least the expected deposit for this job. */
+  escrowFunded?: boolean;
+};
+
+export function explainDepositBlocker(
+  job: OnChainJob,
+  options?: DepositBlockerOptions,
+): string | null {
   if (job.status === ONCHAIN_JOB_STATUS.OPEN) {
     return null;
   }
   if (job.status === ONCHAIN_JOB_STATUS.ASSIGNED) {
+    if (options?.escrowFunded) {
+      return null;
+    }
     return (
-      'Job đã ASSIGNED on-chain (thường do luồng cũ gọi assignFreelancer trước khi nạp escrow). ' +
+      'Job đã ASSIGNED on-chain nhưng escrow chưa được nạp (thường do luồng cũ gọi assignFreelancer trước depositEscrow). ' +
       'depositEscrow chỉ chạy khi job còn OPEN. Job này không thể nạp escrow — hãy tạo job mới để demo.'
     );
   }
