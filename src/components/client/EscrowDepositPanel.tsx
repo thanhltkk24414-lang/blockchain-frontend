@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAccount } from 'wagmi';
-import { isAddress, zeroAddress } from 'viem';
+import { getAddress, isAddress, zeroAddress } from 'viem';
 import type { Bid, Job } from '@/lib/api';
 import { useEscrowDeposit } from '@/hooks/useEscrowDeposit';
+import { useOnChainJob } from '@/hooks/useOnChainJob';
 import { computeTotalDeposit, fromUsdcUnits } from '@/lib/utils/usdc';
 import { DEMO_MINT_USDC, useMockUsdcMint } from '@/hooks/useMockUsdcMint';
 import { useUsdcBalance } from '@/hooks/contracts/useContracts';
 import { TxStatusModal } from '@/components/shared/TxStatusModal';
 import { CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 import { etherscanAddressUrl, isValidOnchainJobId } from '@/lib/utils/etherscan';
+import { addressesEqual, tryChecksumAddress } from '@/lib/utils/address';
 import {
   explainDepositBlocker,
+  explainRegistryMismatch,
+  hasRegistryClientMismatch,
   isNonZeroAddress,
   onchainStatusLabel,
   ONCHAIN_JOB_STATUS,
@@ -44,11 +48,11 @@ function resolveFreelancerFromJob(job: Job): string | null {
 
 function resolveAcceptedFreelancer(job: Job, bids: Bid[]): string | null {
   const fromJob = resolveFreelancerFromJob(job);
-  if (fromJob) return fromJob;
+  if (fromJob) return tryChecksumAddress(fromJob) ?? fromJob;
 
   const accepted = bids.find((b) => b.status === 'accepted');
   if (accepted && isNonZeroAddress(accepted.freelancerAddress)) {
-    return accepted.freelancerAddress;
+    return tryChecksumAddress(accepted.freelancerAddress) ?? accepted.freelancerAddress;
   }
 
   return null;
@@ -77,16 +81,45 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
   const [freelancerInput, setFreelancerInput] = useState(acceptedFreelancer ?? '');
   const [localError, setLocalError] = useState<string | null>(null);
   const [depositing, setDepositing] = useState(false);
-  const [onchainStatus, setOnchainStatus] = useState<number | null>(null);
-  const [onchainFreelancer, setOnchainFreelancer] = useState<string | null>(null);
-  const [onchainBlocker, setOnchainBlocker] = useState<string | null>(null);
-  const [onchainEscrowFunded, setOnchainEscrowFunded] = useState(false);
 
-  const [onchainContractValueUsdc, setOnchainContractValueUsdc] = useState<number | null>(null);
-  const [onchainTotalDepositUsdc, setOnchainTotalDepositUsdc] = useState<number | null>(null);
+  const {
+    onchainJob,
+    onchainStatus,
+    onchainFreelancer,
+    escrowFunded: onchainEscrowFunded,
+    refetch: refetchOnchain,
+  } = useOnChainJob(job.onchainJobId, job.status);
 
-  const { deposit, readOnChainJob, checkEscrowFunded, txStatus, txHash, txLabel, txError, resetTx, escrowTotalFromOnChain } =
+  const onchainBlocker = useMemo(
+    () => (onchainJob ? explainDepositBlocker(onchainJob, { escrowFunded: onchainEscrowFunded }) : null),
+    [onchainJob, onchainEscrowFunded],
+  );
+
+  const registryMismatch = useMemo(
+    () => hasRegistryClientMismatch(onchainJob?.client, onchainClientAddr),
+    [onchainJob?.client, onchainClientAddr],
+  );
+
+  const registryMismatchMessage = useMemo(() => {
+    if (!registryMismatch || !onchainClientAddr || !job.onchainJobId) return null;
+    return explainRegistryMismatch(
+      job.onchainJobId,
+      CONTRACT_ADDRESSES.JobRegistry,
+      onchainClientAddr,
+      onchainJob?.client,
+    );
+  }, [registryMismatch, onchainClientAddr, job.onchainJobId, onchainJob?.client]);
+
+  const { deposit, txStatus, txHash, txLabel, txError, resetTx, escrowTotalFromOnChain } =
     useEscrowDeposit();
+
+  const onchainContractValueUsdc =
+    onchainJob != null ? fromUsdcUnits(onchainJob.contractValue) : null;
+  const onchainTotalDepositUsdc =
+    onchainJob != null
+      ? fromUsdcUnits(escrowTotalFromOnChain(onchainJob.contractValue))
+      : null;
+
   const {
     mint,
     minting,
@@ -98,39 +131,20 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
   const { data: balance, refetch: refetchBalance } = useUsdcBalance(address);
 
   useEffect(() => {
-    if (!isValidOnchainJobId(job.onchainJobId)) return;
-    let cancelled = false;
-    void readOnChainJob(job.onchainJobId!)
-      .then(async (onChainJob) => {
-        if (cancelled) return;
-        const escrowFunded = await checkEscrowFunded(onChainJob.contractValue);
-        if (cancelled) return;
-        setOnchainStatus(onChainJob.status);
-        setOnchainEscrowFunded(escrowFunded);
-        setOnchainFreelancer(
-          isNonZeroAddress(onChainJob.freelancer) ? onChainJob.freelancer : null,
-        );
-        setOnchainBlocker(explainDepositBlocker(onChainJob, { escrowFunded }));
-        const onChainCv = fromUsdcUnits(onChainJob.contractValue);
-        setOnchainContractValueUsdc(onChainCv);
-        setOnchainTotalDepositUsdc(
-          fromUsdcUnits(escrowTotalFromOnChain(onChainJob.contractValue)),
-        );
-        if (!acceptedFreelancer && isNonZeroAddress(onChainJob.freelancer)) {
-          setFreelancerInput(onChainJob.freelancer);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [acceptedFreelancer, checkEscrowFunded, escrowTotalFromOnChain, job.onchainJobId, readOnChainJob]);
-
-  useEffect(() => {
     if (acceptedFreelancer) {
       setFreelancerInput(acceptedFreelancer);
     }
   }, [acceptedFreelancer]);
+
+  const onchainFreelancerCs = isNonZeroAddress(onchainFreelancer)
+    ? tryChecksumAddress(onchainFreelancer)
+    : null;
+  const acceptedVsOnchainMismatch = Boolean(
+    acceptedFreelancer &&
+      onchainFreelancerCs &&
+      onchainStatus !== ONCHAIN_JOB_STATUS.OPEN &&
+      !addressesEqual(acceptedFreelancer, onchainFreelancerCs),
+  );
 
   if (!isValidOnchainJobId(job.onchainJobId) || !isSiweClient) {
     return null;
@@ -147,7 +161,7 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
     balance != null ? Number(balance) / 1_000_000 : null;
   const insufficientUsdc =
     balanceUsdc != null && balanceUsdc < totalDeposit;
-  const depositBlocked = Boolean(onchainBlocker);
+  const depositBlocked = Boolean(onchainBlocker) || registryMismatch;
   const escrowFunded = onchainEscrowFunded || txStatus === 'success';
   const depositComplete =
     escrowFunded &&
@@ -196,9 +210,36 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
       setLocalError('Job thiếu on-chain id hoặc giá trị hợp đồng.');
       return;
     }
-    const freelancer = (acceptedFreelancer ?? freelancerInput).trim();
-    if (!isAddress(freelancer) || freelancer.toLowerCase() === zeroAddress) {
+
+    const freelancerRaw = acceptedFreelancer ?? freelancerInput.trim();
+    if (!isAddress(freelancerRaw) || freelancerRaw.toLowerCase() === zeroAddress) {
       setLocalError('Nhập địa chỉ ví freelancer hợp lệ (0x…, không phải 0x0).');
+      return;
+    }
+
+    let freelancer: `0x${string}`;
+    try {
+      freelancer = getAddress(freelancerRaw);
+    } catch {
+      setLocalError('Địa chỉ freelancer không hợp lệ.');
+      return;
+    }
+
+    if (acceptedFreelancer && !addressesEqual(freelancer, acceptedFreelancer)) {
+      setLocalError(
+        `Freelancer phải trùng bid đã accept: ${acceptedFreelancer}. Không được nhập địa chỉ khác.`,
+      );
+      return;
+    }
+
+    if (
+      onchainFreelancerCs &&
+      isNonZeroAddress(onchainFreelancerCs) &&
+      !addressesEqual(freelancer, onchainFreelancerCs)
+    ) {
+      setLocalError(
+        `Freelancer on-chain hiện tại là ${onchainFreelancerCs} — không thể deposit với ${freelancer}.`,
+      );
       return;
     }
 
@@ -206,15 +247,11 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
     try {
       await deposit({
         onchainJobId: job.onchainJobId,
-        freelancerAddress: freelancer as `0x${string}`,
+        freelancerAddress: freelancer,
+        expectedFreelancer: acceptedFreelancer ?? undefined,
+        expectedOnchainClient: onchainClientAddr,
       });
-      if (job.onchainJobId) {
-        const onChainJob = await readOnChainJob(job.onchainJobId);
-        const escrowFundedAfter = await checkEscrowFunded(onChainJob.contractValue);
-        setOnchainStatus(onChainJob.status);
-        setOnchainEscrowFunded(escrowFundedAfter);
-        setOnchainBlocker(explainDepositBlocker(onChainJob, { escrowFunded: escrowFundedAfter }));
-      }
+      await refetchOnchain();
     } catch {
       // tx state handled in hook
     } finally {
@@ -238,13 +275,11 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
         <p className="muted phase-note">
           On-chain job id: <strong>{job.onchainJobId}</strong> · JobRegistry:{' '}
           <strong>{onchainStatusLabel(onchainStatus)}</strong>
-          {onchainFreelancer && (
+          {onchainFreelancerCs && (
             <>
               {' '}
               · freelancer:{' '}
-              <code>
-                {onchainFreelancer.slice(0, 6)}…{onchainFreelancer.slice(-4)}
-              </code>
+              <code className="mono">{onchainFreelancerCs}</code>
             </>
           )}
         </p>
@@ -266,14 +301,25 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
         </p>
       )}
 
-      {depositBlocked && !depositComplete && (
+      {registryMismatchMessage && (
+        <p className="error">{registryMismatchMessage}</p>
+      )}
+
+      {depositBlocked && !depositComplete && !registryMismatchMessage && (
         <p className="error">{onchainBlocker}</p>
+      )}
+
+      {acceptedVsOnchainMismatch && acceptedFreelancer && onchainFreelancerCs && (
+        <p className="error">
+          Freelancer on-chain ({onchainFreelancerCs}) khác bid đã accept ({acceptedFreelancer}).
+          Job này không sửa được on-chain — freelancer phải dùng ví on-chain hoặc tạo job mới.
+        </p>
       )}
 
       {readyToDeposit && acceptedFreelancer && (
         <p className="muted phase-note">
           Job on-chain đang <strong>OPEN</strong> — sẵn sàng nạp escrow cho freelancer{' '}
-          <code>{acceptedFreelancer.slice(0, 6)}…{acceptedFreelancer.slice(-4)}</code>.
+          <code className="mono">{acceptedFreelancer}</code>.
         </p>
       )}
 
@@ -289,11 +335,23 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
 
       {onchainClientAddr && (
         <p className="muted phase-note">
-          Client on-chain:{' '}
+          Client on-chain (API):{' '}
           <code>
             {onchainClientAddr.slice(0, 6)}…{onchainClientAddr.slice(-4)}
           </code>
-          {walletMismatch && (
+          {onchainJob?.client && isNonZeroAddress(onchainJob.client) && (
+            <>
+              {' '}
+              · JobRegistry read:{' '}
+              <code>
+                {onchainJob.client.slice(0, 6)}…{onchainJob.client.slice(-4)}
+              </code>
+            </>
+          )}
+          {registryMismatch && (
+            <span className="error"> — lệch contract registry (xem cảnh báo trên).</span>
+          )}
+          {walletMismatch && !registryMismatch && (
             <span className="error">
               {' '}
               — ví MetaMask hiện tại khác ví này; giao dịch sẽ revert.
@@ -381,6 +439,8 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
           walletMismatch ||
           insufficientUsdc ||
           depositBlocked ||
+          registryMismatch ||
+          acceptedVsOnchainMismatch ||
           depositComplete
         }
       >

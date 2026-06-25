@@ -1,14 +1,17 @@
 import { useCallback, useState } from 'react';
 import { useAccount, useReadContract, useWriteContract } from 'wagmi';
 import { readContract, waitForTransactionReceipt } from 'wagmi/actions';
-import { zeroAddress, type Abi } from 'viem';
+import { getAddress, zeroAddress, type Abi } from 'viem';
 import { wagmiConfig } from '@/config/wagmi';
 import { contracts } from '@/lib/contracts/config';
 import { CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 import { escrowTotalFromOnChain, fromUsdcUnits } from '@/lib/utils/usdc';
 import { executeContractWrite, decodeContractError } from '@/lib/utils/contractWrite';
+import { addressesEqual } from '@/lib/utils/address';
 import {
   explainDepositBlocker,
+  explainRegistryMismatch,
+  hasRegistryClientMismatch,
   isNonZeroAddress,
   type OnChainJob,
 } from '@/lib/utils/onchainJob';
@@ -17,6 +20,9 @@ import type { TxStatus } from '@/components/shared/TxStatusModal';
 interface EscrowDepositParams {
   onchainJobId: number;
   freelancerAddress: `0x${string}`;
+  expectedFreelancer?: string;
+  /** From API when backend registry differs from frontend read. */
+  expectedOnchainClient?: string | null;
 }
 
 export function useEscrowDeposit() {
@@ -54,12 +60,18 @@ export function useEscrowDeposit() {
   }, []);
 
   const deposit = useCallback(
-    async ({ onchainJobId, freelancerAddress }: EscrowDepositParams) => {
+    async ({ onchainJobId, freelancerAddress, expectedFreelancer, expectedOnchainClient }: EscrowDepositParams) => {
       if (!address) throw new Error('Connect your wallet first');
-      if (!isNonZeroAddress(freelancerAddress)) {
+      const freelancer = getAddress(freelancerAddress);
+      if (!isNonZeroAddress(freelancer)) {
         throw new Error('Địa chỉ freelancer không hợp lệ (không được dùng 0x0).');
       }
-      if (freelancerAddress.toLowerCase() === address.toLowerCase()) {
+      if (expectedFreelancer && !addressesEqual(freelancer, expectedFreelancer)) {
+        throw new Error(
+          `Freelancer deposit (${freelancer}) phải trùng bid đã accept (${getAddress(expectedFreelancer)}).`,
+        );
+      }
+      if (freelancer.toLowerCase() === getAddress(address).toLowerCase()) {
         throw new Error('Freelancer không thể trùng ví client on-chain.');
       }
 
@@ -68,6 +80,19 @@ export function useEscrowDeposit() {
 
       try {
         const onChainJob = await readOnChainJob(onchainJobId);
+        if (
+          hasRegistryClientMismatch(onChainJob.client, expectedOnchainClient) &&
+          expectedOnchainClient
+        ) {
+          throw new Error(
+            explainRegistryMismatch(
+              onchainJobId,
+              CONTRACT_ADDRESSES.JobRegistry,
+              expectedOnchainClient,
+              onChainJob.client,
+            ),
+          );
+        }
         const escrowFunded = await checkEscrowFunded(onChainJob.contractValue);
         const blocker = explainDepositBlocker(onChainJob, { escrowFunded });
         if (blocker) {
@@ -110,7 +135,7 @@ export function useEscrowDeposit() {
           address: contracts.escrowVault.address,
           abi: contracts.escrowVault.abi as Abi,
           functionName: 'depositEscrow',
-          args: [BigInt(onchainJobId), freelancerAddress],
+          args: [BigInt(onchainJobId), freelancer],
           account: address,
         });
         setTxHash(depositHash);

@@ -1,0 +1,22 @@
+import { getAddress, isAddress, type Address } from 'viem';
+
+/** Compare two wallet addresses (EIP-55 safe; different bytes → false). */
+export function addressesEqual(a?: string | null, b?: string | null): boolean {
+  if (!a || !b) return false;
+  try {
+    return getAddress(a) === getAddress(b);
+  } catch {
+    return a.toLowerCase() === b.toLowerCase();
+  }
+}
+
+/** Checksummed address for display / contract calls; throws if invalid. */
+export function checksumAddress(addr: string): Address {
+  return getAddress(addr);
+}
+
+/** Safe checksum — returns null when invalid. */
+export function tryChecksumAddress(addr?: string | null): Address | null {
+  if (!addr || !isAddress(addr)) return null;
+  return getAddress(addr);
+}

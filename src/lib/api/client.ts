@@ -172,6 +172,15 @@ export async function fetchJobById(id: string) {
   const data = await parseJson<JobDetailResponse>(res);
   if (data.success && data.job) {
     data.job = normalizeJob(data.job);
+    if (data.onchain) {
+      if (data.onchain.onchainStatus) data.job.onchainStatus = data.onchain.onchainStatus;
+      if (data.onchain.onchainFreelancerAddress) {
+        data.job.onchainFreelancerAddress = data.onchain.onchainFreelancerAddress;
+      }
+      if (data.onchain.onchainClientAddress) {
+        data.job.onchainClientAddress = data.onchain.onchainClientAddress;
+      }
+    }
     if (data.metadata) {
       data.metadata = {
         ...data.metadata,
@@ -267,11 +276,50 @@ export async function fetchArbitratorStatus(address: string) {
   }>(res);
 }
 
+export interface DisputeRecord {
+  _id: string;
+  jobId: string;
+  onchainJobId: number;
+  initiatorAddress?: string;
+  respondentAddress?: string;
+  status?: string;
+  result?: string;
+  isResolved?: boolean;
+  evidence?: Array<{ submitter: string; ipfsHash: string; submittedAt?: string }>;
+  arbitrators?: Array<{ address: string; vote: string; isRevealed: boolean }>;
+  openedAt?: string;
+}
+
+export async function fetchDisputes(params?: { status?: string; page?: number; limit?: number }) {
+  const qs = new URLSearchParams();
+  if (params?.status) qs.set('status', params.status);
+  if (params?.page) qs.set('page', String(params.page));
+  if (params?.limit) qs.set('limit', String(params.limit));
+  const res = await fetch(`${API_URL}/api/disputes?${qs}`);
+  return parseJson<{
+    success: boolean;
+    disputes: DisputeRecord[];
+    pagination?: { page: number; limit: number; total: number; pages: number };
+  }>(res);
+}
+
+export async function fetchDisputeByJob(jobId: string) {
+  const res = await fetch(`${API_URL}/api/disputes/job/${jobId}`);
+  return parseJson<{ success: boolean; dispute?: DisputeRecord; error?: string }>(res);
+}
+
+export async function fetchDisputeByOnchainJob(onchainJobId: number) {
+  const res = await fetch(`${API_URL}/api/disputes/onchain/${onchainJobId}`);
+  return parseJson<{ success: boolean; dispute?: DisputeRecord; error?: string }>(res);
+}
+
 export async function fetchHealth() {
   const res = await fetch(`${API_URL}/health`);
   return parseJson<{
     status: string;
     mongodb: string;
+    chainId?: number;
+    contracts?: Record<string, string | null>;
     websocket: { enabled: boolean; path: string };
   }>(res);
 }

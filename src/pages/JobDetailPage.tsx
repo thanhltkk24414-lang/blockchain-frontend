@@ -8,6 +8,8 @@ import { AcceptBidButton } from '@/components/client/AcceptBidButton';
 import { ClientJobActionsPanel } from '@/components/client/ClientJobActionsPanel';
 import { BidForm } from '@/components/freelancer/BidForm';
 import { DeliverableSubmitPanel } from '@/components/freelancer/DeliverableSubmitPanel';
+import { DisputeEvidencePanel } from '@/components/dispute/DisputeEvidencePanel';
+import { DisputeStatusPanel } from '@/components/dispute/DisputeStatusPanel';
 import { useAuth } from '@/context/AuthContext';
 import {
   etherscanAddressUrl,
@@ -15,7 +17,10 @@ import {
 } from '@/lib/utils/etherscan';
 import { CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 import { OnchainEscrowStatus } from '@/components/shared/OnchainEscrowStatus';
+import { WalletMismatchBanner } from '@/components/shared/WalletMismatchBanner';
 import { formatApiDate } from '@/lib/utils/dates';
+import { useOnChainJob } from '@/hooks/useOnChainJob';
+import { effectiveJobStatus } from '@/lib/utils/onchainJob';
 
 function formatDuration(seconds?: number): string {
   if (!seconds) return '—';
@@ -41,6 +46,16 @@ export function JobDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const {
+    onchainStatus,
+    onchainStatusLabel,
+    loading: chainLoading,
+    refetch: refetchOnChain,
+  } = useOnChainJob(job?.onchainJobId, job?.status);
+
+  const displayStatus =
+    job != null ? effectiveJobStatus(job.status, onchainStatus) : 'OPEN';
+
   const loadBids = useCallback(() => {
     if (!id) return;
     fetchBidsByJob(id)
@@ -61,7 +76,8 @@ export function JobDetailPage() {
       })
       .catch(() => {});
     loadBids();
-  }, [id, loadBids]);
+    void refetchOnChain();
+  }, [id, loadBids, refetchOnChain]);
 
   useEffect(() => {
     if (!id) return;
@@ -133,7 +149,10 @@ export function JobDetailPage() {
         </Link>
         <div className="job-detail-header">
           <h2>{job.title}</h2>
-          <StatusBadge status={job.status} />
+          <StatusBadge status={displayStatus} />
+          {chainLoading && onchainStatus == null && (
+            <span className="muted phase-note">Đang đọc on-chain…</span>
+          )}
         </div>
         <p className="muted">{job.description}</p>
       </div>
@@ -158,6 +177,8 @@ export function JobDetailPage() {
         </section>
       )}
 
+      <WalletMismatchBanner job={job} isJobOwner={isJobOwner && isAuthenticated} />
+
       <div className="job-detail-grid">
         <section className="panel">
           <h3>Details</h3>
@@ -166,11 +187,16 @@ export function JobDetailPage() {
             <dd>{job.category}</dd>
             <dt>Status</dt>
             <dd>
-              <StatusBadge status={job.status} />
-              {job.status?.toUpperCase() === 'ASSIGNED' && (
+              <StatusBadge status={displayStatus} />
+              {onchainStatusLabel && displayStatus !== job.status?.toUpperCase() && (
+                <p className="muted phase-note">
+                  DB: {job.status?.toUpperCase()} → on-chain: <strong>{onchainStatusLabel}</strong>
+                </p>
+              )}
+              {(displayStatus === 'ASSIGNED' || job.status?.toUpperCase() === 'ASSIGNED') && (
                 <OnchainEscrowStatus
                   onchainJobId={job.onchainJobId}
-                  dbStatus={job.status}
+                  dbStatus={displayStatus}
                 />
               )}
             </dd>
@@ -245,7 +271,7 @@ export function JobDetailPage() {
               </>
             )}
           </dl>
-          <MilestoneProgress status={job.status} />
+          <MilestoneProgress status={displayStatus} />
         </section>
       </div>
 
@@ -260,6 +286,8 @@ export function JobDetailPage() {
       )}
 
       <DeliverableSubmitPanel job={job} onSubmitted={reloadJob} />
+      <DisputeStatusPanel job={job} />
+      <DisputeEvidencePanel job={job} />
 
       {canManageJob && bids.length > 0 && (
         <section className="panel">

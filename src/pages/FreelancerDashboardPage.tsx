@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { fetchJobsByFreelancer, fetchMyBids, fetchUserStats, type Bid, type Job } from '@/lib/api';
 import { JobCard } from '@/components/shared/JobCard';
+import { DashboardErrorBoundary } from '@/components/shared/DashboardErrorBoundary';
 import { useJobCounter } from '@/hooks/contracts/useContracts';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
-import { compareByDateDesc } from '@/lib/utils/dates';
+import { sortByDateDesc } from '@/lib/utils/dates';
 
 export function FreelancerDashboardPage() {
   const { address, isAuthenticated } = useAuth();
@@ -19,6 +20,7 @@ export function FreelancerDashboardPage() {
   const loadData = useCallback(async () => {
     if (!address) return;
     setLoading(true);
+    setError(null);
     try {
       const [jobsRes, statsRes, bidsRes] = await Promise.all([
         fetchJobsByFreelancer(address),
@@ -30,6 +32,7 @@ export function FreelancerDashboardPage() {
       if (statsRes.success) setStats(statsRes.stats || null);
       if (bidsRes.success) setBids(bidsRes.bids || []);
       else setError(bidsRes.error || 'Failed to load your proposals');
+      if (jobsRes.success && bidsRes.success) setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
@@ -44,12 +47,12 @@ export function FreelancerDashboardPage() {
   useAutoRefresh(loadData);
 
   const recentBids = useMemo(
-    () => [...bids].sort((a, b) => compareByDateDesc(a.createdAt, b.createdAt)).slice(0, 5),
+    () => sortByDateDesc(bids, (bid) => bid.createdAt).slice(0, 5),
     [bids],
   );
 
   const assignedJobs = useMemo(
-    () => [...jobs].sort((a, b) => compareByDateDesc(a.createdAt, b.createdAt)),
+    () => sortByDateDesc(jobs, (job) => job.createdAt),
     [jobs],
   );
 
@@ -85,39 +88,46 @@ export function FreelancerDashboardPage() {
       {error && <p className="error">{error}</p>}
 
       {recentBids.length > 0 && (
-        <section className="panel">
-          <h3>Recent proposals</h3>
-          <ul className="bids-list">
-            {recentBids.map((bid) => {
-              const jobLinkId =
-                typeof bid.jobId === 'object' && bid.jobId && '_id' in bid.jobId
-                  ? (bid.jobId as { _id: string })._id
-                  : bid.jobId;
-              return (
-              <li key={bid._id} className="bid-item">
-                <strong>{bid.title || 'Proposal'}</strong>
-                <span className="muted">
-                  {bid.bidAmount} USDC · {bid.status}
-                </span>
-                <Link to={`/jobs/${jobLinkId}`} className="btn ghost">
-                  View job
-                </Link>
-              </li>
-              );
-            })}
-          </ul>
-        </section>
+        <DashboardErrorBoundary section="recent proposals">
+          <section className="panel">
+            <h3>Recent proposals</h3>
+            <ul className="bids-list">
+              {recentBids.map((bid) => {
+                const jobLinkId =
+                  typeof bid.jobId === 'object' && bid.jobId && '_id' in bid.jobId
+                    ? (bid.jobId as { _id: string })._id
+                    : typeof (bid as Bid & { job?: { _id?: string } }).job === 'object' &&
+                        (bid as Bid & { job?: { _id?: string } }).job?._id
+                      ? (bid as Bid & { job: { _id: string } }).job._id
+                      : bid.jobId;
+                return (
+                <li key={bid._id} className="bid-item">
+                  <strong>{bid.title || 'Proposal'}</strong>
+                  <span className="muted">
+                    {bid.bidAmount} USDC · {bid.status}
+                  </span>
+                  <Link to={`/jobs/${jobLinkId}`} className="btn ghost">
+                    View job
+                  </Link>
+                </li>
+                );
+              })}
+            </ul>
+          </section>
+        </DashboardErrorBoundary>
       )}
 
       <h3>Assigned jobs</h3>
       {isAuthenticated && !loading && assignedJobs.length === 0 && (
         <p className="muted">No active assignments yet — submit bids on open jobs.</p>
       )}
-      <ul className="jobs-list">
-        {assignedJobs.map((job) => (
-          <JobCard key={job._id} job={job} />
-        ))}
-      </ul>
+      <DashboardErrorBoundary section="assigned jobs">
+        <ul className="jobs-list">
+          {assignedJobs.map((job) => (
+            <JobCard key={job._id} job={job} />
+          ))}
+        </ul>
+      </DashboardErrorBoundary>
     </main>
   );
 }

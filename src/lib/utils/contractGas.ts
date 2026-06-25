@@ -8,7 +8,11 @@ const GAS_BUFFER_DEN = 10n;
 /** Minimum gas for heavy escrow/registry writes (avoid under-estimate reverts). */
 const GAS_MIN: Record<string, bigint> = {
   depositEscrow: 200_000n,
-  approveAndRelease: 200_000n,
+  startWork: 120_000n,
+  /** Sepolia submitWork ~178k; 100k causes OOG masked as "unknown revert". */
+  submitWork: 220_000n,
+  /** Sepolia approveAndRelease ~224k; 200k OOG shows as undecoded revert. */
+  approveAndRelease: 250_000n,
   raiseDispute: 200_000n,
 };
 
