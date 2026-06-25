@@ -34,7 +34,6 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [successCid, setSuccessCid] = useState<string | null>(null);
 
   const walletCs = tryChecksumAddress(address);
   const rawOnchainFreelancer =
@@ -56,10 +55,7 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
     walletCs && onchainFreelancerCs && !addressesEqual(walletCs, onchainFreelancerCs),
   );
 
-  const onchainSubmitted =
-    onchainStatus === ONCHAIN_JOB_STATUS.SUBMITTED ||
-    job.onchainStatus === 'SUBMITTED' ||
-    job.status === 'SUBMITTED';
+  const onchainSubmitted = !chainLoading && onchainStatus === ONCHAIN_JOB_STATUS.SUBMITTED;
 
   if (!isAssignedFreelancer || !isValidOnchainJobId(job.onchainJobId)) return null;
 
@@ -68,11 +64,19 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
   const twoStepFlow = isOnchainAssigned && !walletMismatch;
 
   const canSubmit =
-    isOnchainAssigned ||
-    isOnchainInProgress ||
-    ['ASSIGNED', 'IN_PROGRESS'].includes(job.status);
+    !chainLoading &&
+    (isOnchainAssigned || isOnchainInProgress);
 
-  if (!canSubmit && !onchainSubmitted && !successCid) {
+  if (chainLoading) {
+    return (
+      <section className="panel deliverable-panel">
+        <h3>Nộp bàn giao</h3>
+        <p className="muted">Đang đọc trạng thái on-chain…</p>
+      </section>
+    );
+  }
+
+  if (!canSubmit && !onchainSubmitted) {
     return (
       <section className="panel deliverable-panel">
         <h3>Nộp bàn giao</h3>
@@ -81,7 +85,7 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
     );
   }
 
-  if (onchainSubmitted || successCid) {
+  if (onchainSubmitted) {
     return (
       <section className="panel deliverable-panel">
         <h3>Bàn giao</h3>
@@ -89,16 +93,17 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
         {onchainJob?.deliverableCID && (
           <p className="muted mono">CID: {onchainJob.deliverableCID}</p>
         )}
-        {successCid && (
+        {onchainJob?.deliverableCID && (
           <a
             className="etherscan-link"
-            href={`https://gateway.pinata.cloud/ipfs/${successCid}`}
+            href={`https://gateway.pinata.cloud/ipfs/${onchainJob.deliverableCID}`}
             target="_blank"
             rel="noopener noreferrer"
           >
             Xem trên IPFS ↗
           </a>
         )}
+        <p className="muted phase-note">Chờ client phê duyệt và giải phóng escrow.</p>
       </section>
     );
   }
@@ -122,7 +127,7 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
         notes: notes.trim(),
         repoUrl: repoUrl.trim() || undefined,
       });
-      setSuccessCid(cid);
+      void cid;
       await refetch();
       onSubmitted?.();
     } catch (err) {

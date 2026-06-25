@@ -7,10 +7,22 @@ export const ONCHAIN_JOB_STATUS = {
   ASSIGNED: 1,
   IN_PROGRESS: 2,
   SUBMITTED: 3,
+  DISPUTED: 4,
   COMPLETED: 5,
   REFUNDED: 6,
   CANCELLED: 7,
 } as const;
+
+const STATUS_RANK: Record<string, number> = {
+  OPEN: 0,
+  ASSIGNED: 1,
+  IN_PROGRESS: 2,
+  SUBMITTED: 3,
+  DISPUTED: 3,
+  COMPLETED: 5,
+  REFUNDED: 6,
+  CANCELLED: 7,
+};
 
 /** Coerce viem uint8 / bigint enum to a plain number for comparisons. */
 export function normalizeOnchainStatus(status: number | bigint): number {
@@ -35,11 +47,28 @@ export function onchainStatusLabel(status: number): string {
     [ONCHAIN_JOB_STATUS.ASSIGNED]: 'ASSIGNED',
     [ONCHAIN_JOB_STATUS.IN_PROGRESS]: 'IN_PROGRESS',
     [ONCHAIN_JOB_STATUS.SUBMITTED]: 'SUBMITTED',
+    [ONCHAIN_JOB_STATUS.DISPUTED]: 'DISPUTED',
     [ONCHAIN_JOB_STATUS.COMPLETED]: 'COMPLETED',
     [ONCHAIN_JOB_STATUS.REFUNDED]: 'REFUNDED',
     [ONCHAIN_JOB_STATUS.CANCELLED]: 'CANCELLED',
   };
   return labels[status] ?? `UNKNOWN(${status})`;
+}
+
+/** Prefer on-chain status for UI when registry has been read. */
+export function effectiveJobStatus(
+  dbStatus: string | undefined,
+  onchainStatus: number | null | undefined,
+): string {
+  if (onchainStatus != null) {
+    const label = onchainStatusLabel(onchainStatus);
+    if (!label.startsWith('UNKNOWN')) return label;
+  }
+  if (dbStatus) {
+    const key = dbStatus.toUpperCase();
+    if (key in STATUS_RANK) return key;
+  }
+  return 'OPEN';
 }
 
 export function isNonZeroAddress(addr?: string | null): addr is Address {
