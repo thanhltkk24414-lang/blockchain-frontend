@@ -15,6 +15,7 @@ import {
   type OnChainJob,
   validateDeliverableSubmit,
 } from '@/lib/utils/onchainJob';
+import { addressesEqual } from '@/lib/utils/address';
 import { useContractTx } from './useContractTx';
 
 const PREFLIGHT_CID = 'QmPreflightCheck000000000000000000000000000';
@@ -169,14 +170,33 @@ export function useClientJobActions() {
 
   const approveAndRelease = useCallback(
     async (onchainJobId: number) => {
-      if (!address) throw new Error('Connect your wallet first');
-      await tx.runTx('Approving deliverable and releasing funds…', () =>
+      if (!address) throw new Error('Hãy kết nối ví MetaMask trước.');
+
+      const wallet = getAddress(address);
+      const jobId = BigInt(onchainJobId);
+      const onchainJob = await readOnchainJob(jobId);
+
+      if (!addressesEqual(onchainJob.client, wallet)) {
+        throw new Error(
+          `Ví MetaMask (${wallet}) không trùng client on-chain (${getAddress(onchainJob.client)}). ` +
+            'Hãy đổi sang ví client đã tạo job.',
+        );
+      }
+
+      if (onchainJob.status !== ONCHAIN_JOB_STATUS.SUBMITTED) {
+        throw new Error(
+          `Job on-chain đang ${onchainJob.status === ONCHAIN_JOB_STATUS.DISPUTED ? 'DISPUTED' : `trạng thái #${onchainJob.status}`} — ` +
+            'chỉ phê duyệt khi SUBMITTED (sau khi freelancer submitWork).',
+        );
+      }
+
+      await tx.runTx('Đang phê duyệt bàn giao và giải phóng USDC…', () =>
         executeContractWrite(writeContractAsync, {
           address: contracts.escrowVault.address,
           abi: contracts.escrowVault.abi as Abi,
           functionName: 'approveAndRelease',
-          args: [BigInt(onchainJobId)],
-          account: address,
+          args: [jobId],
+          account: wallet,
         }),
       );
     },

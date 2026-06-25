@@ -38,6 +38,14 @@ const REVERT_HINTS_BY_FN: Record<string, Record<string, string>> = {
     StartWindowExpired:
       'Đã quá 72 giờ kể từ khi được gán — client có thể hủy hợp đồng.',
   },
+  approveAndRelease: {
+    WrongStatus:
+      'approveAndRelease chỉ gọi được khi job SUBMITTED (freelancer đã submitWork on-chain).',
+    OnlyClient:
+      'Chỉ ví client on-chain (người tạo job) mới phê duyệt — đổi sang ví client đúng trong MetaMask.',
+    ContractPaused: 'EscrowVault đang pause — thử lại sau.',
+    TransferFailed: 'Chuyển USDC thất bại — escrow có thể chưa khóa đủ tiền cho job này.',
+  },
 };
 
 export function decodeContractError(
@@ -63,11 +71,16 @@ export function decodeContractError(
     }
 
     const msg = err.shortMessage || err.message;
-    if (/reverted.*unknown|out of gas|intrinsic gas too low/i.test(msg)) {
+    if (/reverted.*unknown|out of gas|intrinsic gas too low|missing revert data/i.test(msg)) {
+      const gasHint =
+        functionName === 'approveAndRelease'
+          ? 'approveAndRelease cần ~225k+ gas trên Sepolia.'
+          : functionName === 'submitWork'
+            ? 'submitWork cần ~180k+ gas.'
+            : 'gas limit có thể quá thấp.';
       return (
-        'Giao dịch bị contract từ chối (revert không decode được). ' +
-        'Thường do gas limit quá thấp (submitWork cần ~180k+), ví MetaMask không trùng freelancer on-chain, ' +
-        'hoặc trạng thái job chưa IN_PROGRESS.'
+        `Giao dịch bị contract từ chối (revert không decode được). Thường do ${gasHint} ` +
+        'Kiểm tra ví MetaMask đúng role và trạng thái job on-chain.'
       );
     }
     return msg;
@@ -75,11 +88,16 @@ export function decodeContractError(
 
   if (err instanceof Error) {
     const msg = err.message;
-    if (/reverted.*unknown|out of gas|intrinsic gas too low/i.test(msg)) {
+    if (/reverted.*unknown|out of gas|intrinsic gas too low|missing revert data/i.test(msg)) {
+      const gasHint =
+        functionName === 'approveAndRelease'
+          ? 'approveAndRelease cần ~225k+ gas trên Sepolia.'
+          : functionName === 'submitWork'
+            ? 'submitWork cần ~180k+ gas.'
+            : 'gas limit có thể quá thấp.';
       return (
-        'Giao dịch bị contract từ chối (revert không decode được). ' +
-        'Thường do gas limit quá thấp (submitWork cần ~180k+), ví MetaMask không trùng freelancer on-chain, ' +
-        'hoặc trạng thái job chưa IN_PROGRESS.'
+        `Giao dịch bị contract từ chối (revert không decode được). Thường do ${gasHint} ` +
+        'Kiểm tra ví MetaMask đúng role và trạng thái job on-chain.'
       );
     }
     return msg;
@@ -122,5 +140,9 @@ export async function executeContractWrite(
     gas,
   };
 
-  return writeContractAsync(request as Parameters<typeof writeContractAsync>[0]);
+  try {
+    return await writeContractAsync(request as Parameters<typeof writeContractAsync>[0]);
+  } catch (writeErr) {
+    throw new Error(decodeContractError(writeErr, params.abi, params.functionName));
+  }
 }
