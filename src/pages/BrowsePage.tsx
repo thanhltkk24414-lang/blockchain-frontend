@@ -3,17 +3,16 @@ import { fetchJobs, searchJobs, type Job } from '@/lib/api';
 import { JobCard } from '@/components/shared/JobCard';
 import { JobFilters, type JobFilterState, DEFAULT_JOB_FILTERS } from '@/components/shared/JobFilters';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
-import { compareByDateDesc } from '@/lib/utils/dates';
+import { sortByDateDesc } from '@/lib/utils/dates';
 
 function sortJobs(jobs: Job[], sortBy: JobFilterState['sortBy']): Job[] {
-  const copy = [...jobs];
   if (sortBy === 'budget-high') {
-    return copy.sort((a, b) => (b.contractValue ?? 0) - (a.contractValue ?? 0));
+    return [...jobs].sort((a, b) => (b.contractValue ?? 0) - (a.contractValue ?? 0));
   }
   if (sortBy === 'budget-low') {
-    return copy.sort((a, b) => (a.contractValue ?? 0) - (b.contractValue ?? 0));
+    return [...jobs].sort((a, b) => (a.contractValue ?? 0) - (b.contractValue ?? 0));
   }
-  return copy.sort((a, b) => compareByDateDesc(a.createdAt, b.createdAt));
+  return sortByDateDesc(jobs, (job) => job.createdAt);
 }
 
 function filterBySkill(jobs: Job[], skill: string): Job[] {

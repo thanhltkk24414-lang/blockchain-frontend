@@ -2,31 +2,36 @@
 export function toTimestamp(value: unknown): number | null {
   if (value == null) return null;
 
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-    const t = new Date(trimmed).getTime();
-    return Number.isNaN(t) ? null : t;
-  }
-
-  if (value instanceof Date) {
-    const t = value.getTime();
-    return Number.isNaN(t) ? null : t;
-  }
-
-  if (typeof value === 'object') {
-    const record = value as Record<string, unknown>;
-    if ('$date' in record) {
-      return toTimestamp(record.$date);
+  try {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
     }
-    if (typeof record.getTime === 'function') {
-      const t = (record.getTime as () => number)();
+
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      const t = new Date(trimmed).getTime();
       return Number.isNaN(t) ? null : t;
     }
+
+    if (value instanceof Date) {
+      const t = value.getTime();
+      return Number.isNaN(t) ? null : t;
+    }
+
+    if (typeof value === 'object') {
+      const record = value as Record<string, unknown>;
+      if (record != null && '$date' in record) {
+        return toTimestamp(record.$date);
+      }
+      const getTime = record?.getTime;
+      if (typeof getTime === 'function') {
+        const t = (getTime as () => number).call(record);
+        return Number.isNaN(t) ? null : t;
+      }
+    }
+  } catch {
+    return null;
   }
 
   return null;
@@ -55,7 +60,24 @@ export function compareByDateDesc(
   fieldA: unknown = a,
   fieldB: unknown = b,
 ): number {
-  const ta = toTimestamp(fieldA) ?? 0;
-  const tb = toTimestamp(fieldB) ?? 0;
-  return tb - ta;
+  try {
+    const ta = toTimestamp(fieldA) ?? 0;
+    const tb = toTimestamp(fieldB) ?? 0;
+    return tb - ta;
+  } catch {
+    return 0;
+  }
+}
+
+/** Sort a copy by date field without throwing when individual items have bad dates. */
+export function sortByDateDesc<T>(
+  items: T[],
+  getDate: (item: T) => unknown = (item) =>
+    (item as { createdAt?: unknown }).createdAt,
+): T[] {
+  try {
+    return [...items].sort((a, b) => compareByDateDesc(getDate(a), getDate(b)));
+  } catch {
+    return [...items];
+  }
 }
