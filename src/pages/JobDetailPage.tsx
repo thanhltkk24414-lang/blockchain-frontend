@@ -159,7 +159,7 @@ export function JobDetailPage() {
         </section>
       )}
 
-      <WalletMismatchBanner job={job} />
+      <WalletMismatchBanner job={job} isJobOwner={isJobOwner && isAuthenticated} />
 
       <div className="job-detail-grid">
         <section className="panel">

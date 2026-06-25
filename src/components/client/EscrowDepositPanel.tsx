@@ -119,10 +119,13 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
     }
   }, [acceptedFreelancer]);
 
-  const onchainFreelancerCs = tryChecksumAddress(onchainFreelancer);
+  const onchainFreelancerCs = isNonZeroAddress(onchainFreelancer)
+    ? tryChecksumAddress(onchainFreelancer)
+    : null;
   const acceptedVsOnchainMismatch = Boolean(
     acceptedFreelancer &&
       onchainFreelancerCs &&
+      onchainStatus !== ONCHAIN_JOB_STATUS.OPEN &&
       !addressesEqual(acceptedFreelancer, onchainFreelancerCs),
   );
 
@@ -212,7 +215,11 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
       return;
     }
 
-    if (onchainFreelancerCs && !addressesEqual(freelancer, onchainFreelancerCs)) {
+    if (
+      onchainFreelancerCs &&
+      isNonZeroAddress(onchainFreelancerCs) &&
+      !addressesEqual(freelancer, onchainFreelancerCs)
+    ) {
       setLocalError(
         `Freelancer on-chain hiện tại là ${onchainFreelancerCs} — không thể deposit với ${freelancer}.`,
       );
@@ -398,6 +405,7 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
           walletMismatch ||
           insufficientUsdc ||
           depositBlocked ||
+          acceptedVsOnchainMismatch ||
           depositComplete
         }
       >

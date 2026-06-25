@@ -7,6 +7,7 @@ import { TxStatusModal } from '@/components/shared/TxStatusModal';
 import { isValidOnchainJobId } from '@/lib/utils/etherscan';
 import { addressesEqual, tryChecksumAddress } from '@/lib/utils/address';
 import {
+  isNonZeroAddress,
   ONCHAIN_JOB_STATUS,
   onchainStatusLabel,
 } from '@/lib/utils/onchainJob';
@@ -36,10 +37,14 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
   const [successCid, setSuccessCid] = useState<string | null>(null);
 
   const walletCs = tryChecksumAddress(address);
-  const onchainFreelancerCs =
-    tryChecksumAddress(job.onchainFreelancerAddress) ??
-    tryChecksumAddress(onchainFreelancer) ??
-    tryChecksumAddress(job.freelancerAddress);
+  const rawOnchainFreelancer =
+    (isNonZeroAddress(job.onchainFreelancerAddress) && job.onchainFreelancerAddress) ||
+    (isNonZeroAddress(onchainFreelancer) && onchainFreelancer) ||
+    (isNonZeroAddress(job.freelancerAddress) && job.freelancerAddress) ||
+    null;
+  const onchainFreelancerCs = rawOnchainFreelancer
+    ? tryChecksumAddress(rawOnchainFreelancer)
+    : null;
 
   const isAssignedFreelancer =
     user?.role === 'freelancer' &&
