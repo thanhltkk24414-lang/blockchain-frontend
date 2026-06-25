@@ -66,6 +66,31 @@ export function ClientDashboardPage() {
           <p className="muted">Connect wallet and sign in to see your posted jobs.</p>
         )}
 
+        {isAuthenticated && jobs.length > 0 && (
+          <div className="stats-row">
+            <div className="stat-card">
+              <span className="stat-label">Tổng job</span>
+              <strong>{jobs.length}</strong>
+            </div>
+            <div className="stat-card">
+              <span className="stat-label">Đang mở</span>
+              <strong>{jobs.filter((j) => j.status === 'OPEN').length}</strong>
+            </div>
+            <div className="stat-card">
+              <span className="stat-label">Đang chạy</span>
+              <strong>
+                {jobs.filter((j) =>
+                  ['ASSIGNED', 'IN_PROGRESS', 'SUBMITTED'].includes(j.status?.toUpperCase() ?? ''),
+                ).length}
+              </strong>
+            </div>
+            <div className="stat-card">
+              <span className="stat-label">Tranh chấp</span>
+              <strong>{jobs.filter((j) => j.status?.toUpperCase() === 'DISPUTED').length}</strong>
+            </div>
+          </div>
+        )}
+
         {showCreate && isAuthenticated && (
           <div className="create-job-panel">
             <CreateJobForm onCreated={handleJobCreated} onCancel={() => setShowCreate(false)} />

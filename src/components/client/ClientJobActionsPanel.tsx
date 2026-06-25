@@ -37,7 +37,10 @@ export function ClientJobActionsPanel({ job, onActionComplete }: ClientJobAction
   if (!isClient || !isValidOnchainJobId(job.onchainJobId)) return null;
 
   const canApprove = !chainLoading && onchainStatus === ONCHAIN_JOB_STATUS.SUBMITTED;
-  const canDispute = !chainLoading && onchainStatus === ONCHAIN_JOB_STATUS.SUBMITTED;
+  const canDispute =
+    !chainLoading &&
+    (onchainStatus === ONCHAIN_JOB_STATUS.SUBMITTED ||
+      onchainStatus === ONCHAIN_JOB_STATUS.IN_PROGRESS);
 
   if (chainLoading) {
     return (

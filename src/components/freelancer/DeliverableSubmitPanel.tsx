@@ -77,6 +77,35 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
   }
 
   if (!canSubmit && !onchainSubmitted) {
+    const terminal =
+      onchainStatus === ONCHAIN_JOB_STATUS.COMPLETED ||
+      onchainStatus === ONCHAIN_JOB_STATUS.REFUNDED ||
+      onchainStatus === ONCHAIN_JOB_STATUS.CANCELLED ||
+      onchainStatus === ONCHAIN_JOB_STATUS.DISPUTED;
+
+    if (terminal) {
+      if (onchainStatus === ONCHAIN_JOB_STATUS.COMPLETED) {
+        return (
+          <section className="panel deliverable-panel">
+            <h3>Bàn giao</h3>
+            <p className="badge success">Job đã hoàn thành on-chain (COMPLETED).</p>
+          </section>
+        );
+      }
+      if (onchainStatus === ONCHAIN_JOB_STATUS.DISPUTED) {
+        return null;
+      }
+      return (
+        <section className="panel deliverable-panel">
+          <h3>Nộp bàn giao</h3>
+          <p className="muted">
+            Job on-chain: <strong>{chainLabel ?? onchainStatusLabel(onchainStatus!)}</strong> — không
+            thể nộp bàn giao thêm.
+          </p>
+        </section>
+      );
+    }
+
     return (
       <section className="panel deliverable-panel">
         <h3>Nộp bàn giao</h3>
