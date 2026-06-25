@@ -6,6 +6,7 @@ import { useArbitratorAccess } from '@/hooks/useArbitratorAccess';
 import { API_URL } from '@/config/env';
 import { fetchHealth } from '@/lib/api';
 import { CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
+import { hasChosenRegistrationRole } from '@/lib/utils/profile';
 import type { RegistrationRole } from '@/lib/api';
 
 type NavItem = { to: string; label: string; roles?: RegistrationRole[]; arbitrator?: boolean };
@@ -42,7 +43,7 @@ export function AppShell() {
   const visibleNav = NAV.filter((item) => {
     if (item.arbitrator) return isAuthenticated && arbitrator.isValid;
     if (!item.roles) return true;
-    if (!isAuthenticated) return false;
+    if (!isAuthenticated || !hasChosenRegistrationRole(user)) return false;
     return item.roles.includes(user?.role as RegistrationRole);
   });
 
@@ -80,7 +81,9 @@ export function AppShell() {
           {isAuthenticated && (
             <div className="auth-status">
               <span className="badge success">Authenticated</span>
-              {user?.role && <span className="badge role-badge">{user.role}</span>}
+              {hasChosenRegistrationRole(user) && (
+                <span className="badge role-badge">{user.role}</span>
+              )}
               <span className="wallet" title="SIWE session wallet">
                 {user?.walletAddress}
               </span>

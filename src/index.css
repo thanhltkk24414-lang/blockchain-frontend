@@ -444,6 +444,22 @@ body {
   font-size: 0.95rem;
 }
 
+.role-card {
+  cursor: pointer;
+  display: block;
+}
+
+.role-card input[type='radio'] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.role-card.selected {
+  border-color: #5b8def;
+  box-shadow: 0 0 0 1px #5b8def;
+}
+
 .btn.outline {
   background: transparent;
   color: #7eb8ff;
