@@ -172,6 +172,15 @@ export async function fetchJobById(id: string) {
   const data = await parseJson<JobDetailResponse>(res);
   if (data.success && data.job) {
     data.job = normalizeJob(data.job);
+    if (data.onchain) {
+      if (data.onchain.onchainStatus) data.job.onchainStatus = data.onchain.onchainStatus;
+      if (data.onchain.onchainFreelancerAddress) {
+        data.job.onchainFreelancerAddress = data.onchain.onchainFreelancerAddress;
+      }
+      if (data.onchain.onchainClientAddress) {
+        data.job.onchainClientAddress = data.onchain.onchainClientAddress;
+      }
+    }
     if (data.metadata) {
       data.metadata = {
         ...data.metadata,

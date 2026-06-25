@@ -1,8 +1,9 @@
 import { useCallback } from 'react';
-import { readContract } from 'wagmi/actions';
+import { readContract, simulateContract } from 'wagmi/actions';
 import { useWriteContract } from 'wagmi';
 import { useAccount } from 'wagmi';
 import type { Abi } from 'viem';
+import { getAddress } from 'viem';
 import { wagmiConfig } from '@/config/wagmi';
 import { uploadIpfsFile, uploadIpfsMetadata } from '@/lib/api';
 import { contracts } from '@/lib/contracts/config';
@@ -15,12 +16,41 @@ import {
 } from '@/lib/utils/onchainJob';
 import { useContractTx } from './useContractTx';
 
+const PREFLIGHT_CID = 'QmPreflightCheck000000000000000000000000000';
+
 async function readOnchainJob(jobId: bigint): Promise<OnChainJob> {
   return (await readContract(wagmiConfig, {
     ...contracts.jobRegistry,
     functionName: 'getJob',
     args: [jobId],
   })) as OnChainJob;
+}
+
+async function preflightDeliverableTxs(
+  onchainJob: OnChainJob,
+  wallet: `0x${string}`,
+  jobId: bigint,
+): Promise<void> {
+  if (onchainJob.status === ONCHAIN_JOB_STATUS.ASSIGNED) {
+    await simulateContract(wagmiConfig, {
+      address: contracts.escrowVault.address,
+      abi: contracts.escrowVault.abi as Abi,
+      functionName: 'startWork',
+      args: [jobId],
+      account: wallet,
+    });
+    return;
+  }
+
+  if (onchainJob.status === ONCHAIN_JOB_STATUS.IN_PROGRESS) {
+    await simulateContract(wagmiConfig, {
+      address: contracts.escrowVault.address,
+      abi: contracts.escrowVault.abi as Abi,
+      functionName: 'submitWork',
+      args: [jobId, PREFLIGHT_CID],
+      account: wallet,
+    });
+  }
 }
 
 export function useDeliverableSubmit() {
@@ -38,9 +68,12 @@ export function useDeliverableSubmit() {
     }) => {
       if (!address) throw new Error('Hãy kết nối ví MetaMask trước.');
 
+      const wallet = getAddress(address);
       const jobId = BigInt(params.onchainJobId);
       let onchainJob = await readOnchainJob(jobId);
-      validateDeliverableSubmit(onchainJob, address);
+      validateDeliverableSubmit(onchainJob, wallet);
+
+      await preflightDeliverableTxs(onchainJob, wallet, jobId);
 
       let deliverableCID: string;
 
@@ -53,7 +86,7 @@ export function useDeliverableSubmit() {
           jobTitle: params.jobTitle,
           notes: params.notes,
           repoUrl: params.repoUrl || undefined,
-          freelancerAddress: address,
+          freelancerAddress: wallet,
           submittedAt: new Date().toISOString(),
         });
         deliverableCID = upload.cid;
@@ -63,9 +96,8 @@ export function useDeliverableSubmit() {
         throw new Error('IPFS không trả về CID — thử lại upload.');
       }
 
-      // Re-read after IPFS upload in case status changed
       onchainJob = await readOnchainJob(jobId);
-      validateDeliverableSubmit(onchainJob, address);
+      validateDeliverableSubmit(onchainJob, wallet);
 
       if (onchainJob.status === ONCHAIN_JOB_STATUS.ASSIGNED) {
         await tx.runTx('Đang bắt đầu làm việc on-chain (startWork)…', () =>
@@ -74,7 +106,7 @@ export function useDeliverableSubmit() {
             abi: contracts.escrowVault.abi as Abi,
             functionName: 'startWork',
             args: [jobId],
-            account: address,
+            account: wallet,
           }),
         );
         onchainJob = await readOnchainJob(jobId);
@@ -91,7 +123,7 @@ export function useDeliverableSubmit() {
           abi: contracts.escrowVault.abi as Abi,
           functionName: 'submitWork',
           args: [jobId, deliverableCID.trim()],
-          account: address,
+          account: wallet,
         }),
       );
 

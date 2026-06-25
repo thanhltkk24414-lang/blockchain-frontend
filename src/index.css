@@ -825,3 +825,17 @@ body {
 .checklist {
   padding-left: 1.25rem;
 }
+
+.wallet-mismatch-banner {
+  border: 1px solid hsl(var(--destructive) / 0.35);
+  background: hsl(var(--destructive) / 0.06);
+}
+
+.wallet-mismatch-banner h3 {
+  margin-top: 0;
+  color: hsl(var(--destructive));
+}
+
+.wallet-compare dd.mono {
+  word-break: break-all;
+}

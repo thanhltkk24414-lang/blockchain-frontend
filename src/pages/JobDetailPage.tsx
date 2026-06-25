@@ -15,6 +15,7 @@ import {
 } from '@/lib/utils/etherscan';
 import { CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 import { OnchainEscrowStatus } from '@/components/shared/OnchainEscrowStatus';
+import { WalletMismatchBanner } from '@/components/shared/WalletMismatchBanner';
 import { formatApiDate } from '@/lib/utils/dates';
 
 function formatDuration(seconds?: number): string {
@@ -157,6 +158,8 @@ export function JobDetailPage() {
           <p className="muted">Connect your wallet and sign in to accept proposals and manage this job.</p>
         </section>
       )}
+
+      <WalletMismatchBanner job={job} />
 
       <div className="job-detail-grid">
         <section className="panel">

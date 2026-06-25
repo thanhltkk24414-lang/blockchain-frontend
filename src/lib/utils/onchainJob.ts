@@ -1,4 +1,5 @@
-import { zeroAddress, type Address } from 'viem';
+import { getAddress, zeroAddress, type Address } from 'viem';
+import { addressesEqual } from '@/lib/utils/address';
 
 /** Matches JobRegistry.JobStatus enum in deployed contracts. */
 export const ONCHAIN_JOB_STATUS = {
@@ -51,10 +52,14 @@ export function shortAddress(addr: string): string {
 
 /** Throws with a Vietnamese message when the connected wallet cannot submit deliverables. */
 export function validateDeliverableSubmit(job: OnChainJob, wallet: Address): void {
-  if (job.freelancer.toLowerCase() !== wallet.toLowerCase()) {
+  const walletCs = getAddress(wallet);
+  const freelancerCs = getAddress(job.freelancer);
+
+  if (!addressesEqual(freelancerCs, walletCs)) {
     throw new Error(
-      `Ví MetaMask (${shortAddress(wallet)}) không trùng freelancer on-chain (${shortAddress(job.freelancer)}). ` +
-        'Hãy đổi sang đúng ví đã được client gán khi nạp escrow (depositEscrow).',
+      `Ví MetaMask (${walletCs}) không trùng freelancer on-chain (${freelancerCs}). ` +
+        'Hãy đổi sang đúng ví đã được client gán khi nạp escrow (depositEscrow). ' +
+        `Sao chép địa chỉ đúng: ${freelancerCs}`,
     );
   }
 

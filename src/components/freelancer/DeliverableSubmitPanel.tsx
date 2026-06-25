@@ -1,18 +1,14 @@
-import { useEffect, useState } from 'react';
-import { readContract } from 'wagmi/actions';
-import type { Address } from 'viem';
+import { useState } from 'react';
 import type { Job } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useDeliverableSubmit } from '@/hooks/useJobActions';
+import { useOnChainJob } from '@/hooks/useOnChainJob';
 import { TxStatusModal } from '@/components/shared/TxStatusModal';
 import { isValidOnchainJobId } from '@/lib/utils/etherscan';
-import { wagmiConfig } from '@/config/wagmi';
-import { contracts } from '@/lib/contracts/config';
+import { addressesEqual, tryChecksumAddress } from '@/lib/utils/address';
 import {
   ONCHAIN_JOB_STATUS,
   onchainStatusLabel,
-  shortAddress,
-  type OnChainJob,
 } from '@/lib/utils/onchainJob';
 
 interface DeliverableSubmitPanelProps {
@@ -23,52 +19,51 @@ interface DeliverableSubmitPanelProps {
 export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPanelProps) {
   const { address, user, isAuthenticated } = useAuth();
   const { submit, txStatus, txHash, txLabel, txError, resetTx } = useDeliverableSubmit();
+  const {
+    onchainJob,
+    onchainStatus,
+    onchainFreelancer,
+    onchainStatusLabel: chainLabel,
+    loading: chainLoading,
+    refetch,
+  } = useOnChainJob(job.onchainJobId, job.status);
+
   const [notes, setNotes] = useState('');
   const [repoUrl, setRepoUrl] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successCid, setSuccessCid] = useState<string | null>(null);
-  const [onchainFreelancer, setOnchainFreelancer] = useState<Address | null>(null);
-  const [onchainStatus, setOnchainStatus] = useState<number | null>(null);
+
+  const walletCs = tryChecksumAddress(address);
+  const onchainFreelancerCs =
+    tryChecksumAddress(job.onchainFreelancerAddress) ??
+    tryChecksumAddress(onchainFreelancer) ??
+    tryChecksumAddress(job.freelancerAddress);
 
   const isAssignedFreelancer =
     user?.role === 'freelancer' &&
-    address &&
-    job.freelancerAddress?.toLowerCase() === address.toLowerCase();
+    walletCs &&
+    job.freelancerAddress &&
+    addressesEqual(walletCs, job.freelancerAddress);
 
-  useEffect(() => {
-    if (!isValidOnchainJobId(job.onchainJobId)) return;
-    let cancelled = false;
+  const walletMismatch = Boolean(
+    walletCs && onchainFreelancerCs && !addressesEqual(walletCs, onchainFreelancerCs),
+  );
 
-    readContract(wagmiConfig, {
-      ...contracts.jobRegistry,
-      functionName: 'getJob',
-      args: [BigInt(job.onchainJobId!)],
-    })
-      .then((raw) => {
-        if (cancelled) return;
-        const chainJob = raw as OnChainJob;
-        setOnchainFreelancer(chainJob.freelancer);
-        setOnchainStatus(chainJob.status);
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
-  }, [job.onchainJobId, job.status]);
+  const onchainSubmitted =
+    onchainStatus === ONCHAIN_JOB_STATUS.SUBMITTED ||
+    job.onchainStatus === 'SUBMITTED' ||
+    job.status === 'SUBMITTED';
 
   if (!isAssignedFreelancer || !isValidOnchainJobId(job.onchainJobId)) return null;
 
-  const walletMismatch =
-    address &&
-    onchainFreelancer &&
-    onchainFreelancer.toLowerCase() !== address.toLowerCase();
+  const canSubmit =
+    ['ASSIGNED', 'IN_PROGRESS'].includes(job.status) ||
+    onchainStatus === ONCHAIN_JOB_STATUS.ASSIGNED ||
+    onchainStatus === ONCHAIN_JOB_STATUS.IN_PROGRESS;
 
-  const canSubmit = ['ASSIGNED', 'IN_PROGRESS'].includes(job.status);
-
-  if (!canSubmit && job.status !== 'SUBMITTED') {
+  if (!canSubmit && !onchainSubmitted && !successCid) {
     return (
       <section className="panel deliverable-panel">
         <h3>Nộp bàn giao</h3>
@@ -77,11 +72,14 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
     );
   }
 
-  if (job.status === 'SUBMITTED' || successCid) {
+  if (onchainSubmitted || successCid) {
     return (
       <section className="panel deliverable-panel">
         <h3>Bàn giao</h3>
-        <p className="badge success">Đã nộp bàn giao on-chain.</p>
+        <p className="badge success">Đã nộp bàn giao on-chain ({chainLabel ?? 'SUBMITTED'}).</p>
+        {onchainJob?.deliverableCID && (
+          <p className="muted mono">CID: {onchainJob.deliverableCID}</p>
+        )}
         {successCid && (
           <a
             className="etherscan-link"
@@ -99,6 +97,7 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!job.onchainJobId) return;
+    if (walletMismatch) return;
     if (!file && notes.trim().length < 10) {
       setError('Thêm file hoặc ghi chú bàn giao ít nhất 10 ký tự.');
       return;
@@ -115,6 +114,7 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
         repoUrl: repoUrl.trim() || undefined,
       });
       setSuccessCid(cid);
+      await refetch();
       onSubmitted?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Nộp bàn giao thất bại');
@@ -127,32 +127,40 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
     <form className="panel deliverable-panel" onSubmit={handleSubmit}>
       <h3>Nộp bàn giao</h3>
       <p className="muted">
-        Upload lên IPFS qua backend, sau đó gọi <code>EscrowVault.submitWork</code> từ ví
-        freelancer. Nếu job còn ASSIGNED, hệ thống tự gọi <code>startWork</code> trước.
+        Hệ thống kiểm tra ví và mô phỏng giao dịch on-chain <strong>trước</strong> khi upload IPFS.
+        Nếu job còn ASSIGNED, sẽ gọi <code>startWork</code> rồi <code>submitWork</code>.
       </p>
 
-      {onchainFreelancer && address && (
-        <p className="muted">
-          Freelancer on-chain: <code>{shortAddress(onchainFreelancer)}</code>
+      {chainLoading && <p className="muted">Đang đọc trạng thái on-chain…</p>}
+
+      {onchainFreelancerCs && walletCs && (
+        <dl className="detail-grid wallet-compare">
+          <dt>Freelancer on-chain</dt>
+          <dd className="mono">{onchainFreelancerCs}</dd>
+          <dt>Ví MetaMask</dt>
+          <dd className={walletMismatch ? 'error mono' : 'mono'}>{walletCs}</dd>
           {onchainStatus != null && (
             <>
-              {' '}
-              · Trạng thái: <strong>{onchainStatusLabel(onchainStatus)}</strong>
+              <dt>Trạng thái on-chain</dt>
+              <dd>
+                <strong>{chainLabel ?? onchainStatusLabel(onchainStatus)}</strong>
+              </dd>
             </>
           )}
-        </p>
+        </dl>
       )}
 
-      {walletMismatch && (
+      {walletMismatch && onchainFreelancerCs && walletCs && (
         <p className="error">
-          Ví MetaMask ({shortAddress(address!)}) không trùng freelancer on-chain (
-          {shortAddress(onchainFreelancer!)}). Đổi sang đúng ví đã được gán khi client nạp escrow.
+          Ví không khớp — chỉ <code className="mono">{onchainFreelancerCs}</code> mới gọi được{' '}
+          <code>submitWork</code>. Địa chỉ bạn đang dùng: <code className="mono">{walletCs}</code>{' '}
+          (khác byte, không chỉ khác chữ hoa).
         </p>
       )}
 
       {onchainStatus === ONCHAIN_JOB_STATUS.ASSIGNED && !walletMismatch && (
         <p className="muted">
-          Job đang ASSIGNED — lần nộp đầu sẽ gửi 2 giao dịch: <code>startWork</code> rồi{' '}
+          Job đang ASSIGNED — lần nộp đầu gửi 2 giao dịch: <code>startWork</code> rồi{' '}
           <code>submitWork</code>.
         </p>
       )}
@@ -193,9 +201,15 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
       <button
         className="btn primary"
         type="submit"
-        disabled={loading || txStatus === 'pending' || !isAuthenticated || Boolean(walletMismatch)}
+        disabled={
+          loading ||
+          txStatus === 'pending' ||
+          chainLoading ||
+          !isAuthenticated ||
+          Boolean(walletMismatch)
+        }
       >
-        {loading || txStatus === 'pending' ? 'Đang nộp…' : 'Upload & nộp on-chain'}
+        {loading || txStatus === 'pending' ? 'Đang nộp…' : 'Kiểm tra & nộp on-chain'}
       </button>
 
       {error && <p className="error">{error}</p>}
