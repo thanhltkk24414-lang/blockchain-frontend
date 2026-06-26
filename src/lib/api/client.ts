@@ -315,6 +315,20 @@ export async function fetchDisputeByOnchainJob(onchainJobId: number) {
   return parseJson<{ success: boolean; dispute?: DisputeRecord; error?: string }>(res);
 }
 
+export async function submitDisputeEvidence(
+  disputeId: string,
+  payload: { ipfsHash: string; description?: string },
+) {
+  const res = await fetch(`${API_URL}/api/disputes/${disputeId}/evidence`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  return parseJson<{ success: boolean; message?: string; evidence?: DisputeRecord['evidence'] }>(
+    res,
+  );
+}
+
 export async function fetchHealth() {
   const res = await fetch(`${API_URL}/health`);
   return parseJson<{

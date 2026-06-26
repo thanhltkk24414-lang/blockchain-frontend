@@ -46,17 +46,65 @@ type OnChainDispute = {
   pendingResult: number;
 };
 
-/** ArbitratorPanel.disputes returns uint40 timestamps — viem decodes them as number, not bigint. */
+/** ArbitratorPanel.disputes returns uint40 timestamps — viem may decode as number, bigint, or tuple. */
 type OnChainDisputeRaw = Omit<OnChainDispute, 'createdAt' | 'resultAt'> & {
-  createdAt: number | bigint;
-  resultAt: number | bigint;
+  createdAt?: number | bigint | null;
+  resultAt?: number | bigint | null;
 };
 
-function normalizeOnchainDispute(raw: OnChainDisputeRaw): OnChainDispute {
+type OnChainDisputeTuple = readonly [
+  Address,
+  number | bigint | null | undefined,
+  number | bigint | null | undefined,
+  boolean,
+  number,
+  number,
+  number,
+  number,
+];
+
+function toBigIntField(value: unknown, fallback = 0n): bigint {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === 'bigint') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return BigInt(Math.trunc(value));
+  if (typeof value === 'string' && value.trim() !== '') return BigInt(value);
+  return fallback;
+}
+
+function normalizeOnchainDispute(raw: unknown): OnChainDispute {
+  if (Array.isArray(raw)) {
+    const [
+      initiator,
+      createdAt,
+      resultAt,
+      isResolved,
+      round,
+      commitCount,
+      revealCount,
+      pendingResult,
+    ] = raw as unknown as OnChainDisputeTuple;
+    return {
+      initiator: getAddress(initiator),
+      createdAt: toBigIntField(createdAt),
+      resultAt: toBigIntField(resultAt),
+      isResolved: Boolean(isResolved),
+      round: Number(round ?? 0),
+      commitCount: Number(commitCount ?? 0),
+      revealCount: Number(revealCount ?? 0),
+      pendingResult: Number(pendingResult ?? 0),
+    };
+  }
+
+  const obj = raw as OnChainDisputeRaw;
   return {
-    ...raw,
-    createdAt: BigInt(raw.createdAt),
-    resultAt: BigInt(raw.resultAt),
+    initiator: getAddress(obj.initiator),
+    createdAt: toBigIntField(obj.createdAt),
+    resultAt: toBigIntField(obj.resultAt),
+    isResolved: Boolean(obj.isResolved),
+    round: Number(obj.round ?? 0),
+    commitCount: Number(obj.commitCount ?? 0),
+    revealCount: Number(obj.revealCount ?? 0),
+    pendingResult: Number(obj.pendingResult ?? 0),
   };
 }
 
@@ -74,7 +122,7 @@ async function readOnchainDispute(jobId: bigint): Promise<OnChainDispute> {
     ...contracts.arbitratorPanel,
     functionName: 'disputes',
     args: [jobId],
-  })) as OnChainDisputeRaw;
+  })) as unknown;
   return normalizeOnchainDispute(raw);
 }
 
