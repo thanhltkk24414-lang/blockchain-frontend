@@ -57,7 +57,7 @@ function assertCreateJobParams({
 }
 
 export function useCreateJob() {
-  const { address } = useAccount();
+  const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { writeContractAsync } = useWriteContract();
   const [txStatus, setTxStatus] = useState<TxStatus>('idle');
@@ -74,14 +74,13 @@ export function useCreateJob() {
 
   const createOnChain = useCallback(
     async (params: CreateJobOnChainParams): Promise<CreateJobOnChainResult> => {
-      if (!address) {
+      if (!isConnected || !address) {
         throw new Error('Kết nối ví MetaMask trên Sepolia trước khi tạo job on-chain.');
       }
       if (!isAddress(address)) {
         const len = String(address).length;
         throw new Error(
-          `Địa chỉ MetaMask không hợp lệ (${len} ký tự). ` +
-            'Cần 0x + 40 hex — xóa account lỗi và import lại private key đúng 64 ký tự.',
+          `Địa chỉ MetaMask không hợp lệ (${len} ký tự). Cần đúng định dạng 0x + 40 ký tự hex.`,
         );
       }
       if (chainId !== CHAIN_ID) {
@@ -143,7 +142,7 @@ export function useCreateJob() {
         throw new Error(message);
       }
     },
-    [address, chainId, resetTx, writeContractAsync],
+    [address, chainId, isConnected, resetTx, writeContractAsync],
   );
 
   return {

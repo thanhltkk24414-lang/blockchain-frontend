@@ -1,6 +1,7 @@
 import { estimateGas } from 'viem/actions';
 import type { Abi, Address } from 'viem';
 import { wagmiConfig } from '@/config/wagmi';
+import { CHAIN_ID } from '@/lib/contracts/addresses';
 
 const GAS_BUFFER_NUM = 12n;
 const GAS_BUFFER_DEN = 10n;
@@ -51,7 +52,7 @@ function capForFunction(functionName: string): bigint {
  */
 export async function withGasLimit(params: GasEstimateInput): Promise<{ gas: bigint }> {
   const cap = capForFunction(params.functionName);
-  const client = wagmiConfig.getClient();
+  const client = wagmiConfig.getClient({ chainId: CHAIN_ID as 11155111 });
   const account = params.account ?? client.account?.address;
   if (!account) {
     return { gas: cap };

@@ -56,7 +56,7 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
     }
     if (!isAddress(address)) {
       setSubmitError(
-        `Địa chỉ MetaMask không hợp lệ (${String(address).length} ký tự). Cần 0x + 40 hex — kiểm tra account import.`,
+        `Địa chỉ MetaMask không hợp lệ (${String(address).length} ký tự). Cần đúng định dạng 0x + 40 ký tự hex.`,
       );
       return;
     }
@@ -92,6 +92,12 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
       });
       if (!metadataRes.success || !metadataRes.cid) {
         throw new Error('IPFS metadata upload failed — kiểm tra đăng nhập SIWE và Pinata backend.');
+      }
+
+      if (!address || address.toLowerCase() !== user.walletAddress.toLowerCase()) {
+        throw new Error(
+          'Ví MetaMask đổi trong lúc upload IPFS — chuyển lại về ví đăng nhập SIWE trước khi ký createJob.',
+        );
       }
 
       setStep('onchain');
