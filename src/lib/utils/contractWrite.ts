@@ -5,6 +5,7 @@ import {
   ContractFunctionRevertedError,
   UserRejectedRequestError,
   encodeFunctionData,
+  getAddress,
   isAddress,
   type Abi,
   type Address,
@@ -89,8 +90,9 @@ function formatDecodedMessage(msg: string, functionName?: string): string {
   if (/missing or invalid parameters/i.test(msg)) {
     const clean = msg.replace(/^MetaMask RPC:\s*/i, '').trim();
     return (
-      `MetaMask RPC: ${clean}. Gợi ý: \`from\` phải là account đang chọn trong MetaMask (eth_accounts[0]), ` +
-      `trùng ví MetaMask đã kết nối trên Fapex, mạng Sepolia (${CHAIN_ID}). Xem Console (F12) → [createJob] eth_sendTransaction request.`
+      `MetaMask RPC: ${clean}. Khi mọi ví đã trùng khớp, thường do gọi eth_sendTransaction qua provider sai ` +
+      `(ví phụ khi cài nhiều ví) hoặc tham số value/from thừa — không phải lỗi calldata/ABI. ` +
+      `Thử Disconnect → Connect lại; tắt ví khác (Coinbase/Brave). Console → [createJob] eth_sendTransaction request.`
     );
   }
   if (/transaction creation failed/i.test(msg)) {
@@ -167,11 +169,11 @@ export type ContractWriteInput = GasEstimateInput & {
 import {
   ensureSepoliaOnProvider,
   getMetaMaskProvider,
+  getSigningProvider,
   type EthereumProvider,
 } from '@/lib/utils/ethereumProvider';
 import {
   isInvalidTxParamsError,
-  requestMetaMaskPermissions,
   resolveMetaMaskSigningAccount,
 } from '@/lib/utils/walletAccounts';
 
@@ -248,12 +250,12 @@ async function writeViaWagmiAction(
   });
 }
 
-/** Last resort: minimal eth_sendTransaction params MetaMask accepts (from/to/data only). */
+/** Last resort: minimal eth_sendTransaction params MetaMask accepts (to/data only). */
 async function writeViaInjectedProvider(
   _wagmiHint: Address,
   params: ContractWriteInput,
 ): Promise<Hash> {
-  const provider = getInjectedProvider();
+  const provider = (await getSigningProvider()) ?? getInjectedProvider();
   if (!provider?.request) {
     throw new Error('MetaMask provider không khả dụng — cài/kích hoạt extension.');
   }
@@ -267,26 +269,27 @@ async function writeViaInjectedProvider(
     args: params.args,
   });
 
-  const txParams = { from, to: params.address, data, value: '0x0' as const };
+  const to = getAddress(params.address);
+  const txMinimal = { to, data };
+  const txWithFrom = { from, to, data };
+
   if (import.meta.env.DEV) {
     console.debug('[contractWrite] eth_sendTransaction request', {
       method: 'eth_sendTransaction',
-      params: [txParams],
+      params: [txMinimal],
     });
   }
 
   try {
     return (await provider.request({
       method: 'eth_sendTransaction',
-      params: [txParams],
+      params: [txMinimal],
     })) as Hash;
   } catch (err) {
     if (!isInvalidTxParamsError(err)) throw err;
-    await requestMetaMaskPermissions(provider);
-    const retryFrom = await resolveMetaMaskSigningAccount();
     return (await provider.request({
       method: 'eth_sendTransaction',
-      params: [{ ...txParams, from: retryFrom }],
+      params: [txWithFrom],
     })) as Hash;
   }
 }

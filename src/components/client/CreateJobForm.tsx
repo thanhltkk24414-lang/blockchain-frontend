@@ -9,7 +9,7 @@ import { TxStatusModal } from '@/components/shared/TxStatusModal';
 import { TxRecoveryModal } from '@/components/shared/TxRecoveryModal';
 import { WalletAccountIndicator } from '@/components/shared/WalletAccountIndicator';
 import { getMetaMaskAccounts } from '@/lib/utils/walletAccounts';
-import { getMetaMaskProvider } from '@/lib/utils/ethereumProvider';
+import { getSigningProvider } from '@/lib/utils/ethereumProvider';
 import { CHAIN_ID, CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 import {
   EMPTY_CREATE_JOB_FORM,
@@ -126,7 +126,7 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
         throw new Error('IPFS metadata upload failed — kiểm tra đăng nhập SIWE và Pinata backend.');
       }
 
-      const provider = getMetaMaskProvider();
+      const provider = await getSigningProvider();
       const mmAccounts = provider ? await getMetaMaskAccounts(provider) : [];
       const activeNow = mmAccounts[0] ?? signingAddress ?? address;
       if (!activeNow || activeNow.toLowerCase() !== user.walletAddress.toLowerCase()) {

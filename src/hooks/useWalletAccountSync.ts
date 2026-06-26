@@ -7,7 +7,7 @@ import {
   shortAddress,
   type WalletAccountSnapshot,
 } from '@/lib/utils/walletAccounts';
-import { getMetaMaskProvider } from '@/lib/utils/ethereumProvider';
+import { getSigningProvider } from '@/lib/utils/ethereumProvider';
 
 export function useWalletAccountSync() {
   const { address: rainbowKitAddress, isConnected } = useAccount();
@@ -17,7 +17,7 @@ export function useWalletAccountSync() {
   );
 
   const refresh = useCallback(async () => {
-    const provider = getMetaMaskProvider();
+    const provider = await getSigningProvider();
     if (!provider) {
       setSnapshot(buildWalletSnapshot(rainbowKitAddress, null, user?.walletAddress));
       return;

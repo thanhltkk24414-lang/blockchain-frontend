@@ -1,5 +1,8 @@
 import { getAddress, isAddress, type Address } from 'viem';
-import { getMetaMaskProvider, type EthereumProvider } from '@/lib/utils/ethereumProvider';
+import {
+  getSigningProvider,
+  type EthereumProvider,
+} from '@/lib/utils/ethereumProvider';
 
 export type WalletAccountSnapshot = {
   rainbowKitAddress: Address | null;
@@ -18,22 +21,20 @@ function normalizeAccounts(raw: unknown): Address[] {
 }
 
 /** Read accounts MetaMask will sign with (no popup). */
-export async function getMetaMaskAccounts(
-  provider: EthereumProvider = getMetaMaskProvider()!,
-): Promise<Address[]> {
-  if (!provider?.request) return [];
-  const raw = await provider.request({ method: 'eth_accounts' });
+export async function getMetaMaskAccounts(provider?: EthereumProvider): Promise<Address[]> {
+  const p = provider ?? (await getSigningProvider());
+  if (!p?.request) return [];
+  const raw = await p.request({ method: 'eth_accounts' });
   return normalizeAccounts(raw);
 }
 
 /** Prompt MetaMask account access if needed; returns authorized accounts. */
-export async function requestMetaMaskAccounts(
-  provider: EthereumProvider = getMetaMaskProvider()!,
-): Promise<Address[]> {
-  if (!provider?.request) {
+export async function requestMetaMaskAccounts(provider?: EthereumProvider): Promise<Address[]> {
+  const p = provider ?? (await getSigningProvider());
+  if (!p?.request) {
     throw new Error('MetaMask provider không khả dụng — cài/kích hoạt extension và refresh trang.');
   }
-  const raw = await provider.request({ method: 'eth_requestAccounts' });
+  const raw = await p.request({ method: 'eth_requestAccounts' });
   const accounts = normalizeAccounts(raw);
   if (accounts.length === 0) {
     throw new Error('MetaMask không trả về account — mở extension và chọn tài khoản.');
@@ -42,17 +43,16 @@ export async function requestMetaMaskAccounts(
 }
 
 /** Re-authorize eth_accounts via wallet_requestPermissions (recovery path). */
-export async function requestMetaMaskPermissions(
-  provider: EthereumProvider = getMetaMaskProvider()!,
-): Promise<Address[]> {
-  if (!provider?.request) {
+export async function requestMetaMaskPermissions(provider?: EthereumProvider): Promise<Address[]> {
+  const p = provider ?? (await getSigningProvider());
+  if (!p?.request) {
     throw new Error('MetaMask provider không khả dụng.');
   }
-  await provider.request({
+  await p.request({
     method: 'wallet_requestPermissions',
     params: [{ eth_accounts: {} }],
   });
-  return requestMetaMaskAccounts(provider);
+  return requestMetaMaskAccounts(p);
 }
 
 /**
@@ -62,7 +62,7 @@ export async function requestMetaMaskPermissions(
 export async function resolveMetaMaskSigningAccount(options?: {
   requestPermissions?: boolean;
 }): Promise<Address> {
-  const provider = getMetaMaskProvider();
+  const provider = await getSigningProvider();
   if (!provider) {
     throw new Error('MetaMask provider không khả dụng — cài/kích hoạt extension và refresh trang.');
   }

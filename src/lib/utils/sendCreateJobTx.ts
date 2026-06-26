@@ -1,6 +1,7 @@
 import type { Abi, Address, Hash } from 'viem';
-import { encodeFunctionData } from 'viem';
-import { simulateContract } from 'wagmi/actions';
+import { encodeFunctionData, getAddress } from 'viem';
+import { sepolia } from 'viem/chains';
+import { getWalletClient, simulateContract } from 'wagmi/actions';
 import { wagmiConfig } from '@/config/wagmi';
 import { contracts } from '@/lib/contracts/config';
 import { CHAIN_ID } from '@/lib/contracts/addresses';
@@ -11,7 +12,8 @@ import {
 } from '@/lib/utils/contractWrite';
 import {
   ensureSepoliaOnProvider,
-  getMetaMaskProvider,
+  getSigningProvider,
+  type EthereumProvider,
 } from '@/lib/utils/ethereumProvider';
 import {
   isInvalidTxParamsError,
@@ -49,11 +51,15 @@ export function previewCreateJobCalldata(params: Omit<SendCreateJobTxParams, 'ac
   return { data, calldataLength: data.length };
 }
 
+function jobRegistryAddress(): Address {
+  return getAddress(contracts.jobRegistry.address);
+}
+
+/** Minimal eth_sendTransaction shape MetaMask accepts for nonpayable calls (no value field). */
 type EthSendTxParams = {
-  from: Address;
   to: Address;
   data: `0x${string}`;
-  value: `0x${string}`;
+  from?: Address;
 };
 
 function logEthSendParams(label: string, params: EthSendTxParams): void {
@@ -61,25 +67,23 @@ function logEthSendParams(label: string, params: EthSendTxParams): void {
   console.debug(`[createJob] ${label}`, {
     method: 'eth_sendTransaction',
     params: [params],
-    from: params.from,
+    from: params.from ?? '(omitted — MetaMask picks active account)',
     to: params.to,
     dataLength: params.data.length,
     dataPrefix: params.data.slice(0, 74),
-    value: params.value,
   });
 }
 
 async function ethSendCreateJob(
-  provider: NonNullable<ReturnType<typeof getMetaMaskProvider>>,
-  from: Address,
+  provider: EthereumProvider,
   data: `0x${string}`,
+  from?: Address,
 ): Promise<Hash> {
   const txParams: EthSendTxParams = {
-    from,
-    to: contracts.jobRegistry.address,
+    to: jobRegistryAddress(),
     data,
-    value: '0x0',
   };
+  if (from) txParams.from = getAddress(from);
   logEthSendParams('eth_sendTransaction request', txParams);
 
   const hash = (await provider.request({
@@ -93,9 +97,62 @@ async function ethSendCreateJob(
   return hash;
 }
 
+async function sendViaWalletClient(from: Address, data: `0x${string}`): Promise<Hash> {
+  const walletClient = await getWalletClient(wagmiConfig, { chainId: CHAIN_ID as 11155111 });
+  if (!walletClient?.account) {
+    throw new Error('Wallet client không khả dụng — kết nối MetaMask trên Sepolia.');
+  }
+  return walletClient.sendTransaction({
+    account: getAddress(from),
+    chain: sepolia,
+    to: jobRegistryAddress(),
+    data,
+  });
+}
+
+async function signCreateJob(
+  provider: EthereumProvider,
+  signingAccount: Address,
+  data: `0x${string}`,
+): Promise<Hash> {
+  const strategies: Array<{ name: string; run: () => Promise<Hash> }> = [
+    {
+      name: 'walletClient.sendTransaction',
+      run: () => sendViaWalletClient(signingAccount, data),
+    },
+    {
+      name: 'eth_sendTransaction (to+data only)',
+      run: () => ethSendCreateJob(provider, data),
+    },
+    {
+      name: 'eth_sendTransaction (from+to+data)',
+      run: () => ethSendCreateJob(provider, data, signingAccount),
+    },
+  ];
+
+  let lastErr: unknown;
+  for (const { name, run } of strategies) {
+    try {
+      const hash = await run();
+      if (import.meta.env.DEV) {
+        console.debug(`[createJob] signed via ${name}`, hash);
+      }
+      return hash;
+    } catch (err) {
+      if (!isInvalidTxParamsError(err)) {
+        throw err;
+      }
+      logContractError(`createJob ${name}`, err);
+      lastErr = err;
+    }
+  }
+
+  throw lastErr;
+}
+
 /**
- * createJob signer — uses MetaMask eth_accounts[0] as `from` (not wagmi cache alone).
- * MetaMask -32602 when `from` ∉ eth_accounts — thường do đổi account trong extension.
+ * createJob signer — preflight via public RPC; signing via wagmi walletClient or
+ * minimal eth_sendTransaction (no value / optional from).
  */
 export async function sendCreateJobTx({
   metadataCID,
@@ -107,7 +164,7 @@ export async function sendCreateJobTx({
   const trimmedCid = metadataCID.trim();
   const args = [trimmedCid, contractValueUnits, durationSeconds] as const;
 
-  const provider = getMetaMaskProvider();
+  const provider = await getSigningProvider();
   if (!provider) {
     throw new Error('MetaMask provider không khả dụng — cài/kích hoạt extension và refresh trang.');
   }
@@ -128,7 +185,7 @@ export async function sendCreateJobTx({
   }
 
   const { gas } = await withGasLimit({
-    address: contracts.jobRegistry.address,
+    address: jobRegistryAddress(),
     abi: contracts.jobRegistry.abi as Abi,
     functionName: 'createJob',
     args: [...args],
@@ -137,7 +194,7 @@ export async function sendCreateJobTx({
 
   try {
     await simulateContract(wagmiConfig, {
-      address: contracts.jobRegistry.address,
+      address: jobRegistryAddress(),
       abi: contracts.jobRegistry.abi as Abi,
       functionName: 'createJob',
       args: [...args],
@@ -161,15 +218,15 @@ export async function sendCreateJobTx({
       signingAccount,
       rainbowKitHint: rainbowKitHint ?? null,
       chainId,
-      jobRegistry: contracts.jobRegistry.address,
+      jobRegistry: jobRegistryAddress(),
       calldataLength: data.length,
     });
   }
 
   try {
-    return await ethSendCreateJob(provider, signingAccount, data);
+    return await signCreateJob(provider, signingAccount, data);
   } catch (err) {
-    logContractError('createJob eth_sendTransaction', err);
+    logContractError('createJob sign', err);
 
     if (isInvalidTxParamsError(err)) {
       if (import.meta.env.DEV) {
@@ -178,12 +235,12 @@ export async function sendCreateJobTx({
       try {
         await requestMetaMaskPermissions(provider);
         signingAccount = await resolveMetaMaskSigningAccount();
-        return await ethSendCreateJob(provider, signingAccount, data);
+        return await signCreateJob(provider, signingAccount, data);
       } catch (retryErr) {
-        logContractError('createJob eth_sendTransaction retry', retryErr);
+        logContractError('createJob sign retry', retryErr);
         const base = decodeContractError(retryErr, contracts.jobRegistry.abi as Abi, 'createJob');
         throw new Error(
-          `${base} Chọn đúng Account trong MetaMask, Disconnect/Connect lại trên Fapex, rồi thử lại.`,
+          `${base} Thử Disconnect → Connect lại MetaMask trên Fapex, hoặc tắt ví khác (Coinbase/Brave) nếu cài song song.`,
         );
       }
     }
@@ -209,7 +266,7 @@ export function buildCreateJobTxDebug(
     metaMaskFrom: signingAccount,
     rainbowKitHint: rainbowKitHint ?? null,
     chainId: CHAIN_ID,
-    jobRegistry: contracts.jobRegistry.address,
+    jobRegistry: jobRegistryAddress(),
     calldataLength,
   };
 }

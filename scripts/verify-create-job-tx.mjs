@@ -29,7 +29,7 @@ const data = encodeFunctionData({
   args: [metadataCID, contractValue, duration],
 });
 
-const txParams = { from, to, data, value: '0x0' };
+const txParams = { from, to, data };
 
 console.log('JobRegistry:', to);
 console.log('chainId:', deployments.chainId);
