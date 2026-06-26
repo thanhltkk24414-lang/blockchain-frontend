@@ -1,128 +1,177 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { fetchArbitratorStatus, fetchDisputes } from '@/lib/api';
+import { fetchDisputes, fetchJobs } from '@/lib/api';
 import { useArbitratorAccess } from '@/hooks/useArbitratorAccess';
-import {
-  isAssignedArbitrator,
-  readChosenArbitrators,
-  useDisputeActions,
-  VOTE_CHOICES,
-} from '@/hooks/useDisputeActions';
-import { TxStatusModal } from '@/components/shared/TxStatusModal';
+import { isAssignedArbitrator, readChosenArbitrators } from '@/hooks/useDisputeActions';
 import { DISPUTE_PHASES } from '@/lib/contracts/disputeTimings';
+import { isValidOnchainJobId } from '@/lib/utils/etherscan';
+
+type AssignedDispute = {
+  onchainJobId: number;
+  jobId?: string;
+  title?: string;
+  disputeStatus?: string;
+};
 
 export function ArbitratorDashboardPage() {
   const { address, isAuthenticated } = useAuth();
   const stake = useArbitratorAccess();
   const [error, setError] = useState<string | null>(null);
-  const [disputes, setDisputes] = useState<Array<{ _id: string; onchainJobId: number; status?: string }>>([]);
-  const [onchainJobId, setOnchainJobId] = useState('');
-  const [voteChoice, setVoteChoice] = useState(String(VOTE_CHOICES.FREELANCER_WIN));
-  const [voteSalt, setVoteSalt] = useState('demo-salt-1');
-  const [isChosen, setIsChosen] = useState(false);
-  const {
-    commitVote,
-    revealVote,
-    finalizeDisputeVoting,
-    executeArbitrationResult,
-    txStatus,
-    txHash,
-    txLabel,
-    txError,
-    resetTx,
-  } = useDisputeActions();
+  const [loading, setLoading] = useState(false);
+  const [assignedDisputes, setAssignedDisputes] = useState<AssignedDispute[]>([]);
+
+  const loadAssignedDisputes = useCallback(async () => {
+    if (!address) {
+      setAssignedDisputes([]);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const [jobsRes, disputesRes] = await Promise.all([
+        fetchJobs({ status: 'DISPUTED', limit: 30 }),
+        fetchDisputes({ status: 'OPEN', limit: 30 }),
+      ]);
+
+      const candidates = new Map<number, AssignedDispute>();
+
+      for (const job of jobsRes.jobs ?? []) {
+        if (isValidOnchainJobId(job.onchainJobId)) {
+          candidates.set(job.onchainJobId!, {
+            onchainJobId: job.onchainJobId!,
+            jobId: job._id,
+            title: job.title,
+            disputeStatus: job.status,
+          });
+        }
+      }
+
+      for (const d of disputesRes.disputes ?? []) {
+        if (!isValidOnchainJobId(d.onchainJobId)) continue;
+        const existing = candidates.get(d.onchainJobId);
+        candidates.set(d.onchainJobId, {
+          onchainJobId: d.onchainJobId,
+          jobId: d.jobId ?? existing?.jobId,
+          title: existing?.title,
+          disputeStatus: d.status ?? existing?.disputeStatus,
+        });
+      }
+
+      const filtered: AssignedDispute[] = [];
+      await Promise.all(
+        [...candidates.values()].map(async (item) => {
+          try {
+            const arbs = await readChosenArbitrators(item.onchainJobId);
+            if (isAssignedArbitrator(arbs, address)) {
+              filtered.push(item);
+            }
+          } catch {
+            /* skip unreadable */
+          }
+        }),
+      );
+
+      filtered.sort((a, b) => b.onchainJobId - a.onchainJobId);
+      setAssignedDisputes(filtered);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Không tải được danh sách tranh chấp');
+    } finally {
+      setLoading(false);
+    }
+  }, [address]);
 
   useEffect(() => {
     if (stake.error) setError(stake.error);
   }, [stake.error]);
 
   useEffect(() => {
-    fetchDisputes({ status: 'OPEN', limit: 20 })
-      .then((res) => {
-        if (res.success) setDisputes(res.disputes || []);
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    const id = Number(onchainJobId);
-    if (!id || !address) {
-      setIsChosen(false);
-      return;
-    }
-    readChosenArbitrators(id)
-      .then((arbs) => setIsChosen(isAssignedArbitrator(arbs, address)))
-      .catch(() => setIsChosen(false));
-  }, [onchainJobId, address]);
-
-  async function runVote(action: 'commit' | 'reveal' | 'finalize' | 'execute') {
-    const id = Number(onchainJobId);
-    if (!id) {
-      setError('Nhập on-chain job ID.');
-      return;
-    }
-    const choice = Number(voteChoice);
-    setError(null);
-    try {
-      if (action === 'commit') await commitVote(id, choice, voteSalt);
-      else if (action === 'reveal') await revealVote(id, choice, voteSalt);
-      else if (action === 'finalize') await finalizeDisputeVoting(id);
-      else await executeArbitrationResult(id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Giao dịch thất bại');
-    }
-  }
+    void loadAssignedDisputes();
+  }, [loadAssignedDisputes]);
 
   return (
     <main className="page">
       <div className="page-header">
-        <h2>Arbitrator console</h2>
+        <h2>Bảng điều khiển Arbitrator</h2>
         <p className="muted">
-          Cần ≥ 50 USDC stake trên PlatformTreasury. Vote qua ArbitratorPanel khi được chọn vào hội
-          đồng.
+          Cần ≥ 50 USDC stake trên PlatformTreasury. Khi được sortition chọn vào hội đồng, vote
+          commit-reveal trên trang chi tiết job.
         </p>
       </div>
 
-      {!isAuthenticated && <p className="muted">Connect wallet và đăng nhập SIWE.</p>}
+      {!isAuthenticated && (
+        <p className="muted">Kết nối ví MetaMask và đăng nhập SIWE để xem tranh chấp được giao.</p>
+      )}
 
-      {stake.loading && <p className="muted">Loading stake status…</p>}
+      {stake.loading && <p className="muted">Đang kiểm tra stake…</p>}
       {error && <p className="error">{error}</p>}
 
       {stake.stakedAmount != null && (
         <div className="stats-row">
           <div className="stat-card">
-            <span className="stat-label">Staked USDC</span>
+            <span className="stat-label">USDC đã stake</span>
             <strong>{stake.stakedAmount}</strong>
           </div>
           <div className="stat-card">
-            <span className="stat-label">Min stake</span>
+            <span className="stat-label">Stake tối thiểu</span>
             <strong>{stake.minStake ?? 50}</strong>
           </div>
           <div className="stat-card">
-            <span className="stat-label">Eligible</span>
-            <strong>{stake.isValid ? 'Yes' : 'No'}</strong>
+            <span className="stat-label">Đủ điều kiện pool</span>
+            <strong>{stake.isValid ? 'Có' : 'Chưa'}</strong>
           </div>
         </div>
       )}
 
+      {stake.message && <p className="muted phase-note">{stake.message}</p>}
+
       <section className="panel">
-        <h3>Dispute queue (DB)</h3>
-        {disputes.length === 0 ? (
-          <p className="muted">Chưa có dispute OPEN trong DB — indexer sẽ sync sau raiseDispute on-chain.</p>
-        ) : (
+        <div className="panel-header-row">
+          <h3>Tranh chấp được giao cho bạn</h3>
+          <button
+            className="btn ghost"
+            type="button"
+            onClick={() => void loadAssignedDisputes()}
+            disabled={loading}
+          >
+            {loading ? 'Đang tải…' : 'Làm mới'}
+          </button>
+        </div>
+
+        <p className="muted phase-note">
+          Demo Sepolia: bằng chứng 0–{DISPUTE_PHASES.evidenceRebuttalEndMin}p → commit{' '}
+          {DISPUTE_PHASES.commitStartMin}–{DISPUTE_PHASES.commitEndMin}p → reveal{' '}
+          {DISPUTE_PHASES.revealStartMin}–{DISPUTE_PHASES.revealEndMin}p → finalize sau{' '}
+          {DISPUTE_PHASES.revealEndMin}p → kháng cáo {DISPUTE_PHASES.appealWindowHours}h.
+        </p>
+
+        {!address && <p className="muted">Chưa kết nối ví.</p>}
+
+        {address && !loading && assignedDisputes.length === 0 && (
+          <p className="muted">
+            Chưa có job DISPUTED nào chọn ví của bạn. Import private key từ{' '}
+            <code>deployments/sepolia-arbitrators.json</code> (chạy{' '}
+            <code>seed-arbitrator-pool.js</code> trước).
+          </p>
+        )}
+
+        {assignedDisputes.length > 0 && (
           <ul className="bids-list">
-            {disputes.map((d) => (
-              <li key={d._id} className="bid-item">
-                <strong>Job #{d.onchainJobId}</strong>
-                <span className="muted"> · {d.status}</span>
-                <button
-                  className="btn ghost"
-                  type="button"
-                  onClick={() => setOnchainJobId(String(d.onchainJobId))}
-                >
-                  Chọn
-                </button>
+            {assignedDisputes.map((d) => (
+              <li key={d.onchainJobId} className="bid-item">
+                <strong>
+                  Job on-chain #{d.onchainJobId}
+                  {d.title ? ` — ${d.title}` : ''}
+                </strong>
+                <span className="muted"> · {d.disputeStatus ?? 'DISPUTED'}</span>
+                {d.jobId ? (
+                  <Link to={`/jobs/${d.jobId}`} className="btn primary">
+                    Mở chi tiết & vote →
+                  </Link>
+                ) : (
+                  <span className="muted">Chưa sync jobId off-chain</span>
+                )}
               </li>
             ))}
           </ul>
@@ -130,85 +179,19 @@ export function ArbitratorDashboardPage() {
       </section>
 
       <section className="panel">
-        <h4>Vote on dispute</h4>
-        <p className="muted phase-note">
-          Commit-reveal: hash = keccak256(choice, salt). Sepolia demo: evidence 0–
-          {DISPUTE_PHASES.evidenceRebuttalEndMin}m → commit {DISPUTE_PHASES.commitStartMin}–
-          {DISPUTE_PHASES.commitEndMin}m → reveal {DISPUTE_PHASES.revealStartMin}–
-          {DISPUTE_PHASES.revealEndMin}m → finalize sau {DISPUTE_PHASES.revealEndMin}m.
+        <h3>Hướng dẫn test nhanh</h3>
+        <ol className="muted phase-note">
+          <li>
+            Import 1 ví từ <code>deployments/sepolia-arbitrators.json</code> vào MetaMask (Sepolia).
+          </li>
+          <li>Stake ≥50 USDC + admin <code>joinPool</code> (script seed đã làm sẵn).</li>
+          <li>Client raise dispute trên job → 5 arbitrator được chọn ngẫu nhiên.</li>
+          <li>Vào job DISPUTED → panel &quot;Hội đồng arbitrator&quot; → commit / reveal theo đồng hồ.</li>
+        </ol>
+        <p className="muted">
+          Stake thêm tại <Link to="/profile">Profile</Link>.
         </p>
-
-        <label className="field">
-          On-chain job ID
-          <input
-            className="input full"
-            value={onchainJobId}
-            onChange={(e) => setOnchainJobId(e.target.value)}
-            placeholder="5"
-          />
-        </label>
-
-        {address && onchainJobId && (
-          <p className={isChosen ? 'badge success' : 'badge warning'}>
-            {isChosen
-              ? 'Ví của bạn nằm trong hội đồng job này.'
-              : 'Ví chưa được chọn — import private key arbitrator từ deployments/sepolia-arbitrators.json.'}
-          </p>
-        )}
-
-        <label className="field">
-          Vote choice
-          <select className="input full" value={voteChoice} onChange={(e) => setVoteChoice(e.target.value)}>
-            <option value={VOTE_CHOICES.FREELANCER_WIN}>1 — Freelancer thắng</option>
-            <option value={VOTE_CHOICES.CLIENT_WIN}>2 — Client thắng</option>
-            <option value={VOTE_CHOICES.SPLIT}>3 — Chia 50/50</option>
-          </select>
-        </label>
-
-        <label className="field">
-          Salt (giữ bí mật đến reveal)
-          <input className="input full" value={voteSalt} onChange={(e) => setVoteSalt(e.target.value)} />
-        </label>
-
-        <div className="form-actions">
-          <button className="btn primary" type="button" onClick={() => runVote('commit')} disabled={!isChosen}>
-            Commit vote
-          </button>
-          <button className="btn ghost" type="button" onClick={() => runVote('reveal')} disabled={!isChosen}>
-            Reveal vote
-          </button>
-          <button className="btn ghost" type="button" onClick={() => runVote('finalize')}>
-            Finalize voting
-          </button>
-          <button className="btn ghost" type="button" onClick={() => runVote('execute')}>
-            Execute result
-          </button>
-        </div>
       </section>
-
-      {address && (
-        <button
-          className="btn ghost"
-          type="button"
-          onClick={() => fetchArbitratorStatus(address).then(() => window.location.reload())}
-        >
-          Refresh stake
-        </button>
-      )}
-
-      <p className="muted">
-        Stake qua <code>PlatformTreasury.stakeAsArbitrator</code> rồi admin <code>joinPool</code>. Xem{' '}
-        <Link to="/profile">Profile</Link>.
-      </p>
-
-      <TxStatusModal
-        open={txStatus !== 'idle'}
-        status={txStatus}
-        label={txLabel}
-        hash={txHash}
-        error={txError}
-        onClose={resetTx}
-      />
     </main>
   );
 }

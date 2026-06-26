@@ -864,3 +864,26 @@ body {
 .wallet-compare dd.mono {
   word-break: break-all;
 }
+
+.dispute-arbitrator-panel .dispute-phase-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.dispute-arbitrator-panel .badge.countdown {
+  background: #1a2d3d;
+  color: #7eb8ff;
+}
+
+.dispute-arbitrator-panel .arbitrator-vote-form {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid hsl(var(--border) / 0.5);
+}
+
+.dispute-arbitrator-panel .dispute-admin-actions {
+  margin-top: 1rem;
+}
+

@@ -6,8 +6,11 @@ import { getAddress, keccak256, encodePacked, toBytes } from 'viem';
 import { wagmiConfig } from '@/config/wagmi';
 import { contracts } from '@/lib/contracts/config';
 import { DISPUTE_PHASES } from '@/lib/contracts/disputeTimings';
-import { executeContractWrite } from '@/lib/utils/contractWrite';
 import { sendSubmitEvidenceTx } from '@/lib/utils/sendSubmitEvidenceTx';
+import { sendCommitVoteTx } from '@/lib/utils/sendCommitVoteTx';
+import { sendRevealVoteTx } from '@/lib/utils/sendRevealVoteTx';
+import { sendFinalizeDisputeTx } from '@/lib/utils/sendFinalizeDisputeTx';
+import { sendExecuteArbitrationResultTx } from '@/lib/utils/sendExecuteArbitrationResultTx';
 import { addressesEqual } from '@/lib/utils/address';
 import {
   normalizeOnchainStatus,
@@ -35,7 +38,7 @@ export function cidToEvidenceHash(cid: string): `0x${string}` {
   return keccak256(toBytes(trimmed));
 }
 
-type OnChainDispute = {
+export type OnChainDispute = {
   initiator: Address;
   createdAt: bigint;
   resultAt: bigint;
@@ -117,7 +120,7 @@ async function readOnchainJob(jobId: bigint): Promise<OnChainJob> {
   return { ...raw, status: normalizeOnchainStatus(raw.status) };
 }
 
-async function readOnchainDispute(jobId: bigint): Promise<OnChainDispute> {
+export async function readOnchainDispute(jobId: bigint): Promise<OnChainDispute> {
   const raw = (await readContract(wagmiConfig, {
     ...contracts.arbitratorPanel,
     functionName: 'disputes',
@@ -202,11 +205,9 @@ export function useDisputeActions() {
       const hash = computeVoteHash(choice, salt);
 
       await tx.runTx('Đang commit vote…', () =>
-        executeContractWrite({
-          address: contracts.arbitratorPanel.address,
-          abi: contracts.arbitratorPanel.abi as Abi,
-          functionName: 'commitVote',
-          args: [BigInt(onchainJobId), hash],
+        sendCommitVoteTx({
+          onchainJobId: BigInt(onchainJobId),
+          voteHash: hash,
           account: wallet,
         }),
       );
@@ -220,11 +221,10 @@ export function useDisputeActions() {
       const wallet = getAddress(address);
 
       await tx.runTx('Đang reveal vote…', () =>
-        executeContractWrite({
-          address: contracts.arbitratorPanel.address,
-          abi: contracts.arbitratorPanel.abi as Abi,
-          functionName: 'revealVote',
-          args: [BigInt(onchainJobId), choice, salt],
+        sendRevealVoteTx({
+          onchainJobId: BigInt(onchainJobId),
+          choice,
+          salt,
           account: wallet,
         }),
       );
@@ -238,11 +238,8 @@ export function useDisputeActions() {
       const wallet = getAddress(address);
 
       await tx.runTx('Đang finalize dispute voting…', () =>
-        executeContractWrite({
-          address: contracts.escrowVault.address,
-          abi: contracts.escrowVault.abi as Abi,
-          functionName: 'finalizeDisputeVoting',
-          args: [BigInt(onchainJobId)],
+        sendFinalizeDisputeTx({
+          onchainJobId: BigInt(onchainJobId),
           account: wallet,
         }),
       );
@@ -256,11 +253,8 @@ export function useDisputeActions() {
       const wallet = getAddress(address);
 
       await tx.runTx('Đang thực thi kết quả phân xử…', () =>
-        executeContractWrite({
-          address: contracts.escrowVault.address,
-          abi: contracts.escrowVault.abi as Abi,
-          functionName: 'executeArbitrationResult',
-          args: [BigInt(onchainJobId)],
+        sendExecuteArbitrationResultTx({
+          onchainJobId: BigInt(onchainJobId),
           account: wallet,
         }),
       );
