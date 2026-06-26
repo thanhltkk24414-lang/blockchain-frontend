@@ -46,13 +46,27 @@ function resolveFreelancerFromJob(job: Job): string | null {
   return null;
 }
 
+function shortAddress(addr: string): string {
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
 function resolveAcceptedFreelancer(job: Job, bids: Bid[]): string | null {
   const fromJob = resolveFreelancerFromJob(job);
   if (fromJob) return tryChecksumAddress(fromJob) ?? fromJob;
 
-  const accepted = bids.find((b) => b.status === 'accepted');
+  const accepted = bids.find((b) => b.status?.toLowerCase() === 'accepted');
   if (accepted && isNonZeroAddress(accepted.freelancerAddress)) {
     return tryChecksumAddress(accepted.freelancerAddress) ?? accepted.freelancerAddress;
+  }
+
+  // Fallback when job is ASSIGNED in DB but bid status was not refreshed in the list.
+  if (job.status?.toUpperCase() === 'ASSIGNED') {
+    const candidates = bids.filter((b) => b.status?.toLowerCase() !== 'rejected');
+    if (candidates.length === 1 && isNonZeroAddress(candidates[0].freelancerAddress)) {
+      return (
+        tryChecksumAddress(candidates[0].freelancerAddress) ?? candidates[0].freelancerAddress
+      );
+    }
   }
 
   return null;
@@ -169,6 +183,40 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
     isNonZeroAddress(onchainFreelancer ?? acceptedFreelancer);
   const readyToDeposit =
     onchainStatus === ONCHAIN_JOB_STATUS.OPEN && !depositBlocked;
+
+  const depositDisabledReason = useMemo(() => {
+    if (depositComplete) return 'Escrow đã được nạp on-chain.';
+    if (walletMismatch && onchainClientAddr) {
+      return `Chuyển MetaMask sang ${shortAddress(onchainClientAddr)} (client on-chain / INDEXER) để approve & deposit.`;
+    }
+    if (registryMismatch && registryMismatchMessage) return registryMismatchMessage;
+    if (depositBlocked && onchainBlocker) return onchainBlocker;
+    if (acceptedVsOnchainMismatch) {
+      return 'Freelancer on-chain không khớp bid đã accept.';
+    }
+    if (insufficientUsdc) {
+      return `Cần ${totalDeposit} MockUSDC trên ví client on-chain — mint bên dưới sau khi chuyển đúng ví.`;
+    }
+    if (!acceptedFreelancer && !freelancerInput.trim()) {
+      return 'Nhập địa chỉ freelancer từ proposal đã accept.';
+    }
+    return null;
+  }, [
+    depositComplete,
+    walletMismatch,
+    onchainClientAddr,
+    registryMismatch,
+    registryMismatchMessage,
+    depositBlocked,
+    onchainBlocker,
+    acceptedVsOnchainMismatch,
+    insufficientUsdc,
+    totalDeposit,
+    acceptedFreelancer,
+    freelancerInput,
+  ]);
+
+  const showMintSection = insufficientUsdc || walletMismatch;
 
   async function handleMint() {
     setLocalError(null);
@@ -336,28 +384,34 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
       {onchainClientAddr && (
         <p className="muted phase-note">
           Client on-chain (API):{' '}
-          <code>
-            {onchainClientAddr.slice(0, 6)}…{onchainClientAddr.slice(-4)}
-          </code>
+          <code>{shortAddress(onchainClientAddr)}</code>
           {onchainJob?.client && isNonZeroAddress(onchainJob.client) && (
             <>
               {' '}
               · JobRegistry read:{' '}
-              <code>
-                {onchainJob.client.slice(0, 6)}…{onchainJob.client.slice(-4)}
-              </code>
+              <code>{shortAddress(onchainJob.client)}</code>
             </>
           )}
           {registryMismatch && (
             <span className="error"> — lệch contract registry (xem cảnh báo trên).</span>
           )}
-          {walletMismatch && !registryMismatch && (
-            <span className="error">
-              {' '}
-              — ví MetaMask hiện tại khác ví này; giao dịch sẽ revert.
-            </span>
-          )}
         </p>
+      )}
+
+      {walletMismatch && onchainClientAddr && address && !registryMismatch && (
+        <div className="escrow-wallet-guide panel info" role="status">
+          <h4>Ví MetaMask không khớp client on-chain</h4>
+          <p className="muted">
+            <strong>Deposit escrow</strong> chỉ thành công khi MetaMask là{' '}
+            <code className="mono">{shortAddress(onchainClientAddr)}</code> (ví INDEXER tạo job
+            on-chain). Ví hiện tại: <code className="mono">{shortAddress(address)}</code>.
+          </p>
+          <p className="muted">
+            <strong>Mint MockUSDC</strong> có thể dùng bất kỳ ví nào (permissionless trên Sepolia).
+            USDC mint sẽ vào ví đang kết nối — để deposit, hãy{' '}
+            <strong>chuyển sang ví client on-chain</strong> rồi mint + approve &amp; deposit.
+          </p>
+        </div>
       )}
 
       <dl className="detail-grid">
@@ -392,17 +446,24 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
         </dd>
       </dl>
 
-      {insufficientUsdc && (
+      {showMintSection && (
         <div className="escrow-mint-hint">
           <p className="muted">
             <strong>Sepolia ETH ≠ MockUSDC.</strong> ETH từ faucet chỉ trả phí gas. Fapex dùng token{' '}
             <code>MockUSDC</code> tại địa chỉ trên — không phải USDC Circle hay token faucet khác.
           </p>
+          {walletMismatch && address && onchainClientAddr && (
+            <p className="muted phase-note">
+              Mint sẽ cộng USDC vào ví đang kết nối ({shortAddress(address)}). Để nạp escrow, chuyển
+              MetaMask sang <code className="mono">{shortAddress(onchainClientAddr)}</code> trước
+              khi mint (hoặc mint trên ví hiện tại chỉ để thử — không dùng được cho deposit).
+            </p>
+          )}
           <button
             className="btn outline"
             type="button"
             onClick={handleMint}
-            disabled={minting || mintTxStatus === 'pending' || walletMismatch || !isConnected}
+            disabled={minting || mintTxStatus === 'pending' || !isConnected}
           >
             {minting || mintTxStatus === 'pending'
               ? 'Minting…'
@@ -441,8 +502,10 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
           depositBlocked ||
           registryMismatch ||
           acceptedVsOnchainMismatch ||
-          depositComplete
+          depositComplete ||
+          (!acceptedFreelancer && !freelancerInput.trim())
         }
+        title={depositDisabledReason ?? undefined}
       >
         {depositComplete
           ? 'Escrow funded'
@@ -450,6 +513,10 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
             ? 'Processing…'
             : 'Approve & deposit escrow'}
       </button>
+
+      {depositDisabledReason && !depositComplete && (
+        <p className="muted phase-note deposit-blocked-reason">{depositDisabledReason}</p>
+      )}
 
       <TxStatusModal
         open={txStatus !== 'idle'}

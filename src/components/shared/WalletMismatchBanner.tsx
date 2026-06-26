@@ -116,6 +116,11 @@ export function WalletMismatchBanner({ job, isJobOwner = false }: WalletMismatch
           (INDEXER) đã tạo job — không phải ví SIWE đăng nhập. Chuyển MetaMask sang ví client
           on-chain trước khi nạp escrow.
         </p>
+        <p className="muted phase-note">
+          <strong>Mint MockUSDC</strong> vẫn dùng được với ví hiện tại (permissionless), nhưng
+          USDC mint vào ví đang kết nối — để deposit, mint sau khi đã chuyển sang ví client
+          on-chain ở trên.
+        </p>
         {onchainStatusLabel && (
           <p className="muted phase-note">
             Trạng thái on-chain: <strong>{onchainStatusLabel}</strong>
