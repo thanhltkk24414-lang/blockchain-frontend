@@ -9,16 +9,27 @@ interface AcceptBidButtonProps {
   bid: Bid;
   onchainJobId?: number;
   jobStatus: string;
+  hasAcceptedBid?: boolean;
   onAccepted?: () => void;
 }
 
-export function AcceptBidButton({ bid, onchainJobId, jobStatus, onAccepted }: AcceptBidButtonProps) {
+export function AcceptBidButton({
+  bid,
+  onchainJobId,
+  jobStatus,
+  hasAcceptedBid = false,
+  onAccepted,
+}: AcceptBidButtonProps) {
   const { accept, txStatus, txHash, txLabel, txError, resetTx } = useAcceptBid();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (bid.status !== 'pending') {
     return <p className="muted phase-note">Proposal {bid.status}.</p>;
+  }
+
+  if (hasAcceptedBid) {
+    return <p className="muted phase-note">Another proposal was already accepted for this job.</p>;
   }
 
   if (jobStatus !== 'OPEN') {

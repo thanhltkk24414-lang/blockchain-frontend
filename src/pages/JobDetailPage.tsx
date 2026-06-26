@@ -148,6 +148,8 @@ export function JobDetailPage() {
     !job.freelancerAddress &&
     !bids.some((b) => b.status?.toLowerCase() === 'accepted');
 
+  const hasAcceptedBid = bids.some((b) => b.status?.toLowerCase() === 'accepted');
+
   return (
     <main className="page job-detail">
       <div className="page-header">
@@ -299,7 +301,13 @@ export function JobDetailPage() {
       {canManageJob && bids.length > 0 && (
         <section className="panel">
           <h3>Proposals ({bids.length})</h3>
-          {job.status !== 'OPEN' && (
+          {hasAcceptedBid && job.status === 'OPEN' && (
+            <p className="muted phase-note">
+              One proposal is accepted — fund escrow on-chain to assign the freelancer. Other bids
+              are closed.
+            </p>
+          )}
+          {job.status !== 'OPEN' && !hasAcceptedBid && (
             <p className="muted phase-note">
               This job is no longer open — new accepts are disabled.
             </p>
@@ -317,6 +325,7 @@ export function JobDetailPage() {
                   bid={bid}
                   onchainJobId={job.onchainJobId}
                   jobStatus={job.status}
+                  hasAcceptedBid={hasAcceptedBid}
                   onAccepted={reloadJob}
                 />
               </li>
