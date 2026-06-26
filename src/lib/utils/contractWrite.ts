@@ -87,9 +87,10 @@ function formatDecodedMessage(msg: string, functionName?: string): string {
     return `MetaMask phải ở Sepolia (chainId ${CHAIN_ID}) trước khi gọi ${functionName ?? 'contract'}.`;
   }
   if (/missing or invalid parameters/i.test(msg)) {
+    const clean = msg.replace(/^MetaMask RPC:\s*/i, '').trim();
     return (
-      `MetaMask RPC: ${msg}. Gợi ý: account MetaMask phải trùng RainbowKit, mạng Sepolia (${CHAIN_ID}), ` +
-      'JobRegistry đúng trong deployments-sepolia.json. Xem Console (F12) → [createJob] hoặc [contractWrite] để chi tiết.'
+      `MetaMask RPC: ${clean}. Gợi ý: \`from\` phải là account đang chọn trong MetaMask (eth_accounts[0]), ` +
+      `trùng RainbowKit Connect Wallet, mạng Sepolia (${CHAIN_ID}). Xem Console (F12) → [createJob] eth_sendTransaction request.`
     );
   }
   if (/transaction creation failed/i.test(msg)) {
@@ -164,9 +165,15 @@ export type ContractWriteInput = GasEstimateInput & {
 };
 
 import {
+  ensureSepoliaOnProvider,
   getMetaMaskProvider,
   type EthereumProvider,
 } from '@/lib/utils/ethereumProvider';
+import {
+  isInvalidTxParamsError,
+  requestMetaMaskPermissions,
+  resolveMetaMaskSigningAccount,
+} from '@/lib/utils/walletAccounts';
 
 function getInjectedProvider(): EthereumProvider | undefined {
   return getMetaMaskProvider();
@@ -243,7 +250,7 @@ async function writeViaWagmiAction(
 
 /** Last resort: minimal eth_sendTransaction params MetaMask accepts (from/to/data only). */
 async function writeViaInjectedProvider(
-  from: Address,
+  _wagmiHint: Address,
   params: ContractWriteInput,
 ): Promise<Hash> {
   const provider = getInjectedProvider();
@@ -251,25 +258,37 @@ async function writeViaInjectedProvider(
     throw new Error('MetaMask provider không khả dụng — cài/kích hoạt extension.');
   }
 
+  await ensureSepoliaOnProvider(provider);
+  const from = await resolveMetaMaskSigningAccount();
+
   const data = encodeFunctionData({
     abi: params.abi,
     functionName: params.functionName,
     args: params.args,
   });
 
-  const hash = (await provider.request({
-    method: 'eth_sendTransaction',
-    params: [
-      {
-        from,
-        to: params.address,
-        data,
-        value: '0x0',
-      },
-    ],
-  })) as Hash;
+  const txParams = { from, to: params.address, data, value: '0x0' as const };
+  if (import.meta.env.DEV) {
+    console.debug('[contractWrite] eth_sendTransaction request', {
+      method: 'eth_sendTransaction',
+      params: [txParams],
+    });
+  }
 
-  return hash;
+  try {
+    return (await provider.request({
+      method: 'eth_sendTransaction',
+      params: [txParams],
+    })) as Hash;
+  } catch (err) {
+    if (!isInvalidTxParamsError(err)) throw err;
+    await requestMetaMaskPermissions(provider);
+    const retryFrom = await resolveMetaMaskSigningAccount();
+    return (await provider.request({
+      method: 'eth_sendTransaction',
+      params: [{ ...txParams, from: retryFrom }],
+    })) as Hash;
+  }
 }
 
 /**

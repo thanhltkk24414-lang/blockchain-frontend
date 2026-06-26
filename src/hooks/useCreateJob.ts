@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useAccount, useChainId, useSwitchChain } from 'wagmi';
-import { readContract, waitForTransactionReceipt } from 'wagmi/actions';
+import { readContract, reconnect, waitForTransactionReceipt } from 'wagmi/actions';
 import { getAddress, isAddress, parseEventLogs, type Abi, type Log } from 'viem';
 import { wagmiConfig } from '@/config/wagmi';
 import { contracts } from '@/lib/contracts/config';
@@ -11,6 +11,7 @@ import {
   sendCreateJobTx,
   type CreateJobTxDebug,
 } from '@/lib/utils/sendCreateJobTx';
+import { isInvalidTxParamsError, resolveMetaMaskSigningAccount } from '@/lib/utils/walletAccounts';
 import { toUsdcUnits } from '@/lib/utils/usdc';
 import type { TxStatus } from '@/components/shared/TxStatusModal';
 
@@ -70,6 +71,7 @@ export function useCreateJob() {
   const [txLabel, setTxLabel] = useState('');
   const [txError, setTxError] = useState<string>();
   const [txDebug, setTxDebug] = useState<CreateJobTxDebug | null>(null);
+  const [showRecovery, setShowRecovery] = useState(false);
 
   const resetTx = useCallback(() => {
     setTxStatus('idle');
@@ -77,6 +79,7 @@ export function useCreateJob() {
     setTxLabel('');
     setTxError(undefined);
     setTxDebug(null);
+    setShowRecovery(false);
   }, []);
 
   const createOnChain = useCallback(
@@ -84,12 +87,22 @@ export function useCreateJob() {
       if (!isConnected || !address) {
         throw new Error('Kết nối ví MetaMask trên Sepolia trước khi tạo job on-chain.');
       }
-      if (!isAddress(address)) {
-        const len = String(address).length;
+
+      let signingAccount: ReturnType<typeof getAddress>;
+      try {
+        signingAccount = await resolveMetaMaskSigningAccount();
+      } catch (accErr) {
         throw new Error(
-          `Địa chỉ MetaMask không hợp lệ (${len} ký tự). Cần đúng định dạng 0x + 40 ký tự hex.`,
+          accErr instanceof Error ? accErr.message : 'Không đọc được account MetaMask.',
         );
       }
+
+      if (!isAddress(signingAccount)) {
+        throw new Error(
+          `Địa chỉ MetaMask không hợp lệ. Cần đúng định dạng 0x + 40 ký tự hex.`,
+        );
+      }
+
       if (chainId !== CHAIN_ID) {
         try {
           await switchChainAsync({ chainId: CHAIN_ID });
@@ -101,7 +114,15 @@ export function useCreateJob() {
         }
       }
 
-      const client = getAddress(address);
+      try {
+        await reconnect(wagmiConfig);
+      } catch (reconnectErr) {
+        if (import.meta.env.DEV) {
+          logContractError('reconnect before createJob', reconnectErr);
+        }
+      }
+
+      const client = getAddress(signingAccount);
       const { metadataCID, contractValue, durationSeconds } = params;
       assertCreateJobParams(params);
 
@@ -128,6 +149,7 @@ export function useCreateJob() {
           metadataCID.trim(),
           valueUnits,
           durationBig,
+          address,
         );
         setTxDebug(debug);
         if (import.meta.env.DEV) {
@@ -138,7 +160,7 @@ export function useCreateJob() {
           metadataCID: metadataCID.trim(),
           contractValueUnits: valueUnits,
           durationSeconds: durationBig,
-          account: client,
+          account: address,
         });
         setTxHash(hash);
 
@@ -163,6 +185,9 @@ export function useCreateJob() {
         );
         setTxStatus('failed');
         setTxError(message);
+        if (isInvalidTxParamsError(err) || /missing or invalid parameters/i.test(message)) {
+          setShowRecovery(true);
+        }
         throw new Error(message);
       }
     },
@@ -176,6 +201,8 @@ export function useCreateJob() {
     txLabel,
     txError,
     txDebug,
+    showRecovery,
+    setShowRecovery,
     resetTx,
   };
 }

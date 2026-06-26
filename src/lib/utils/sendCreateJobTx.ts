@@ -13,16 +13,24 @@ import {
   ensureSepoliaOnProvider,
   getMetaMaskProvider,
 } from '@/lib/utils/ethereumProvider';
+import {
+  isInvalidTxParamsError,
+  requestMetaMaskPermissions,
+  resolveMetaMaskSigningAccount,
+} from '@/lib/utils/walletAccounts';
 
 export type SendCreateJobTxParams = {
   metadataCID: string;
   contractValueUnits: bigint;
   durationSeconds: bigint;
-  account: Address;
+  /** RainbowKit/wagmi hint — actual `from` comes from MetaMask eth_accounts[0]. */
+  account?: Address;
 };
 
 export type CreateJobTxDebug = {
   account: Address;
+  metaMaskFrom: Address | null;
+  rainbowKitHint: Address | null;
   chainId: number;
   jobRegistry: Address;
   calldataLength: number;
@@ -41,26 +49,90 @@ export function previewCreateJobCalldata(params: Omit<SendCreateJobTxParams, 'ac
   return { data, calldataLength: data.length };
 }
 
+type EthSendTxParams = {
+  from: Address;
+  to: Address;
+  data: `0x${string}`;
+  value: `0x${string}`;
+};
+
+function logEthSendParams(label: string, params: EthSendTxParams): void {
+  if (!import.meta.env.DEV) return;
+  console.debug(`[createJob] ${label}`, {
+    method: 'eth_sendTransaction',
+    params: [params],
+    from: params.from,
+    to: params.to,
+    dataLength: params.data.length,
+    dataPrefix: params.data.slice(0, 74),
+    value: params.value,
+  });
+}
+
+async function ethSendCreateJob(
+  provider: NonNullable<ReturnType<typeof getMetaMaskProvider>>,
+  from: Address,
+  data: `0x${string}`,
+): Promise<Hash> {
+  const txParams: EthSendTxParams = {
+    from,
+    to: contracts.jobRegistry.address,
+    data,
+    value: '0x0',
+  };
+  logEthSendParams('eth_sendTransaction request', txParams);
+
+  const hash = (await provider.request({
+    method: 'eth_sendTransaction',
+    params: [txParams],
+  })) as Hash;
+
+  if (import.meta.env.DEV) {
+    console.debug('[createJob] eth_sendTransaction response', hash);
+  }
+  return hash;
+}
+
 /**
- * createJob signer — uses window.ethereum eth_sendTransaction as primary path
- * (MetaMask on Windows often rejects wagmi/viem gas/fee fields from RainbowKit).
+ * createJob signer — uses MetaMask eth_accounts[0] as `from` (not wagmi cache alone).
+ * MetaMask -32602 when `from` ∉ eth_accounts is the usual Windows/RainbowKit mismatch.
  */
 export async function sendCreateJobTx({
   metadataCID,
   contractValueUnits,
   durationSeconds,
-  account,
+  account: rainbowKitHint,
 }: SendCreateJobTxParams): Promise<`0x${string}`> {
   const chainId = CHAIN_ID as 11155111;
   const trimmedCid = metadataCID.trim();
   const args = [trimmedCid, contractValueUnits, durationSeconds] as const;
+
+  const provider = getMetaMaskProvider();
+  if (!provider) {
+    throw new Error('MetaMask provider không khả dụng — cài/kích hoạt extension và refresh trang.');
+  }
+
+  await ensureSepoliaOnProvider(provider);
+
+  let signingAccount = await resolveMetaMaskSigningAccount();
+
+  if (
+    rainbowKitHint &&
+    signingAccount.toLowerCase() !== rainbowKitHint.toLowerCase() &&
+    import.meta.env.DEV
+  ) {
+    console.warn('[createJob] RainbowKit ≠ MetaMask active', {
+      rainbowKit: rainbowKitHint,
+      metaMaskActive: signingAccount,
+    });
+  }
 
   const { gas } = await withGasLimit({
     address: contracts.jobRegistry.address,
     abi: contracts.jobRegistry.abi as Abi,
     functionName: 'createJob',
     args: [...args],
-    account,
+    account: signingAccount,
   });
 
   try {
@@ -69,7 +141,7 @@ export async function sendCreateJobTx({
       abi: contracts.jobRegistry.abi as Abi,
       functionName: 'createJob',
       args: [...args],
-      account,
+      account: signingAccount,
       gas,
       chainId,
     });
@@ -86,48 +158,46 @@ export async function sendCreateJobTx({
 
   if (import.meta.env.DEV) {
     console.debug('[createJob] preflight OK', {
-      account,
+      signingAccount,
+      rainbowKitHint: rainbowKitHint ?? null,
       chainId,
       jobRegistry: contracts.jobRegistry.address,
       calldataLength: data.length,
     });
   }
 
-  const provider = getMetaMaskProvider();
-  if (!provider) {
-    throw new Error('MetaMask provider không khả dụng — cài/kích hoạt extension và refresh trang.');
-  }
-
-  await ensureSepoliaOnProvider(provider);
-
   try {
-    const hash = (await provider.request({
-      method: 'eth_sendTransaction',
-      params: [
-        {
-          from: account,
-          to: contracts.jobRegistry.address,
-          data,
-          value: '0x0',
-        },
-      ],
-    })) as Hash;
-
-    if (import.meta.env.DEV) {
-      console.debug('[createJob] signed via eth_sendTransaction (primary)', hash);
-    }
-    return hash;
+    return await ethSendCreateJob(provider, signingAccount, data);
   } catch (err) {
     logContractError('createJob eth_sendTransaction', err);
+
+    if (isInvalidTxParamsError(err)) {
+      if (import.meta.env.DEV) {
+        console.warn('[createJob] -32602 — retrying after wallet_requestPermissions');
+      }
+      try {
+        await requestMetaMaskPermissions(provider);
+        signingAccount = await resolveMetaMaskSigningAccount();
+        return await ethSendCreateJob(provider, signingAccount, data);
+      } catch (retryErr) {
+        logContractError('createJob eth_sendTransaction retry', retryErr);
+        const base = decodeContractError(retryErr, contracts.jobRegistry.abi as Abi, 'createJob');
+        throw new Error(
+          `${base} Chọn đúng Account trong MetaMask, Disconnect/Connect lại trên Fapex (RainbowKit), rồi thử lại.`,
+        );
+      }
+    }
+
     throw new Error(decodeContractError(err, contracts.jobRegistry.abi as Abi, 'createJob'));
   }
 }
 
 export function buildCreateJobTxDebug(
-  account: Address,
+  signingAccount: Address,
   metadataCID: string,
   contractValueUnits: bigint,
   durationSeconds: bigint,
+  rainbowKitHint?: Address | null,
 ): CreateJobTxDebug {
   const { calldataLength } = previewCreateJobCalldata({
     metadataCID,
@@ -135,7 +205,9 @@ export function buildCreateJobTxDebug(
     durationSeconds,
   });
   return {
-    account,
+    account: signingAccount,
+    metaMaskFrom: signingAccount,
+    rainbowKitHint: rainbowKitHint ?? null,
     chainId: CHAIN_ID,
     jobRegistry: contracts.jobRegistry.address,
     calldataLength,
