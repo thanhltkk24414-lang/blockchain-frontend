@@ -12,7 +12,12 @@ import { sendRevealVoteTx } from '@/lib/utils/sendRevealVoteTx';
 import { sendFinalizeDisputeTx } from '@/lib/utils/sendFinalizeDisputeTx';
 import { sendExecuteArbitrationResultTx } from '@/lib/utils/sendExecuteArbitrationResultTx';
 import { sendFileAppealTx } from '@/lib/utils/sendFileAppealTx';
-import { addVoteToTally, emptyVoteTally, type VoteTally } from '@/lib/utils/disputeChoice';
+import {
+  addVoteToTally,
+  emptyVoteTally,
+  VOTE_CHOICES,
+  type VoteTally,
+} from '@/lib/utils/disputeChoice';
 import { addressesEqual } from '@/lib/utils/address';
 import {
   normalizeOnchainStatus,
@@ -23,11 +28,7 @@ import {
 import { decodeContractError } from '@/lib/utils/contractWrite';
 import { useContractTx } from './useContractTx';
 
-export const VOTE_CHOICES = {
-  FREELANCER_WIN: 1,
-  CLIENT_WIN: 2,
-  SPLIT: 3,
-} as const;
+export { VOTE_CHOICES };
 
 export function computeVoteHash(choice: number, salt: string): `0x${string}` {
   return keccak256(encodePacked(['uint256', 'string'], [BigInt(choice), salt]));

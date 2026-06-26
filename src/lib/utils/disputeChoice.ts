@@ -1,4 +1,8 @@
-import { VOTE_CHOICES } from '@/hooks/useDisputeActions';
+export const VOTE_CHOICES = {
+  FREELANCER_WIN: 1,
+  CLIENT_WIN: 2,
+  SPLIT: 3,
+} as const;
 
 export const DISPUTE_CHOICE_LABELS: Record<number, string> = {
   0: 'Chưa quyết định',
