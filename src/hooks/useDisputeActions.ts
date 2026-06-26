@@ -46,6 +46,20 @@ type OnChainDispute = {
   pendingResult: number;
 };
 
+/** ArbitratorPanel.disputes returns uint40 timestamps — viem decodes them as number, not bigint. */
+type OnChainDisputeRaw = Omit<OnChainDispute, 'createdAt' | 'resultAt'> & {
+  createdAt: number | bigint;
+  resultAt: number | bigint;
+};
+
+function normalizeOnchainDispute(raw: OnChainDisputeRaw): OnChainDispute {
+  return {
+    ...raw,
+    createdAt: BigInt(raw.createdAt),
+    resultAt: BigInt(raw.resultAt),
+  };
+}
+
 async function readOnchainJob(jobId: bigint): Promise<OnChainJob> {
   const raw = (await readContract(wagmiConfig, {
     ...contracts.jobRegistry,
@@ -56,11 +70,12 @@ async function readOnchainJob(jobId: bigint): Promise<OnChainJob> {
 }
 
 async function readOnchainDispute(jobId: bigint): Promise<OnChainDispute> {
-  return (await readContract(wagmiConfig, {
+  const raw = (await readContract(wagmiConfig, {
     ...contracts.arbitratorPanel,
     functionName: 'disputes',
     args: [jobId],
-  })) as OnChainDispute;
+  })) as OnChainDisputeRaw;
+  return normalizeOnchainDispute(raw);
 }
 
 async function preflightSubmitEvidence(
