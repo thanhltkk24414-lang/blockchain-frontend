@@ -193,8 +193,14 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
 
       {address && !isAssigned && chosenArbs.length > 0 && (
         <p className="muted">
-          Ví hiện tại không nằm trong hội đồng — import private key từ{' '}
-          <code>deployments/sepolia-arbitrators.json</code>.
+          Đang dùng ví <code>{address.slice(0, 6)}…{address.slice(-4)}</code> — không nằm hội
+          đồng job này. Chuyển sang một trong các ví arbitrator:{' '}
+          {chosenArbs.map((a) => (
+            <code key={a} style={{ marginRight: '0.5rem' }}>
+              {a.slice(0, 6)}…{a.slice(-4)}
+            </code>
+          ))}{' '}
+          (import từ <code>deployments/sepolia-arbitrators.json</code>).
         </p>
       )}
 

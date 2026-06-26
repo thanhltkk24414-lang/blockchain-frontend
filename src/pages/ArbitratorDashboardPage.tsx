@@ -1,94 +1,66 @@
-import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { fetchDisputes, fetchJobs } from '@/lib/api';
 import { useArbitratorAccess } from '@/hooks/useArbitratorAccess';
-import { isAssignedArbitrator, readChosenArbitrators } from '@/hooks/useDisputeActions';
+import {
+  shortWallet,
+  useArbitratorDisputes,
+  type ArbitratorDisputeItem,
+} from '@/hooks/useArbitratorDisputes';
+import { isAssignedArbitrator } from '@/hooks/useDisputeActions';
 import { DISPUTE_PHASES } from '@/lib/contracts/disputeTimings';
-import { isValidOnchainJobId } from '@/lib/utils/etherscan';
 
-type AssignedDispute = {
-  onchainJobId: number;
-  jobId?: string;
-  title?: string;
-  disputeStatus?: string;
-};
+function DisputeList({
+  items,
+  note,
+}: {
+  items: ArbitratorDisputeItem[];
+  note?: string;
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <>
+      {note && <p className="muted phase-note">{note}</p>}
+      <ul className="bids-list">
+        {items.map((d) => (
+          <li key={d.onchainJobId} className="bid-item">
+            <strong>
+              Job on-chain #{d.onchainJobId}
+              {d.title ? ` — ${d.title}` : ''}
+            </strong>
+            <span className="muted"> · {d.disputeStatus}</span>
+            {d.jobId ? (
+              <Link to={`/jobs/${d.jobId}`} className="btn primary">
+                Mở chi tiết & vote →
+              </Link>
+            ) : (
+              <span className="muted">Chưa sync jobId off-chain</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
 
 export function ArbitratorDashboardPage() {
   const { address, isAuthenticated } = useAuth();
   const stake = useArbitratorAccess();
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [assignedDisputes, setAssignedDisputes] = useState<AssignedDispute[]>([]);
+  const {
+    assignedDisputes,
+    poolOnlyDisputes,
+    samplePanelWallets,
+    loading,
+    error,
+    reload,
+  } = useArbitratorDisputes(address, stake.inPool);
 
-  const loadAssignedDisputes = useCallback(async () => {
-    if (!address) {
-      setAssignedDisputes([]);
-      return;
-    }
+  const displayError = error ?? stake.error;
 
-    setLoading(true);
-    setError(null);
-    try {
-      const [jobsRes, disputesRes] = await Promise.all([
-        fetchJobs({ status: 'DISPUTED', limit: 30 }),
-        fetchDisputes({ status: 'OPEN', limit: 30 }),
-      ]);
-
-      const candidates = new Map<number, AssignedDispute>();
-
-      for (const job of jobsRes.jobs ?? []) {
-        if (isValidOnchainJobId(job.onchainJobId)) {
-          candidates.set(job.onchainJobId!, {
-            onchainJobId: job.onchainJobId!,
-            jobId: job._id,
-            title: job.title,
-            disputeStatus: job.status,
-          });
-        }
-      }
-
-      for (const d of disputesRes.disputes ?? []) {
-        if (!isValidOnchainJobId(d.onchainJobId)) continue;
-        const existing = candidates.get(d.onchainJobId);
-        candidates.set(d.onchainJobId, {
-          onchainJobId: d.onchainJobId,
-          jobId: d.jobId ?? existing?.jobId,
-          title: existing?.title,
-          disputeStatus: d.status ?? existing?.disputeStatus,
-        });
-      }
-
-      const filtered: AssignedDispute[] = [];
-      await Promise.all(
-        [...candidates.values()].map(async (item) => {
-          try {
-            const arbs = await readChosenArbitrators(item.onchainJobId);
-            if (isAssignedArbitrator(arbs, address)) {
-              filtered.push(item);
-            }
-          } catch {
-            /* skip unreadable */
-          }
-        }),
-      );
-
-      filtered.sort((a, b) => b.onchainJobId - a.onchainJobId);
-      setAssignedDisputes(filtered);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Không tải được danh sách tranh chấp');
-    } finally {
-      setLoading(false);
-    }
-  }, [address]);
-
-  useEffect(() => {
-    if (stake.error) setError(stake.error);
-  }, [stake.error]);
-
-  useEffect(() => {
-    void loadAssignedDisputes();
-  }, [loadAssignedDisputes]);
+  const hintArbitratorWallet =
+    samplePanelWallets.find((w) => !isAssignedArbitrator([w], address)) ??
+    samplePanelWallets[0] ??
+    '0x59a1E706254fcE3152feeE8D95Ecf74f1f30040e';
 
   return (
     <main className="page">
@@ -105,7 +77,7 @@ export function ArbitratorDashboardPage() {
       )}
 
       {stake.loading && <p className="muted">Đang kiểm tra stake…</p>}
-      {error && <p className="error">{error}</p>}
+      {displayError && <p className="error">{displayError}</p>}
 
       {stake.stakedAmount != null && (
         <div className="stats-row">
@@ -132,7 +104,7 @@ export function ArbitratorDashboardPage() {
           <button
             className="btn ghost"
             type="button"
-            onClick={() => void loadAssignedDisputes()}
+            onClick={() => void reload()}
             disabled={loading}
           >
             {loading ? 'Đang tải…' : 'Làm mới'}
@@ -149,32 +121,39 @@ export function ArbitratorDashboardPage() {
         {!address && <p className="muted">Chưa kết nối ví.</p>}
 
         {address && !loading && assignedDisputes.length === 0 && (
-          <p className="muted">
-            Chưa có job DISPUTED nào chọn ví của bạn. Import private key từ{' '}
-            <code>deployments/sepolia-arbitrators.json</code> (chạy{' '}
-            <code>seed-arbitrator-pool.js</code> trước).
-          </p>
+          <div className="muted phase-note">
+            <p>
+              Đang dùng ví <code>{shortWallet(address)}</code>
+              {stake.inPool ? ' (trong pool arbitrator)' : ''} —{' '}
+              {samplePanelWallets.length > 0
+                ? 'không nằm hội đồng các job đang tranh chấp.'
+                : 'chưa có job DISPUTED on-chain nào trong phạm vi quét.'}
+            </p>
+            {samplePanelWallets.length > 0 && (
+              <p>
+                Chuyển sang ví arbitrator được chọn (vd.{' '}
+                <code>{shortWallet(hintArbitratorWallet)}</code>) — import private key từ{' '}
+                <code>deployments/sepolia-arbitrators.json</code>.
+              </p>
+            )}
+            {samplePanelWallets.length === 0 && (
+              <p>
+                Chạy <code>seed-arbitrator-pool.js</code> và mở tranh chấp trên job SUBMITTED trước.
+              </p>
+            )}
+          </div>
         )}
 
-        {assignedDisputes.length > 0 && (
-          <ul className="bids-list">
-            {assignedDisputes.map((d) => (
-              <li key={d.onchainJobId} className="bid-item">
-                <strong>
-                  Job on-chain #{d.onchainJobId}
-                  {d.title ? ` — ${d.title}` : ''}
-                </strong>
-                <span className="muted"> · {d.disputeStatus ?? 'DISPUTED'}</span>
-                {d.jobId ? (
-                  <Link to={`/jobs/${d.jobId}`} className="btn primary">
-                    Mở chi tiết & vote →
-                  </Link>
-                ) : (
-                  <span className="muted">Chưa sync jobId off-chain</span>
-                )}
-              </li>
-            ))}
-          </ul>
+        <DisputeList items={assignedDisputes} />
+
+        {poolOnlyDisputes.length > 0 && (
+          <>
+            <h4>Tranh chấp khác (trong pool, chưa được chọn)</h4>
+            <DisputeList
+              items={poolOnlyDisputes}
+              note="Bạn trong pool arbitrator nhưng sortition không chọn ví này cho hội đồng job này — chỉ xem, không vote."
+            />
+          </>
         )}
       </section>
 

@@ -111,11 +111,12 @@ function normalizeOnchainDispute(raw: unknown): OnChainDispute {
   };
 }
 
-async function readOnchainJob(jobId: bigint): Promise<OnChainJob> {
+export async function readOnchainJob(jobId: bigint | number): Promise<OnChainJob> {
+  const id = typeof jobId === 'bigint' ? jobId : BigInt(jobId);
   const raw = (await readContract(wagmiConfig, {
     ...contracts.jobRegistry,
     functionName: 'getJob',
-    args: [jobId],
+    args: [id],
   })) as OnChainJob;
   return { ...raw, status: normalizeOnchainStatus(raw.status) };
 }
