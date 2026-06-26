@@ -4,7 +4,7 @@ import { getMetaMaskProvider, type EthereumProvider } from '@/lib/utils/ethereum
 export type WalletAccountSnapshot = {
   rainbowKitAddress: Address | null;
   metaMaskActive: Address | null;
-  /** RainbowKit (wagmi) address differs from MetaMask extension selected account. */
+  /** wagmi connected address differs from MetaMask extension selected account. */
   rainbowMismatch: boolean;
   /** SIWE session wallet differs from MetaMask active account used for signing. */
   siweMismatch: boolean;
@@ -57,7 +57,7 @@ export async function requestMetaMaskPermissions(
 
 /**
  * Account MetaMask will use for eth_sendTransaction — always eth_accounts[0]
- * after eth_requestAccounts, never wagmi/RainbowKit cache alone.
+ * after eth_requestAccounts, never wagmi cache alone.
  */
 export async function resolveMetaMaskSigningAccount(options?: {
   requestPermissions?: boolean;

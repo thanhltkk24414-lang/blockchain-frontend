@@ -102,7 +102,7 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
     }
     if (rainbowMismatch) {
       setSubmitError(
-        'RainbowKit và MetaMask không trùng account — chọn đúng Account trong extension hoặc Disconnect → Connect lại trên Fapex.',
+        'Ví Fapex và MetaMask không trùng account — chọn đúng Account trong extension hoặc Disconnect → Connect lại.',
       );
       return;
     }
@@ -322,7 +322,7 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
           }}
         >
           <strong>DEV — createJob debug</strong>
-          <div>RainbowKit: {address ?? '—'}</div>
+          <div>Fapex connected: {address ?? '—'}</div>
           <div>MetaMask active: {metaMaskActive ?? '—'}</div>
           <div>signing: {signingAddress ?? '—'}</div>
           <div>chainId: {chainId ?? '—'} (cần {CHAIN_ID})</div>

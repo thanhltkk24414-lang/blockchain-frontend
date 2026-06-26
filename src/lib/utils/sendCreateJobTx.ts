@@ -23,7 +23,7 @@ export type SendCreateJobTxParams = {
   metadataCID: string;
   contractValueUnits: bigint;
   durationSeconds: bigint;
-  /** RainbowKit/wagmi hint — actual `from` comes from MetaMask eth_accounts[0]. */
+  /** wagmi connected address hint — actual `from` comes from MetaMask eth_accounts[0]. */
   account?: Address;
 };
 
@@ -95,7 +95,7 @@ async function ethSendCreateJob(
 
 /**
  * createJob signer — uses MetaMask eth_accounts[0] as `from` (not wagmi cache alone).
- * MetaMask -32602 when `from` ∉ eth_accounts is the usual Windows/RainbowKit mismatch.
+ * MetaMask -32602 when `from` ∉ eth_accounts — thường do đổi account trong extension.
  */
 export async function sendCreateJobTx({
   metadataCID,
@@ -121,8 +121,8 @@ export async function sendCreateJobTx({
     signingAccount.toLowerCase() !== rainbowKitHint.toLowerCase() &&
     import.meta.env.DEV
   ) {
-    console.warn('[createJob] RainbowKit ≠ MetaMask active', {
-      rainbowKit: rainbowKitHint,
+    console.warn('[createJob] Fapex connected ≠ MetaMask active', {
+      connected: rainbowKitHint,
       metaMaskActive: signingAccount,
     });
   }
@@ -183,7 +183,7 @@ export async function sendCreateJobTx({
         logContractError('createJob eth_sendTransaction retry', retryErr);
         const base = decodeContractError(retryErr, contracts.jobRegistry.abi as Abi, 'createJob');
         throw new Error(
-          `${base} Chọn đúng Account trong MetaMask, Disconnect/Connect lại trên Fapex (RainbowKit), rồi thử lại.`,
+          `${base} Chọn đúng Account trong MetaMask, Disconnect/Connect lại trên Fapex, rồi thử lại.`,
         );
       }
     }

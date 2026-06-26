@@ -90,7 +90,7 @@ function formatDecodedMessage(msg: string, functionName?: string): string {
     const clean = msg.replace(/^MetaMask RPC:\s*/i, '').trim();
     return (
       `MetaMask RPC: ${clean}. Gợi ý: \`from\` phải là account đang chọn trong MetaMask (eth_accounts[0]), ` +
-      `trùng RainbowKit Connect Wallet, mạng Sepolia (${CHAIN_ID}). Xem Console (F12) → [createJob] eth_sendTransaction request.`
+      `trùng ví MetaMask đã kết nối trên Fapex, mạng Sepolia (${CHAIN_ID}). Xem Console (F12) → [createJob] eth_sendTransaction request.`
     );
   }
   if (/transaction creation failed/i.test(msg)) {
@@ -101,7 +101,7 @@ function formatDecodedMessage(msg: string, functionName?: string): string {
   }
   if (/connector account not found|account not found/i.test(msg)) {
     return (
-      'Account MetaMask không khớp yêu cầu giao dịch — chọn đúng account trong extension (phải trùng ví kết nối RainbowKit).'
+      'Account MetaMask không khớp yêu cầu giao dịch — chọn đúng account trong extension (phải trùng ví đã kết nối trên Fapex).'
     );
   }
   if (/reverted.*unknown|out of gas|intrinsic gas too low|missing revert data/i.test(msg)) {
@@ -160,7 +160,7 @@ export function decodeContractError(
 }
 
 export type ContractWriteInput = GasEstimateInput & {
-  /** Optional — when set, must match the wallet RainbowKit/MetaMask connector will sign with. */
+  /** Optional — when set, must match the MetaMask account Fapex will sign with. */
   account?: Address;
 };
 
@@ -319,7 +319,7 @@ export async function sendContractTransaction(
     params.account.toLowerCase() !== signerAddress.toLowerCase()
   ) {
     throw new Error(
-      'Account MetaMask không khớp — chọn đúng account trong extension (phải trùng ví kết nối RainbowKit).',
+      'Account MetaMask không khớp — chọn đúng account trong extension (phải trùng ví đã kết nối trên Fapex).',
     );
   }
 

@@ -7,8 +7,8 @@ interface WalletAccountIndicatorProps {
 }
 
 /**
- * Shows RainbowKit (wagmi) vs MetaMask extension selected account.
- * "Trùng RainbowKit" = hai địa chỉ khớp nhau — cần thiết để eth_sendTransaction không bị -32602.
+ * Shows Fapex-connected (wagmi) vs MetaMask extension selected account.
+ * Hai địa chỉ phải khớp — nếu không eth_sendTransaction bị -32602.
  */
 export function WalletAccountIndicator({ showSiwe = true, compact = false }: WalletAccountIndicatorProps) {
   const {
@@ -35,7 +35,7 @@ export function WalletAccountIndicator({ showSiwe = true, compact = false }: Wal
     >
       <div className="wallet-account-lines">
         <p className="muted" style={{ margin: 0 }}>
-          <strong>RainbowKit</strong> (nút Connect Wallet):{' '}
+          <strong>Fapex đã kết nối</strong> (MetaMask):{' '}
           <code className="mono">{shortRainbow ?? '—'}</code>
           {rainbowKitAddress && (
             <span className="muted phase-note" title={rainbowKitAddress}>
@@ -63,7 +63,7 @@ export function WalletAccountIndicator({ showSiwe = true, compact = false }: Wal
 
       {rainbowMismatch && (
         <p className="error" style={{ marginTop: '0.5rem' }}>
-          Không trùng RainbowKit — MetaMask đang chọn account khác với ví Fapex đã Connect.
+          MetaMask đang chọn account khác với ví Fapex đã kết nối.
           Giao dịch on-chain dùng <strong>MetaMask active</strong>; chọn đúng account trong
           extension hoặc Disconnect → Connect lại trên Fapex.
         </p>
@@ -78,7 +78,7 @@ export function WalletAccountIndicator({ showSiwe = true, compact = false }: Wal
 
       {!rainbowMismatch && !siweMismatch && metaMaskActive && (
         <p className="muted phase-note" style={{ marginTop: '0.35rem', marginBottom: 0 }}>
-          Trùng RainbowKit — sẵn sàng ký giao dịch.
+          Trùng ví — sẵn sàng ký giao dịch.
         </p>
       )}
 

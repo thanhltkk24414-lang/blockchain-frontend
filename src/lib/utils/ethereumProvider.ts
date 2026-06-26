@@ -4,14 +4,13 @@ export type EthereumProvider = {
   providers?: EthereumProvider[];
 };
 
-/** Prefer MetaMask when multiple injected wallets share window.ethereum (common on Windows). */
+/** MetaMask extension only — filter by isMetaMask (handles multi-wallet window.ethereum on Windows). */
 export function getMetaMaskProvider(): EthereumProvider | undefined {
   if (typeof window === 'undefined') return undefined;
   const eth = (window as Window & { ethereum?: EthereumProvider }).ethereum;
   if (!eth?.request) return undefined;
   if (eth.isMetaMask) return eth;
-  const nested = eth.providers?.find((p: EthereumProvider) => p.isMetaMask && p.request);
-  return nested ?? eth;
+  return eth.providers?.find((p: EthereumProvider) => p.isMetaMask && p.request);
 }
 
 export const SEPOLIA_CHAIN_ID_HEX = '0xaa36a7';
