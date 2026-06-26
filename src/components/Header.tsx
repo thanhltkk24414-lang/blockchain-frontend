@@ -6,7 +6,6 @@ export function Header() {
   const {
     isConnected,
     isAuthenticated,
-    user,
     sessionWallet,
     connectedWallet,
     walletSessionNotice,

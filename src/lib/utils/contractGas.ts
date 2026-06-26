@@ -1,12 +1,14 @@
 import { estimateGas } from 'viem/actions';
 import type { Abi, Address } from 'viem';
 import { wagmiConfig } from '@/config/wagmi';
+import { CHAIN_ID } from '@/lib/contracts/addresses';
 
 const GAS_BUFFER_NUM = 12n;
 const GAS_BUFFER_DEN = 10n;
 
 /** Minimum gas for heavy escrow/registry writes (avoid under-estimate reverts). */
 const GAS_MIN: Record<string, bigint> = {
+  createJob: 120_000n,
   depositEscrow: 200_000n,
   startWork: 120_000n,
   /** Sepolia submitWork ~178k; 100k causes OOG masked as "unknown revert". */
@@ -50,7 +52,7 @@ function capForFunction(functionName: string): bigint {
  */
 export async function withGasLimit(params: GasEstimateInput): Promise<{ gas: bigint }> {
   const cap = capForFunction(params.functionName);
-  const client = wagmiConfig.getClient();
+  const client = wagmiConfig.getClient({ chainId: CHAIN_ID as 11155111 });
   const account = params.account ?? client.account?.address;
   if (!account) {
     return { gas: cap };

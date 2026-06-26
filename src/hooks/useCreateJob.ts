@@ -1,9 +1,11 @@
 import { useCallback, useState } from 'react';
-import { useAccount, useWriteContract } from 'wagmi';
-import { parseEventLogs, waitForTransactionReceipt, type Abi } from 'viem';
+import { useAccount, useChainId, useWriteContract } from 'wagmi';
+import { readContract, waitForTransactionReceipt } from 'wagmi/actions';
+import { getAddress, isAddress, parseEventLogs, type Abi, type Log } from 'viem';
 import { wagmiConfig } from '@/config/wagmi';
 import { contracts } from '@/lib/contracts/config';
-import { executeContractWrite } from '@/lib/utils/contractWrite';
+import { CHAIN_ID, CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
+import { decodeContractError, executeContractWrite } from '@/lib/utils/contractWrite';
 import { toUsdcUnits } from '@/lib/utils/usdc';
 import type { TxStatus } from '@/components/shared/TxStatusModal';
 
@@ -18,9 +20,9 @@ export interface CreateJobOnChainResult {
   createTxHash: `0x${string}`;
 }
 
-function parseJobIdFromReceipt(
-  logs: Awaited<ReturnType<typeof waitForTransactionReceipt>>['logs'],
-): number {
+const RESTRICTED_TIER = 0;
+
+function parseJobIdFromReceipt(logs: Log[]): number {
   const events = parseEventLogs({
     abi: contracts.jobRegistry.abi as Abi,
     eventName: 'JobCreated',
@@ -29,7 +31,7 @@ function parseJobIdFromReceipt(
   if (events.length === 0) {
     throw new Error('JobCreated event not found — kiểm tra giao dịch trên Etherscan.');
   }
-  const jobId = events[0].args.jobId;
+  const jobId = (events[0].args as { jobId: bigint }).jobId;
   const numeric = Number(jobId);
   if (!Number.isFinite(numeric) || numeric <= 0) {
     throw new Error(`Invalid on-chain job id: ${jobId}`);
@@ -37,8 +39,26 @@ function parseJobIdFromReceipt(
   return numeric;
 }
 
+function assertCreateJobParams({
+  metadataCID,
+  contractValue,
+  durationSeconds,
+}: CreateJobOnChainParams): void {
+  const cid = metadataCID?.trim();
+  if (!cid) {
+    throw new Error('metadataCID trống — upload IPFS phải hoàn tất trước createJob.');
+  }
+  if (!Number.isFinite(contractValue) || contractValue < 1) {
+    throw new Error('Budget phải ≥ 1 USDC (on-chain dùng 6 decimals: 1 USDC = 1_000_000 units).');
+  }
+  if (!Number.isFinite(durationSeconds) || durationSeconds < 3600) {
+    throw new Error('Duration on-chain phải ≥ 3600 giây (1 giờ). Form dùng ngày × 86400.');
+  }
+}
+
 export function useCreateJob() {
-  const { address } = useAccount();
+  const { address, isConnected } = useAccount();
+  const chainId = useChainId();
   const { writeContractAsync } = useWriteContract();
   const [txStatus, setTxStatus] = useState<TxStatus>('idle');
   const [txHash, setTxHash] = useState('');
@@ -53,32 +73,58 @@ export function useCreateJob() {
   }, []);
 
   const createOnChain = useCallback(
-    async ({
-      metadataCID,
-      contractValue,
-      durationSeconds,
-    }: CreateJobOnChainParams): Promise<CreateJobOnChainResult> => {
-      if (!address) {
+    async (params: CreateJobOnChainParams): Promise<CreateJobOnChainResult> => {
+      if (!isConnected || !address) {
         throw new Error('Kết nối ví MetaMask trên Sepolia trước khi tạo job on-chain.');
       }
+      if (!isAddress(address)) {
+        const len = String(address).length;
+        throw new Error(
+          `Địa chỉ MetaMask không hợp lệ (${len} ký tự). Cần đúng định dạng 0x + 40 ký tự hex.`,
+        );
+      }
+      if (chainId !== CHAIN_ID) {
+        throw new Error(
+          `MetaMask đang ở chain ${chainId ?? 'unknown'} — chuyển sang Sepolia (${CHAIN_ID}).`,
+        );
+      }
+
+      const client = getAddress(address);
+      const { metadataCID, contractValue, durationSeconds } = params;
+      assertCreateJobParams(params);
 
       resetTx();
       setTxStatus('pending');
       setTxLabel('Creating job on JobRegistry…');
 
       try {
+        const tier = (await readContract(wagmiConfig, {
+          ...contracts.reputationStore,
+          functionName: 'getTier',
+          args: [client],
+        })) as number;
+        if (tier === RESTRICTED_TIER) {
+          throw new Error(
+            'AccountRestricted: Reputation tier Restricted — ví này không được gọi JobRegistry.createJob.',
+          );
+        }
+
+        const valueUnits = toUsdcUnits(contractValue);
         const hash = await executeContractWrite(writeContractAsync, {
           address: contracts.jobRegistry.address,
           abi: contracts.jobRegistry.abi as Abi,
           functionName: 'createJob',
-          args: [metadataCID, toUsdcUnits(contractValue), BigInt(durationSeconds)],
-          account: address,
+          args: [metadataCID.trim(), valueUnits, BigInt(Math.round(durationSeconds))],
+          account: client,
         });
         setTxHash(hash);
 
         const receipt = await waitForTransactionReceipt(wagmiConfig, { hash });
         if (receipt.status === 'reverted') {
-          throw new Error('createJob revert on-chain — kiểm tra reputation tier và gas ETH.');
+          throw new Error(
+            `createJob revert on-chain (JobRegistry ${CONTRACT_ADDRESSES.JobRegistry}). ` +
+              'Kiểm tra reputation tier và Sepolia ETH.',
+          );
         }
 
         const onchainJobId = parseJobIdFromReceipt(receipt.logs);
@@ -86,12 +132,17 @@ export function useCreateJob() {
         setTxLabel('Job created on-chain');
         return { onchainJobId, createTxHash: hash };
       } catch (err) {
+        const message = decodeContractError(
+          err,
+          contracts.jobRegistry.abi as Abi,
+          'createJob',
+        );
         setTxStatus('failed');
-        setTxError(err instanceof Error ? err.message : 'createJob failed');
-        throw err;
+        setTxError(message);
+        throw new Error(message);
       }
     },
-    [address, resetTx, writeContractAsync],
+    [address, chainId, isConnected, resetTx, writeContractAsync],
   );
 
   return {
