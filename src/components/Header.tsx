@@ -22,7 +22,7 @@ export function Header() {
         <span className="api-badge">API: {API_URL}</span>
       </div>
       <div className="header-actions">
-        <ConnectButton />
+        <ConnectButton label="MetaMask" />
         {isConnected && !isAuthenticated && (
           <button className="btn primary" onClick={signIn} disabled={loading}>
             {loading ? 'Signing…' : 'Sign in (SIWE)'}

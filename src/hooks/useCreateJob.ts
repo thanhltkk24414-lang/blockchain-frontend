@@ -1,11 +1,17 @@
 import { useCallback, useState } from 'react';
-import { useAccount, useChainId, useWriteContract } from 'wagmi';
-import { readContract, waitForTransactionReceipt } from 'wagmi/actions';
+import { useAccount, useChainId, useSwitchChain } from 'wagmi';
+import { readContract, reconnect, waitForTransactionReceipt } from 'wagmi/actions';
 import { getAddress, isAddress, parseEventLogs, type Abi, type Log } from 'viem';
 import { wagmiConfig } from '@/config/wagmi';
 import { contracts } from '@/lib/contracts/config';
 import { CHAIN_ID, CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
-import { decodeContractError, executeContractWrite } from '@/lib/utils/contractWrite';
+import { decodeContractError, logContractError } from '@/lib/utils/contractWrite';
+import {
+  buildCreateJobTxDebug,
+  sendCreateJobTx,
+  type CreateJobTxDebug,
+} from '@/lib/utils/sendCreateJobTx';
+import { isInvalidTxParamsError, resolveMetaMaskSigningAccount } from '@/lib/utils/walletAccounts';
 import { toUsdcUnits } from '@/lib/utils/usdc';
 import type { TxStatus } from '@/components/shared/TxStatusModal';
 
@@ -59,17 +65,21 @@ function assertCreateJobParams({
 export function useCreateJob() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
-  const { writeContractAsync } = useWriteContract();
+  const { switchChainAsync } = useSwitchChain();
   const [txStatus, setTxStatus] = useState<TxStatus>('idle');
   const [txHash, setTxHash] = useState('');
   const [txLabel, setTxLabel] = useState('');
   const [txError, setTxError] = useState<string>();
+  const [txDebug, setTxDebug] = useState<CreateJobTxDebug | null>(null);
+  const [showRecovery, setShowRecovery] = useState(false);
 
   const resetTx = useCallback(() => {
     setTxStatus('idle');
     setTxHash('');
     setTxLabel('');
     setTxError(undefined);
+    setTxDebug(null);
+    setShowRecovery(false);
   }, []);
 
   const createOnChain = useCallback(
@@ -77,19 +87,42 @@ export function useCreateJob() {
       if (!isConnected || !address) {
         throw new Error('Kết nối ví MetaMask trên Sepolia trước khi tạo job on-chain.');
       }
-      if (!isAddress(address)) {
-        const len = String(address).length;
+
+      let signingAccount: ReturnType<typeof getAddress>;
+      try {
+        signingAccount = await resolveMetaMaskSigningAccount();
+      } catch (accErr) {
         throw new Error(
-          `Địa chỉ MetaMask không hợp lệ (${len} ký tự). Cần đúng định dạng 0x + 40 ký tự hex.`,
-        );
-      }
-      if (chainId !== CHAIN_ID) {
-        throw new Error(
-          `MetaMask đang ở chain ${chainId ?? 'unknown'} — chuyển sang Sepolia (${CHAIN_ID}).`,
+          accErr instanceof Error ? accErr.message : 'Không đọc được account MetaMask.',
         );
       }
 
-      const client = getAddress(address);
+      if (!isAddress(signingAccount)) {
+        throw new Error(
+          `Địa chỉ MetaMask không hợp lệ. Cần đúng định dạng 0x + 40 ký tự hex.`,
+        );
+      }
+
+      if (chainId !== CHAIN_ID) {
+        try {
+          await switchChainAsync({ chainId: CHAIN_ID });
+        } catch (switchErr) {
+          logContractError('switchChain Sepolia', switchErr);
+          throw new Error(
+            `MetaMask đang ở chain ${chainId ?? 'unknown'} — chuyển sang Sepolia (${CHAIN_ID}).`,
+          );
+        }
+      }
+
+      try {
+        await reconnect(wagmiConfig);
+      } catch (reconnectErr) {
+        if (import.meta.env.DEV) {
+          logContractError('reconnect before createJob', reconnectErr);
+        }
+      }
+
+      const client = getAddress(signingAccount);
       const { metadataCID, contractValue, durationSeconds } = params;
       assertCreateJobParams(params);
 
@@ -110,12 +143,24 @@ export function useCreateJob() {
         }
 
         const valueUnits = toUsdcUnits(contractValue);
-        const hash = await executeContractWrite(writeContractAsync, {
-          address: contracts.jobRegistry.address,
-          abi: contracts.jobRegistry.abi as Abi,
-          functionName: 'createJob',
-          args: [metadataCID.trim(), valueUnits, BigInt(Math.round(durationSeconds))],
-          account: client,
+        const durationBig = BigInt(Math.round(durationSeconds));
+        const debug = buildCreateJobTxDebug(
+          client,
+          metadataCID.trim(),
+          valueUnits,
+          durationBig,
+          address,
+        );
+        setTxDebug(debug);
+        if (import.meta.env.DEV) {
+          console.debug('[createJob] tx debug', debug);
+        }
+
+        const hash = await sendCreateJobTx({
+          metadataCID: metadataCID.trim(),
+          contractValueUnits: valueUnits,
+          durationSeconds: durationBig,
+          account: address,
         });
         setTxHash(hash);
 
@@ -132,6 +177,7 @@ export function useCreateJob() {
         setTxLabel('Job created on-chain');
         return { onchainJobId, createTxHash: hash };
       } catch (err) {
+        logContractError('createOnChain', err);
         const message = decodeContractError(
           err,
           contracts.jobRegistry.abi as Abi,
@@ -139,10 +185,13 @@ export function useCreateJob() {
         );
         setTxStatus('failed');
         setTxError(message);
+        if (isInvalidTxParamsError(err) || /missing or invalid parameters/i.test(message)) {
+          setShowRecovery(true);
+        }
         throw new Error(message);
       }
     },
-    [address, chainId, isConnected, resetTx, writeContractAsync],
+    [address, chainId, isConnected, resetTx, switchChainAsync],
   );
 
   return {
@@ -151,6 +200,9 @@ export function useCreateJob() {
     txHash,
     txLabel,
     txError,
+    txDebug,
+    showRecovery,
+    setShowRecovery,
     resetTx,
   };
 }

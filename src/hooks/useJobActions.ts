@@ -1,6 +1,5 @@
 import { useCallback } from 'react';
 import { readContract, simulateContract } from 'wagmi/actions';
-import { useWriteContract } from 'wagmi';
 import { useAccount } from 'wagmi';
 import type { Abi } from 'viem';
 import { getAddress } from 'viem';
@@ -79,7 +78,6 @@ async function waitForInProgress(jobId: bigint): Promise<OnChainJob> {
 
 export function useDeliverableSubmit() {
   const { address } = useAccount();
-  const { writeContractAsync } = useWriteContract();
   const tx = useContractTx();
 
   const submit = useCallback(
@@ -107,7 +105,7 @@ export function useDeliverableSubmit() {
 
       if (needsStartWork) {
         await tx.runTx('Bước 1/2: Bắt đầu làm việc on-chain (startWork)…', () =>
-          executeContractWrite(writeContractAsync, {
+          executeContractWrite({
             address: contracts.escrowVault.address,
             abi: contracts.escrowVault.abi as Abi,
             functionName: 'startWork',
@@ -155,7 +153,7 @@ export function useDeliverableSubmit() {
         : 'Đang nộp bàn giao on-chain (submitWork)…';
 
       await tx.runTx(submitLabel, () =>
-        executeContractWrite(writeContractAsync, {
+        executeContractWrite({
           address: contracts.escrowVault.address,
           abi: contracts.escrowVault.abi as Abi,
           functionName: 'submitWork',
@@ -166,7 +164,7 @@ export function useDeliverableSubmit() {
 
       return deliverableCID;
     },
-    [address, tx, writeContractAsync],
+    [address, tx],
   );
 
   return { submit, ...tx };
@@ -174,7 +172,6 @@ export function useDeliverableSubmit() {
 
 export function useClientJobActions() {
   const { address } = useAccount();
-  const { writeContractAsync } = useWriteContract();
   const tx = useContractTx();
 
   const approveAndRelease = useCallback(
@@ -200,7 +197,7 @@ export function useClientJobActions() {
       }
 
       await tx.runTx('Đang phê duyệt bàn giao và giải phóng USDC…', () =>
-        executeContractWrite(writeContractAsync, {
+        executeContractWrite({
           address: contracts.escrowVault.address,
           abi: contracts.escrowVault.abi as Abi,
           functionName: 'approveAndRelease',
@@ -209,7 +206,7 @@ export function useClientJobActions() {
         }),
       );
     },
-    [address, tx, writeContractAsync],
+    [address, tx],
   );
 
   const raiseDispute = useCallback(
@@ -249,7 +246,7 @@ export function useClientJobActions() {
 
       if (allowance < fee) {
         await tx.runTx('Đang approve phí tranh chấp USDC…', () =>
-          executeContractWrite(writeContractAsync, {
+          executeContractWrite({
             address: contracts.mockUsdc.address,
             abi: contracts.mockUsdc.abi as Abi,
             functionName: 'approve',
@@ -260,7 +257,7 @@ export function useClientJobActions() {
       }
 
       await tx.runTx('Đang mở tranh chấp on-chain…', () =>
-        executeContractWrite(writeContractAsync, {
+        executeContractWrite({
           address: contracts.escrowVault.address,
           abi: contracts.escrowVault.abi as Abi,
           functionName: 'raiseDispute',
@@ -269,7 +266,7 @@ export function useClientJobActions() {
         }),
       );
     },
-    [address, tx, writeContractAsync],
+    [address, tx],
   );
 
   return { approveAndRelease, raiseDispute, ...tx };

@@ -1,11 +1,16 @@
-import { simulateContract } from 'wagmi/actions';
+import { getWalletClient, simulateContract, writeContract } from 'wagmi/actions';
+import { sepolia } from 'wagmi/chains';
 import {
   BaseError,
   ContractFunctionRevertedError,
   UserRejectedRequestError,
+  encodeFunctionData,
+  getAddress,
   isAddress,
   type Abi,
   type Address,
+  type Hash,
+  type WalletClient,
 } from 'viem';
 import { wagmiConfig } from '@/config/wagmi';
 import { CHAIN_ID } from '@/lib/contracts/addresses';
@@ -83,10 +88,11 @@ function formatDecodedMessage(msg: string, functionName?: string): string {
     return `MetaMask phải ở Sepolia (chainId ${CHAIN_ID}) trước khi gọi ${functionName ?? 'contract'}.`;
   }
   if (/missing or invalid parameters/i.test(msg)) {
+    const clean = msg.replace(/^MetaMask RPC:\s*/i, '').trim();
     return (
-      'MetaMask từ chối tham số giao dịch — thường do: (1) ví chưa kết nối Fapex hoặc account MetaMask khác account RainbowKit, ' +
-      `(2) sai mạng (cần Sepolia chainId ${CHAIN_ID}), (3) địa chỉ contract sai trong env. ` +
-      'Mở MetaMask → chọn đúng account → Sepolia → disconnect/reconnect ví trên Fapex (không cần import lại private key).'
+      `MetaMask RPC: ${clean}. Khi mọi ví đã trùng khớp, thường do gọi eth_sendTransaction qua provider sai ` +
+      `(ví phụ khi cài nhiều ví) hoặc tham số value/from thừa — không phải lỗi calldata/ABI. ` +
+      `Thử Disconnect → Connect lại; tắt ví khác (Coinbase/Brave). Console → [createJob] eth_sendTransaction request.`
     );
   }
   if (/transaction creation failed/i.test(msg)) {
@@ -97,7 +103,7 @@ function formatDecodedMessage(msg: string, functionName?: string): string {
   }
   if (/connector account not found|account not found/i.test(msg)) {
     return (
-      'Account MetaMask không khớp yêu cầu giao dịch — chọn đúng account trong extension (phải trùng ví kết nối RainbowKit).'
+      'Account MetaMask không khớp yêu cầu giao dịch — chọn đúng account trong extension (phải trùng ví đã kết nối trên Fapex).'
     );
   }
   if (/reverted.*unknown|out of gas|intrinsic gas too low|missing revert data/i.test(msg)) {
@@ -156,12 +162,145 @@ export function decodeContractError(
 }
 
 export type ContractWriteInput = GasEstimateInput & {
-  account: Address;
+  /** Optional — when set, must match the MetaMask account Fapex will sign with. */
+  account?: Address;
 };
 
-export async function executeContractWrite(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- wagmi accepts simulateContract().request
-  writeContractAsync: (request: any) => Promise<`0x${string}`>,
+import {
+  ensureSepoliaOnProvider,
+  getMetaMaskProvider,
+  getSigningProvider,
+  type EthereumProvider,
+} from '@/lib/utils/ethereumProvider';
+import {
+  isInvalidTxParamsError,
+  resolveMetaMaskSigningAccount,
+} from '@/lib/utils/walletAccounts';
+
+function getInjectedProvider(): EthereumProvider | undefined {
+  return getMetaMaskProvider();
+}
+
+function isUserRejection(err: unknown): boolean {
+  if (err instanceof BaseError) {
+    return Boolean(err.walk((e) => e instanceof UserRejectedRequestError));
+  }
+  const msg = err instanceof Error ? err.message : String(err);
+  return /user rejected|user denied|rejected the request/i.test(msg);
+}
+
+/** DEV: log viem/wagmi error tree including cause and RPC details. */
+export function logContractError(label: string, err: unknown): void {
+  if (!import.meta.env.DEV) return;
+  if (err instanceof BaseError) {
+    console.error(`[contractWrite] ${label}`, {
+      shortMessage: err.shortMessage,
+      message: err.message,
+      details: (err as BaseError & { details?: string }).details,
+      cause: err.cause,
+      metaMessages: err.metaMessages,
+    });
+    return;
+  }
+  if (err instanceof Error) {
+    console.error(`[contractWrite] ${label}`, {
+      message: err.message,
+      cause: err.cause,
+    });
+    return;
+  }
+  console.error(`[contractWrite] ${label}`, err);
+}
+
+function debugWriteFailure(strategy: string, err: unknown): void {
+  logContractError(`${strategy} failed`, err);
+}
+
+/**
+ * MetaMask (injected provider) rejects eth_sendTransaction when wagmi/viem forwards
+ * pre-estimated gas / EIP-1559 fee fields from the public RPC simulate path.
+ * Preflight uses gas on the read client only; signing omits gas so MetaMask estimates locally.
+ */
+async function writeViaWalletClient(
+  walletClient: WalletClient,
+  params: ContractWriteInput,
+): Promise<Hash> {
+  return walletClient.writeContract({
+    address: params.address,
+    abi: params.abi,
+    functionName: params.functionName,
+    args: params.args,
+    value: params.value,
+    account: walletClient.account!,
+    chain: sepolia,
+  });
+}
+
+async function writeViaWagmiAction(
+  params: ContractWriteInput,
+  chainId: 11155111,
+): Promise<Hash> {
+  return writeContract(wagmiConfig, {
+    address: params.address,
+    abi: params.abi,
+    functionName: params.functionName,
+    args: params.args,
+    value: params.value,
+    chainId,
+  });
+}
+
+/** Last resort: minimal eth_sendTransaction params MetaMask accepts (to/data only). */
+async function writeViaInjectedProvider(
+  _wagmiHint: Address,
+  params: ContractWriteInput,
+): Promise<Hash> {
+  const provider = (await getSigningProvider()) ?? getInjectedProvider();
+  if (!provider?.request) {
+    throw new Error('MetaMask provider không khả dụng — cài/kích hoạt extension.');
+  }
+
+  await ensureSepoliaOnProvider(provider);
+  const from = await resolveMetaMaskSigningAccount();
+
+  const data = encodeFunctionData({
+    abi: params.abi,
+    functionName: params.functionName,
+    args: params.args,
+  });
+
+  const to = getAddress(params.address);
+  const txMinimal = { to, data };
+  const txWithFrom = { from, to, data };
+
+  if (import.meta.env.DEV) {
+    console.debug('[contractWrite] eth_sendTransaction request', {
+      method: 'eth_sendTransaction',
+      params: [txMinimal],
+    });
+  }
+
+  try {
+    return (await provider.request({
+      method: 'eth_sendTransaction',
+      params: [txMinimal],
+    })) as Hash;
+  } catch (err) {
+    if (!isInvalidTxParamsError(err)) throw err;
+    return (await provider.request({
+      method: 'eth_sendTransaction',
+      params: [txWithFrom],
+    })) as Hash;
+  }
+}
+
+/**
+ * Sign a contract write with MetaMask-safe fallbacks:
+ * 1) walletClient.writeContract (full Sepolia chain object, no gas field)
+ * 2) wagmi writeContract action (chainId only, no gas)
+ * 3) raw window.ethereum eth_sendTransaction after encodeFunctionData
+ */
+export async function sendContractTransaction(
   params: ContractWriteInput,
 ): Promise<`0x${string}`> {
   if (!params.address || !isAddress(params.address)) {
@@ -170,34 +309,71 @@ export async function executeContractWrite(
     );
   }
 
-  const { gas } = await withGasLimit(params);
+  const chainId = CHAIN_ID as 11155111;
 
-  let simulation;
+  const walletClient = await getWalletClient(wagmiConfig, { chainId });
+  if (!walletClient?.account) {
+    throw new Error('Kết nối ví MetaMask trên Sepolia trước khi gửi giao dịch.');
+  }
+
+  const signerAddress = walletClient.account.address;
+  if (
+    params.account &&
+    params.account.toLowerCase() !== signerAddress.toLowerCase()
+  ) {
+    throw new Error(
+      'Account MetaMask không khớp — chọn đúng account trong extension (phải trùng ví đã kết nối trên Fapex).',
+    );
+  }
+
+  const { gas } = await withGasLimit({
+    ...params,
+    account: signerAddress,
+  });
+
   try {
-    simulation = await simulateContract(wagmiConfig, {
+    await simulateContract(wagmiConfig, {
       address: params.address,
       abi: params.abi,
       functionName: params.functionName,
       args: params.args,
-      account: params.account,
+      account: signerAddress,
       value: params.value,
       gas,
-      chainId: CHAIN_ID as 11155111,
+      chainId,
     });
   } catch (simErr) {
     throw new Error(decodeContractError(simErr, params.abi, params.functionName));
   }
 
-  // Use viem/wagmi simulate request so MetaMask gets chainId + encoded calldata (manual rebuild omitted chainId).
-  const writeRequest = {
-    ...simulation.request,
-    gas,
-    chainId: CHAIN_ID as 11155111,
-  };
+  const strategies: Array<() => Promise<Hash>> = [
+    () => writeViaWalletClient(walletClient, params),
+    () => writeViaWagmiAction(params, chainId),
+    () => writeViaInjectedProvider(signerAddress, params),
+  ];
 
-  try {
-    return await writeContractAsync(writeRequest);
-  } catch (writeErr) {
-    throw new Error(decodeContractError(writeErr, params.abi, params.functionName));
+  const strategyNames = ['walletClient.writeContract', 'wagmi.writeContract', 'eth_sendTransaction'];
+
+  let lastErr: unknown;
+  for (let i = 0; i < strategies.length; i++) {
+    try {
+      const hash = await strategies[i]();
+      if (import.meta.env.DEV) {
+        console.debug(`[contractWrite] signed via ${strategyNames[i]}`, hash);
+      }
+      return hash;
+    } catch (err) {
+      if (isUserRejection(err)) {
+        throw new Error(decodeContractError(err, params.abi, params.functionName));
+      }
+      debugWriteFailure(strategyNames[i], err);
+      lastErr = err;
+    }
   }
+
+  throw new Error(decodeContractError(lastErr, params.abi, params.functionName));
+}
+
+export async function executeContractWrite(params: ContractWriteInput): Promise<`0x${string}`> {
+  return sendContractTransaction(params);
 }

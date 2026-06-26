@@ -27,7 +27,7 @@ INDEXER backend chỉ còn: đọc events, sync MongoDB, các relay admin (khôn
 ## Các bước cho người dùng sau khi deploy code
 
 1. **Faucet Sepolia ETH** cho ví client (gas `createJob` + `depositEscrow`).
-2. Đăng nhập SIWE bằng ví đó — **giữ cùng ví** trong MetaMask khi tạo job.
+2. Đăng nhập SIWE bằng ví đó — **giữ cùng ví** trong MetaMask khi tạo job. Fapex chỉ hỗ trợ MetaMask (không WalletConnect / Coinbase / Rainbow).
 3. Client dashboard → **Create job** → xác nhận 2 bước: tx on-chain rồi lưu API.
 4. Freelancer bid → client accept.
 5. Trên trang job: **Mint test USDC** (ví client) → **Approve & deposit escrow**.

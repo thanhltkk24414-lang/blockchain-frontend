@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useAccount, useWriteContract } from 'wagmi';
+import { useAccount } from 'wagmi';
 import { readContract } from 'wagmi/actions';
 import type { Abi } from 'viem';
 import { getAddress, keccak256, encodePacked, toBytes } from 'viem';
@@ -25,7 +25,6 @@ export function cidToEvidenceHash(cid: string): `0x${string}` {
 
 export function useDisputeActions() {
   const { address } = useAccount();
-  const { writeContractAsync } = useWriteContract();
   const tx = useContractTx();
 
   const submitEvidence = useCallback(
@@ -35,7 +34,7 @@ export function useDisputeActions() {
       const hash = cidToEvidenceHash(cid);
 
       await tx.runTx('Đang nộp bằng chứng on-chain…', () =>
-        executeContractWrite(writeContractAsync, {
+        executeContractWrite({
           address: contracts.arbitratorPanel.address,
           abi: contracts.arbitratorPanel.abi as Abi,
           functionName: 'submitEvidence',
@@ -44,7 +43,7 @@ export function useDisputeActions() {
         }),
       );
     },
-    [address, tx, writeContractAsync],
+    [address, tx],
   );
 
   const commitVote = useCallback(
@@ -54,7 +53,7 @@ export function useDisputeActions() {
       const hash = computeVoteHash(choice, salt);
 
       await tx.runTx('Đang commit vote…', () =>
-        executeContractWrite(writeContractAsync, {
+        executeContractWrite({
           address: contracts.arbitratorPanel.address,
           abi: contracts.arbitratorPanel.abi as Abi,
           functionName: 'commitVote',
@@ -63,7 +62,7 @@ export function useDisputeActions() {
         }),
       );
     },
-    [address, tx, writeContractAsync],
+    [address, tx],
   );
 
   const revealVote = useCallback(
@@ -72,7 +71,7 @@ export function useDisputeActions() {
       const wallet = getAddress(address);
 
       await tx.runTx('Đang reveal vote…', () =>
-        executeContractWrite(writeContractAsync, {
+        executeContractWrite({
           address: contracts.arbitratorPanel.address,
           abi: contracts.arbitratorPanel.abi as Abi,
           functionName: 'revealVote',
@@ -81,7 +80,7 @@ export function useDisputeActions() {
         }),
       );
     },
-    [address, tx, writeContractAsync],
+    [address, tx],
   );
 
   const finalizeDisputeVoting = useCallback(
@@ -90,7 +89,7 @@ export function useDisputeActions() {
       const wallet = getAddress(address);
 
       await tx.runTx('Đang finalize dispute voting…', () =>
-        executeContractWrite(writeContractAsync, {
+        executeContractWrite({
           address: contracts.escrowVault.address,
           abi: contracts.escrowVault.abi as Abi,
           functionName: 'finalizeDisputeVoting',
@@ -99,7 +98,7 @@ export function useDisputeActions() {
         }),
       );
     },
-    [address, tx, writeContractAsync],
+    [address, tx],
   );
 
   const executeArbitrationResult = useCallback(
@@ -108,7 +107,7 @@ export function useDisputeActions() {
       const wallet = getAddress(address);
 
       await tx.runTx('Đang thực thi kết quả phân xử…', () =>
-        executeContractWrite(writeContractAsync, {
+        executeContractWrite({
           address: contracts.escrowVault.address,
           abi: contracts.escrowVault.abi as Abi,
           functionName: 'executeArbitrationResult',
@@ -117,7 +116,7 @@ export function useDisputeActions() {
         }),
       );
     },
-    [address, tx, writeContractAsync],
+    [address, tx],
   );
 
   return {

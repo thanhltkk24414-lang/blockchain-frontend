@@ -4,8 +4,13 @@ import { isAddress } from 'viem';
 import { createJob, uploadIpfsMetadata } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useCreateJob } from '@/hooks/useCreateJob';
+import { useWalletAccountSync } from '@/hooks/useWalletAccountSync';
 import { TxStatusModal } from '@/components/shared/TxStatusModal';
-import { CHAIN_ID } from '@/lib/contracts/addresses';
+import { TxRecoveryModal } from '@/components/shared/TxRecoveryModal';
+import { WalletAccountIndicator } from '@/components/shared/WalletAccountIndicator';
+import { getMetaMaskAccounts } from '@/lib/utils/walletAccounts';
+import { getSigningProvider } from '@/lib/utils/ethereumProvider';
+import { CHAIN_ID, CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 import {
   EMPTY_CREATE_JOB_FORM,
   JOB_CATEGORIES,
@@ -23,8 +28,27 @@ interface CreateJobFormProps {
 export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
-  const { user, isAuthenticated } = useAuth();
-  const { createOnChain, txStatus, txHash, txLabel, txError, resetTx } = useCreateJob();
+  const { user, isAuthenticated, signIn, loading: authLoading } = useAuth();
+  const {
+    signingAddress,
+    siweMismatch,
+    rainbowMismatch,
+    metaMaskActive,
+    shortMetaMask,
+    shortSiwe,
+    refresh: refreshAccounts,
+  } = useWalletAccountSync();
+  const {
+    createOnChain,
+    txStatus,
+    txHash,
+    txLabel,
+    txError,
+    txDebug,
+    showRecovery,
+    setShowRecovery,
+    resetTx,
+  } = useCreateJob();
   const [values, setValues] = useState<CreateJobFormValues>(EMPTY_CREATE_JOB_FORM);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -50,13 +74,14 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
       return;
     }
 
-    if (!isConnected || !address) {
+    const txWallet = signingAddress ?? address;
+    if (!isConnected || !txWallet) {
       setSubmitError('Kết nối ví MetaMask trên Sepolia trước khi tạo job.');
       return;
     }
-    if (!isAddress(address)) {
+    if (!isAddress(txWallet)) {
       setSubmitError(
-        `Địa chỉ MetaMask không hợp lệ (${String(address).length} ký tự). Cần đúng định dạng 0x + 40 ký tự hex.`,
+        `Địa chỉ MetaMask không hợp lệ (${String(txWallet).length} ký tự). Cần đúng định dạng 0x + 40 ký tự hex.`,
       );
       return;
     }
@@ -68,9 +93,16 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
       setSubmitError('Đăng nhập SIWE trước khi tạo job.');
       return;
     }
-    if (address.toLowerCase() !== user.walletAddress.toLowerCase()) {
+    if (txWallet.toLowerCase() !== user.walletAddress.toLowerCase()) {
       setSubmitError(
-        'Ví MetaMask phải trùng ví đăng nhập SIWE — cùng ví sẽ là client on-chain và nạp escrow sau này.',
+        `SIWE đăng nhập: ${shortSiwe} · MetaMask active: ${shortMetaMask ?? '—'} — ` +
+          'giao dịch createJob dùng ví MetaMask đang chọn. Đăng nhập lại (Sign in) với account MetaMask hiện tại.',
+      );
+      return;
+    }
+    if (rainbowMismatch) {
+      setSubmitError(
+        'Ví Fapex và MetaMask không trùng account — chọn đúng Account trong extension hoặc Disconnect → Connect lại.',
       );
       return;
     }
@@ -87,16 +119,19 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
         skills: payload.skills,
         deliverables: payload.deliverables,
         acceptanceCriteria: payload.acceptanceCriteria,
-        clientAddress: user.walletAddress,
+        clientAddress: txWallet,
         createdAt: new Date().toISOString(),
       });
       if (!metadataRes.success || !metadataRes.cid) {
         throw new Error('IPFS metadata upload failed — kiểm tra đăng nhập SIWE và Pinata backend.');
       }
 
-      if (!address || address.toLowerCase() !== user.walletAddress.toLowerCase()) {
+      const provider = await getSigningProvider();
+      const mmAccounts = provider ? await getMetaMaskAccounts(provider) : [];
+      const activeNow = mmAccounts[0] ?? signingAddress ?? address;
+      if (!activeNow || activeNow.toLowerCase() !== user.walletAddress.toLowerCase()) {
         throw new Error(
-          'Ví MetaMask đổi trong lúc upload IPFS — chuyển lại về ví đăng nhập SIWE trước khi ký createJob.',
+          `Ví MetaMask đổi trong lúc upload IPFS — chuyển lại về ${shortSiwe} trước khi ký createJob.`,
         );
       }
 
@@ -257,6 +292,49 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
         )}
       </div>
 
+      <WalletAccountIndicator showSiwe={isAuthenticated} compact />
+
+      {siweMismatch && isAuthenticated && (
+        <div className="panel wallet-mismatch-banner" role="alert" style={{ marginTop: '0.75rem' }}>
+          <p className="error" style={{ margin: 0 }}>
+            SIWE ({shortSiwe}) khác MetaMask active ({shortMetaMask ?? '—'}).{' '}
+            <button
+              type="button"
+              className="btn ghost"
+              disabled={authLoading}
+              onClick={() => void signIn()}
+            >
+              Đăng nhập lại với MetaMask hiện tại
+            </button>
+          </p>
+        </div>
+      )}
+
+      {import.meta.env.DEV && (
+        <div
+          className="muted phase-note"
+          style={{
+            marginTop: '0.75rem',
+            padding: '0.5rem 0.75rem',
+            border: '1px dashed #666',
+            borderRadius: 6,
+            fontSize: '0.85rem',
+          }}
+        >
+          <strong>DEV — createJob debug</strong>
+          <div>Fapex connected: {address ?? '—'}</div>
+          <div>MetaMask active: {metaMaskActive ?? '—'}</div>
+          <div>signing: {signingAddress ?? '—'}</div>
+          <div>chainId: {chainId ?? '—'} (cần {CHAIN_ID})</div>
+          <div>JobRegistry: {CONTRACT_ADDRESSES.JobRegistry}</div>
+          <div>
+            calldata length:{' '}
+            {txDebug?.calldataLength ??
+              (submitting && step === 'onchain' ? 'đang ký…' : '— (sau IPFS upload)')}
+          </div>
+        </div>
+      )}
+
       {submitError && <p className="error">{submitError}</p>}
       {stepLabel && submitting && <p className="muted phase-note">{stepLabel}</p>}
 
@@ -282,6 +360,16 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
         hash={txHash}
         error={txError ?? submitError ?? undefined}
         onClose={resetTx}
+      />
+      <TxRecoveryModal
+        open={showRecovery}
+        error={txError}
+        onClose={() => setShowRecovery(false)}
+        onRetry={() => {
+          setShowRecovery(false);
+          resetTx();
+          void refreshAccounts();
+        }}
       />
     </form>
   );
