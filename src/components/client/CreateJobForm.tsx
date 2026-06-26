@@ -2,14 +2,13 @@ import { useState, type FormEvent } from 'react';
 import { useAccount, useChainId } from 'wagmi';
 import { isAddress } from 'viem';
 import { createJob, uploadIpfsMetadata } from '@/lib/api';
+import { USE_RELAYED_CREATE_JOB } from '@/config/env';
 import { useAuth } from '@/context/AuthContext';
 import { useCreateJob } from '@/hooks/useCreateJob';
 import { useWalletAccountSync } from '@/hooks/useWalletAccountSync';
 import { TxStatusModal } from '@/components/shared/TxStatusModal';
 import { TxRecoveryModal } from '@/components/shared/TxRecoveryModal';
 import { WalletAccountIndicator } from '@/components/shared/WalletAccountIndicator';
-import { getMetaMaskAccounts } from '@/lib/utils/walletAccounts';
-import { getSigningProvider } from '@/lib/utils/ethereumProvider';
 import { CHAIN_ID, CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 import {
   EMPTY_CREATE_JOB_FORM,
@@ -126,9 +125,24 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
         throw new Error('IPFS metadata upload failed — kiểm tra đăng nhập SIWE và Pinata backend.');
       }
 
-      const provider = await getSigningProvider();
-      const mmAccounts = provider ? await getMetaMaskAccounts(provider) : [];
-      const activeNow = mmAccounts[0] ?? signingAddress ?? address;
+      if (USE_RELAYED_CREATE_JOB) {
+        setStep('api');
+        const res = await createJob({
+          ...payload,
+          metadataCID: metadataRes.cid,
+          relayCreateJob: true,
+        });
+        if (!res.success || !res.job) {
+          const detail = [res.error, res.hint].filter(Boolean).join(' — ');
+          throw new Error(detail || 'Failed to register job in API (relay mode)');
+        }
+        onCreated(res.job);
+        setValues(EMPTY_CREATE_JOB_FORM);
+        resetTx();
+        return;
+      }
+
+      const activeNow = signingAddress ?? address;
       if (!activeNow || activeNow.toLowerCase() !== user.walletAddress.toLowerCase()) {
         throw new Error(
           `Ví MetaMask đổi trong lúc upload IPFS — chuyển lại về ${shortSiwe} trước khi ký createJob.`,
@@ -294,6 +308,16 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
 
       <WalletAccountIndicator showSiwe={isAuthenticated} compact />
 
+      {USE_RELAYED_CREATE_JOB && (
+        <div className="panel wallet-mismatch-banner" role="alert" style={{ marginTop: '0.75rem' }}>
+          <p className="muted" style={{ margin: 0 }}>
+            <strong>Demo mode — relayed createJob.</strong> Backend dùng ví INDEXER để gọi on-chain;
+            nạp escrow sau này cần ví INDEXER (không phải ví client). Tắt{' '}
+            <code>VITE_USE_RELAYED_CREATE_JOB</code> để ký createJob từ MetaMask.
+          </p>
+        </div>
+      )}
+
       {siweMismatch && isAuthenticated && (
         <div className="panel wallet-mismatch-banner" role="alert" style={{ marginTop: '0.75rem' }}>
           <p className="error" style={{ margin: 0 }}>
@@ -349,8 +373,17 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
         </button>
       </div>
       <p className="muted phase-note">
-        Bạn ký <code>JobRegistry.createJob</code> từ ví MetaMask (cần Sepolia ETH cho gas). Backend chỉ
-        lưu metadata IPFS và đồng bộ MongoDB — cùng ví sẽ nạp escrow sau khi accept bid.
+        {USE_RELAYED_CREATE_JOB ? (
+          <>
+            Relay demo: backend gọi <code>JobRegistry.createJob</code> qua INDEXER wallet. Production:
+            tắt <code>VITE_USE_RELAYED_CREATE_JOB</code> và ký từ MetaMask.
+          </>
+        ) : (
+          <>
+            Bạn ký <code>JobRegistry.createJob</code> từ ví MetaMask (cần Sepolia ETH cho gas). Backend chỉ
+            lưu metadata IPFS và đồng bộ MongoDB — cùng ví sẽ nạp escrow sau khi accept bid.
+          </>
+        )}
       </p>
 
       <TxStatusModal

@@ -29,10 +29,12 @@ export interface CreateJobFormPayload {
 }
 
 export interface CreateJobPayload extends CreateJobFormPayload {
-  /** Sequential id from JobRegistry after client-signed createJob. */
-  onchainJobId: number;
+  /** Sequential id from JobRegistry after client-signed createJob (omit when relay demo mode). */
+  onchainJobId?: number;
   metadataCID: string;
   createTxHash?: string;
+  /** Backend INDEXER relay — requires RELAY_CREATE_JOB=true on API. */
+  relayCreateJob?: boolean;
 }
 
 export function parseSkillsInput(raw: string): string[] {

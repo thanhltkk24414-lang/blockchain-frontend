@@ -1,27 +1,24 @@
-import { connectorsForWallets } from '@rainbow-me/rainbowkit';
-import { metaMaskWallet } from '@rainbow-me/rainbowkit/wallets';
+import { metaMask } from 'wagmi/connectors';
 import { createConfig, http } from 'wagmi';
 import { sepolia } from 'wagmi/chains';
 
-const connectors = connectorsForWallets(
-  [
-    {
-      groupName: 'MetaMask',
-      wallets: [metaMaskWallet],
-    },
-  ],
-  {
-    appName: 'Fapex',
-    // WalletConnect unused — MetaMask-only; RainbowKit API still requires a projectId string.
-    projectId: 'fapex-metamask-only',
-  },
-);
+const dappOrigin =
+  typeof window !== 'undefined' ? window.location.origin : 'https://fapex.app';
 
 export const wagmiConfig = createConfig({
   chains: [sepolia],
-  connectors,
+  connectors: [
+    metaMask({
+      dappMetadata: {
+        name: 'Fapex',
+        url: dappOrigin,
+      },
+    }),
+  ],
   transports: {
     [sepolia.id]: http(),
   },
   ssr: false,
+  // Critical on Windows when Coinbase/Brave/Rabby inject alongside MetaMask.
+  multiInjectedProviderDiscovery: false,
 });
