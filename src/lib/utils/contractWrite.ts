@@ -72,6 +72,13 @@ const REVERT_HINTS_BY_FN: Record<string, Record<string, string>> = {
     NotEnoughArbitrators:
       'Chưa đủ 5 arbitrator trong pool (ArbitratorPanel.poolSize). Admin cần joinPool trước khi demo dispute.',
   },
+  submitEvidence: {
+    JobNotDisputed: 'Job chưa DISPUTED — mở tranh chấp (raiseDispute) trước khi nộp bằng chứng.',
+    NotAParty:
+      'Chỉ client hoặc freelancer on-chain mới nộp bằng chứng — đổi sang ví đúng trong MetaMask.',
+    EvidenceWindowClosed:
+      'Đã quá cửa sổ nộp bằng chứng (demo Sepolia: 30 phút kể từ raiseDispute).',
+  },
 };
 
 function formatDecodedMessage(msg: string, functionName?: string): string {
@@ -92,7 +99,7 @@ function formatDecodedMessage(msg: string, functionName?: string): string {
     return (
       `MetaMask RPC: ${clean}. Thường do nhiều ví inject (Coinbase/Brave/Rabby) hoặc connector sai — ` +
       `không phải lỗi calldata/ABI. Thử Disconnect → Connect lại MetaMask; tắt extension ví khác; ` +
-      `refresh trang. createJob dùng wagmi sendTransaction (không eth_sendTransaction thủ công).`
+      `refresh trang. createJob/submitEvidence dùng wagmi sendTransaction (không eth_sendTransaction thủ công).`
     );
   }
   if (/transaction creation failed/i.test(msg)) {

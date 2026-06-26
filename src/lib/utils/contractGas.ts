@@ -17,6 +17,7 @@ const GAS_MIN: Record<string, bigint> = {
   approveAndRelease: 250_000n,
   /** Sepolia raiseDispute ~641k (sortition + 5× incrementActiveDispute); 400k OOG → undecoded revert. */
   raiseDispute: 700_000n,
+  submitEvidence: 180_000n,
 };
 
 /** Per-function caps — avoids Infura "gas limit too high" on failed estimates. */
@@ -29,6 +30,7 @@ const GAS_CAPS: Record<string, bigint> = {
   submitWork: 250_000n,
   approveAndRelease: 350_000n,
   raiseDispute: 900_000n,
+  submitEvidence: 280_000n,
   assignFreelancer: 200_000n,
   createJob: 350_000n,
   submitProposal: 250_000n,
