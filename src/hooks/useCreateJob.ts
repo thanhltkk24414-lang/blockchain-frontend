@@ -1,12 +1,16 @@
 import { useCallback, useState } from 'react';
-import { useAccount, useChainId } from 'wagmi';
+import { useAccount, useChainId, useSwitchChain } from 'wagmi';
 import { readContract, waitForTransactionReceipt } from 'wagmi/actions';
 import { getAddress, isAddress, parseEventLogs, type Abi, type Log } from 'viem';
 import { wagmiConfig } from '@/config/wagmi';
 import { contracts } from '@/lib/contracts/config';
 import { CHAIN_ID, CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
-import { decodeContractError } from '@/lib/utils/contractWrite';
-import { sendCreateJobTx } from '@/lib/utils/sendCreateJobTx';
+import { decodeContractError, logContractError } from '@/lib/utils/contractWrite';
+import {
+  buildCreateJobTxDebug,
+  sendCreateJobTx,
+  type CreateJobTxDebug,
+} from '@/lib/utils/sendCreateJobTx';
 import { toUsdcUnits } from '@/lib/utils/usdc';
 import type { TxStatus } from '@/components/shared/TxStatusModal';
 
@@ -60,16 +64,19 @@ function assertCreateJobParams({
 export function useCreateJob() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
+  const { switchChainAsync } = useSwitchChain();
   const [txStatus, setTxStatus] = useState<TxStatus>('idle');
   const [txHash, setTxHash] = useState('');
   const [txLabel, setTxLabel] = useState('');
   const [txError, setTxError] = useState<string>();
+  const [txDebug, setTxDebug] = useState<CreateJobTxDebug | null>(null);
 
   const resetTx = useCallback(() => {
     setTxStatus('idle');
     setTxHash('');
     setTxLabel('');
     setTxError(undefined);
+    setTxDebug(null);
   }, []);
 
   const createOnChain = useCallback(
@@ -84,9 +91,14 @@ export function useCreateJob() {
         );
       }
       if (chainId !== CHAIN_ID) {
-        throw new Error(
-          `MetaMask đang ở chain ${chainId ?? 'unknown'} — chuyển sang Sepolia (${CHAIN_ID}).`,
-        );
+        try {
+          await switchChainAsync({ chainId: CHAIN_ID });
+        } catch (switchErr) {
+          logContractError('switchChain Sepolia', switchErr);
+          throw new Error(
+            `MetaMask đang ở chain ${chainId ?? 'unknown'} — chuyển sang Sepolia (${CHAIN_ID}).`,
+          );
+        }
       }
 
       const client = getAddress(address);
@@ -110,10 +122,22 @@ export function useCreateJob() {
         }
 
         const valueUnits = toUsdcUnits(contractValue);
+        const durationBig = BigInt(Math.round(durationSeconds));
+        const debug = buildCreateJobTxDebug(
+          client,
+          metadataCID.trim(),
+          valueUnits,
+          durationBig,
+        );
+        setTxDebug(debug);
+        if (import.meta.env.DEV) {
+          console.debug('[createJob] tx debug', debug);
+        }
+
         const hash = await sendCreateJobTx({
           metadataCID: metadataCID.trim(),
           contractValueUnits: valueUnits,
-          durationSeconds: BigInt(Math.round(durationSeconds)),
+          durationSeconds: durationBig,
           account: client,
         });
         setTxHash(hash);
@@ -131,6 +155,7 @@ export function useCreateJob() {
         setTxLabel('Job created on-chain');
         return { onchainJobId, createTxHash: hash };
       } catch (err) {
+        logContractError('createOnChain', err);
         const message = decodeContractError(
           err,
           contracts.jobRegistry.abi as Abi,
@@ -141,7 +166,7 @@ export function useCreateJob() {
         throw new Error(message);
       }
     },
-    [address, chainId, isConnected, resetTx],
+    [address, chainId, isConnected, resetTx, switchChainAsync],
   );
 
   return {
@@ -150,6 +175,7 @@ export function useCreateJob() {
     txHash,
     txLabel,
     txError,
+    txDebug,
     resetTx,
   };
 }

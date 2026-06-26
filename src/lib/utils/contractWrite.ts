@@ -88,9 +88,8 @@ function formatDecodedMessage(msg: string, functionName?: string): string {
   }
   if (/missing or invalid parameters/i.test(msg)) {
     return (
-      'MetaMask từ chối tham số giao dịch — thường do: (1) ví chưa kết nối Fapex hoặc account MetaMask khác account RainbowKit, ' +
-      `(2) sai mạng (cần Sepolia chainId ${CHAIN_ID}), (3) địa chỉ contract sai trong env. ` +
-      'Mở MetaMask → chọn đúng account → Sepolia → disconnect/reconnect ví trên Fapex (không cần import lại private key).'
+      `MetaMask RPC: ${msg}. Gợi ý: account MetaMask phải trùng RainbowKit, mạng Sepolia (${CHAIN_ID}), ` +
+      'JobRegistry đúng trong deployments-sepolia.json. Xem Console (F12) → [createJob] hoặc [contractWrite] để chi tiết.'
     );
   }
   if (/transaction creation failed/i.test(msg)) {
@@ -164,14 +163,13 @@ export type ContractWriteInput = GasEstimateInput & {
   account?: Address;
 };
 
-type EthereumProvider = {
-  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-};
+import {
+  getMetaMaskProvider,
+  type EthereumProvider,
+} from '@/lib/utils/ethereumProvider';
 
 function getInjectedProvider(): EthereumProvider | undefined {
-  if (typeof window === 'undefined') return undefined;
-  const w = window as Window & { ethereum?: EthereumProvider };
-  return w.ethereum;
+  return getMetaMaskProvider();
 }
 
 function isUserRejection(err: unknown): boolean {
@@ -182,10 +180,31 @@ function isUserRejection(err: unknown): boolean {
   return /user rejected|user denied|rejected the request/i.test(msg);
 }
 
-function debugWriteFailure(strategy: string, err: unknown): void {
+/** DEV: log viem/wagmi error tree including cause and RPC details. */
+export function logContractError(label: string, err: unknown): void {
   if (!import.meta.env.DEV) return;
-  const msg = err instanceof Error ? err.message : String(err);
-  console.debug(`[contractWrite] ${strategy} failed:`, msg);
+  if (err instanceof BaseError) {
+    console.error(`[contractWrite] ${label}`, {
+      shortMessage: err.shortMessage,
+      message: err.message,
+      details: (err as BaseError & { details?: string }).details,
+      cause: err.cause,
+      metaMessages: err.metaMessages,
+    });
+    return;
+  }
+  if (err instanceof Error) {
+    console.error(`[contractWrite] ${label}`, {
+      message: err.message,
+      cause: err.cause,
+    });
+    return;
+  }
+  console.error(`[contractWrite] ${label}`, err);
+}
+
+function debugWriteFailure(strategy: string, err: unknown): void {
+  logContractError(`${strategy} failed`, err);
 }
 
 /**
@@ -245,6 +264,7 @@ async function writeViaInjectedProvider(
         from,
         to: params.address,
         data,
+        value: '0x0',
       },
     ],
   })) as Hash;

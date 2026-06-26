@@ -5,7 +5,7 @@ import { createJob, uploadIpfsMetadata } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useCreateJob } from '@/hooks/useCreateJob';
 import { TxStatusModal } from '@/components/shared/TxStatusModal';
-import { CHAIN_ID } from '@/lib/contracts/addresses';
+import { CHAIN_ID, CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 import {
   EMPTY_CREATE_JOB_FORM,
   JOB_CATEGORIES,
@@ -24,7 +24,7 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { user, isAuthenticated } = useAuth();
-  const { createOnChain, txStatus, txHash, txLabel, txError, resetTx } = useCreateJob();
+  const { createOnChain, txStatus, txHash, txLabel, txError, txDebug, resetTx } = useCreateJob();
   const [values, setValues] = useState<CreateJobFormValues>(EMPTY_CREATE_JOB_FORM);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -256,6 +256,29 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
           <span className="field-error">{fieldErrors.acceptanceCriteria}</span>
         )}
       </div>
+
+      {import.meta.env.DEV && (
+        <div
+          className="muted phase-note"
+          style={{
+            marginTop: '0.75rem',
+            padding: '0.5rem 0.75rem',
+            border: '1px dashed #666',
+            borderRadius: 6,
+            fontSize: '0.85rem',
+          }}
+        >
+          <strong>DEV — createJob debug</strong>
+          <div>address: {address ?? '—'}</div>
+          <div>chainId: {chainId ?? '—'} (cần {CHAIN_ID})</div>
+          <div>JobRegistry: {CONTRACT_ADDRESSES.JobRegistry}</div>
+          <div>
+            calldata length:{' '}
+            {txDebug?.calldataLength ??
+              (submitting && step === 'onchain' ? 'đang ký…' : '— (sau IPFS upload)')}
+          </div>
+        </div>
+      )}
 
       {submitError && <p className="error">{submitError}</p>}
       {stepLabel && submitting && <p className="muted phase-note">{stepLabel}</p>}
