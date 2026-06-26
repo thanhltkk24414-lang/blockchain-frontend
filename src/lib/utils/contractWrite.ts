@@ -90,9 +90,9 @@ function formatDecodedMessage(msg: string, functionName?: string): string {
   if (/missing or invalid parameters/i.test(msg)) {
     const clean = msg.replace(/^MetaMask RPC:\s*/i, '').trim();
     return (
-      `MetaMask RPC: ${clean}. Khi mọi ví đã trùng khớp, thường do gọi eth_sendTransaction qua provider sai ` +
-      `(ví phụ khi cài nhiều ví) hoặc tham số value/from thừa — không phải lỗi calldata/ABI. ` +
-      `Thử Disconnect → Connect lại; tắt ví khác (Coinbase/Brave). Console → [createJob] eth_sendTransaction request.`
+      `MetaMask RPC: ${clean}. Thường do nhiều ví inject (Coinbase/Brave/Rabby) hoặc connector sai — ` +
+      `không phải lỗi calldata/ABI. Thử Disconnect → Connect lại MetaMask; tắt extension ví khác; ` +
+      `refresh trang. createJob dùng wagmi sendTransaction (không eth_sendTransaction thủ công).`
     );
   }
   if (/transaction creation failed/i.test(msg)) {

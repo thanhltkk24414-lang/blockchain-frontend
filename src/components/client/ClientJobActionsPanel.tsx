@@ -6,6 +6,7 @@ import { useOnChainJob } from '@/hooks/useOnChainJob';
 import { TxStatusModal } from '@/components/shared/TxStatusModal';
 import { isValidOnchainJobId } from '@/lib/utils/etherscan';
 import { ONCHAIN_JOB_STATUS } from '@/lib/utils/onchainJob';
+import { addressesEqual } from '@/lib/utils/address';
 
 interface ClientJobActionsPanelProps {
   job: Job;
@@ -24,17 +25,37 @@ export function ClientJobActionsPanel({ job, onActionComplete }: ClientJobAction
   const { address, user } = useAuth();
   const { approveAndRelease, raiseDispute, txStatus, txHash, txLabel, txError, resetTx } =
     useClientJobActions();
-  const { onchainStatus, onchainJob, onchainStatusLabel, loading: chainLoading, refetch } =
+  const { onchainStatus, onchainJob, onchainStatusLabel, onchainClient, loading: chainLoading, refetch } =
     useOnChainJob(job.onchainJobId, job.status);
   const [busy, setBusy] = useState<'approve' | 'dispute' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const clientAddr = resolveClientAddress(job);
-  const isClient =
+  const isDbClient =
     user?.role === 'client' &&
     Boolean(address && clientAddr && address.toLowerCase() === clientAddr);
+  const isOnChainClient = Boolean(
+    address && onchainClient && addressesEqual(onchainClient, address),
+  );
 
-  if (!isClient || !isValidOnchainJobId(job.onchainJobId)) return null;
+  if (!isDbClient || !isValidOnchainJobId(job.onchainJobId)) return null;
+
+  if (!isOnChainClient && !chainLoading) {
+    return (
+      <section className="panel client-actions-panel">
+        <h3>Phê duyệt bàn giao</h3>
+        <p className="error">
+          Ví MetaMask không trùng client on-chain — chỉ client đã tạo job mới phê duyệt hoặc
+          khiếu nại.
+        </p>
+        {onchainClient && (
+          <p className="muted mono">
+            Client on-chain: {onchainClient}
+          </p>
+        )}
+      </section>
+    );
+  }
 
   const canApprove = !chainLoading && onchainStatus === ONCHAIN_JOB_STATUS.SUBMITTED;
   const canDispute =

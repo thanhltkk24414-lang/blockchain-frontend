@@ -1,13 +1,14 @@
 {
   "name": "fapex-frontend",
   "private": true,
-  "version": "0.1.4",
+  "version": "0.1.5",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "sync-abis": "node scripts/sync-abis.mjs"
+    "sync-abis": "node scripts/sync-abis.mjs",
+    "verify:create-job": "node scripts/verify-create-job-tx.mjs"
   },
   "dependencies": {
     "@rainbow-me/rainbowkit": "^2.2.8",

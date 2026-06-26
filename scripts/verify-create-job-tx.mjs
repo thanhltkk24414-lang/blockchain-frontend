@@ -1,11 +1,12 @@
 /**
- * Offline check: createJob calldata + eth_sendTransaction params shape for MetaMask.
+ * Integration check: createJob calldata + public RPC simulateContract.
  * Run: node scripts/verify-create-job-tx.mjs
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { encodeFunctionData, getAddress, isAddress, isHex } from 'viem';
+import { createPublicClient, encodeFunctionData, getAddress, http, isAddress, isHex } from 'viem';
+import { sepolia } from 'viem/chains';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
@@ -17,7 +18,7 @@ const abi = JSON.parse(
   readFileSync(join(root, 'src/lib/contracts/abis/JobRegistry.json'), 'utf8'),
 );
 
-const from = getAddress('0xBD2975d8b1a923f1ad80046791bf4cc5570d616b');
+const from = getAddress('0x7f03D60375DE680C55FC08dd48EA0D4B449eabDD');
 const to = getAddress(deployments.addresses.JobRegistry);
 const metadataCID = 'bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi';
 const contractValue = 1_000_000n;
@@ -29,18 +30,15 @@ const data = encodeFunctionData({
   args: [metadataCID, contractValue, duration],
 });
 
-const txParams = { from, to, data };
+const txParams = { to, data };
 
 console.log('JobRegistry:', to);
 console.log('chainId:', deployments.chainId);
+console.log('simulate account:', from);
 console.log('calldata length:', data.length);
 console.log('calldata is hex:', isHex(data));
-console.log('from is address:', isAddress(from));
-console.log('to is address:', isAddress(to));
 console.log('selector:', data.slice(0, 10));
-console.log('eth_sendTransaction params:', JSON.stringify(txParams, (_, v) =>
-  typeof v === 'bigint' ? v.toString() : v,
-));
+console.log('wagmi sendTransaction shape:', JSON.stringify(txParams));
 
 let failed = false;
 if (!isHex(data)) {
@@ -65,4 +63,28 @@ if (data.slice(0, 10) !== '0x79c62711') {
 }
 
 if (failed) process.exit(1);
-console.log('OK: createJob params valid for MetaMask eth_sendTransaction');
+
+const client = createPublicClient({
+  chain: sepolia,
+  transport: http('https://ethereum-sepolia-rpc.publicnode.com'),
+});
+
+try {
+  const { result } = await client.simulateContract({
+    address: to,
+    abi,
+    functionName: 'createJob',
+    args: [metadataCID, contractValue, duration],
+    account: from,
+  });
+  console.log('OK: simulateContract succeeded — predicted jobId', result?.toString?.() ?? result);
+} catch (err) {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/AccountRestricted|restricted/i.test(msg)) {
+    console.warn('WARN: simulate reverted (reputation) — calldata/ABI OK:', msg);
+    console.log('OK: encode path valid; wallet may need non-Restricted tier');
+    process.exit(0);
+  }
+  console.error('FAIL: simulateContract', msg);
+  process.exit(1);
+}

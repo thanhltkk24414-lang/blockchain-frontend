@@ -21,11 +21,84 @@ import { useContractTx } from './useContractTx';
 const PREFLIGHT_CID = 'QmPreflightCheck000000000000000000000000000';
 const DISPUTE_FEE_BPS = 2n;
 const DISPUTE_FEE_CAP = 50_000_000n; // 50 USDC (6 decimals)
+const MIN_ARBITRATOR_POOL = 5n;
 
 function computeDisputeFee(contractValueMicro: bigint): bigint {
   let fee = (contractValueMicro * DISPUTE_FEE_BPS) / 100n;
   if (fee > DISPUTE_FEE_CAP) fee = DISPUTE_FEE_CAP;
   return fee;
+}
+
+async function preflightRaiseDispute(
+  wallet: `0x${string}`,
+  onchainJob: OnChainJob,
+): Promise<bigint> {
+  const isClient = addressesEqual(onchainJob.client, wallet);
+  const isFreelancer = addressesEqual(onchainJob.freelancer, wallet);
+
+  if (!isClient && !isFreelancer) {
+    throw new Error(
+      `Ví MetaMask (${wallet}) không phải client/freelancer của job on-chain. ` +
+        'Chỉ một trong hai bên mới được mở tranh chấp.',
+    );
+  }
+
+  if (
+    onchainJob.status !== ONCHAIN_JOB_STATUS.SUBMITTED &&
+    onchainJob.status !== ONCHAIN_JOB_STATUS.IN_PROGRESS
+  ) {
+    throw new Error(
+      `Job on-chain đang ${onchainStatusLabel(onchainJob.status)} — ` +
+        'chỉ khiếu nại khi SUBMITTED hoặc IN_PROGRESS.',
+    );
+  }
+
+  const tier = (await readContract(wagmiConfig, {
+    ...contracts.reputationStore,
+    functionName: 'getTier',
+    args: [wallet],
+  })) as number;
+  if (tier <= 1) {
+    throw new Error(
+      'LowReputationTier: tier Warning/Restricted không được mở tranh chấp mới — cần Normal hoặc Trusted.',
+    );
+  }
+
+  const poolSize = (await readContract(wagmiConfig, {
+    ...contracts.arbitratorPanel,
+    functionName: 'poolSize',
+  })) as bigint;
+  if (poolSize < MIN_ARBITRATOR_POOL) {
+    throw new Error(
+      `NotEnoughArbitrators: pool hiện ${poolSize.toString()} — cần ≥5 arbitrator (chạy scripts/seed-arbitrator-pool.js).`,
+    );
+  }
+
+  const fee = computeDisputeFee(onchainJob.contractValue);
+  const [balance, allowance] = (await Promise.all([
+    readContract(wagmiConfig, {
+      ...contracts.mockUsdc,
+      functionName: 'balanceOf',
+      args: [wallet],
+    }),
+    readContract(wagmiConfig, {
+      ...contracts.mockUsdc,
+      functionName: 'allowance',
+      args: [wallet, CONTRACT_ADDRESSES.EscrowVault],
+    }),
+  ])) as [bigint, bigint];
+
+  if (balance < fee) {
+    throw new Error(
+      `TransferFailed: cần ${Number(fee) / 1e6} USDC phí tranh chấp — số dư MockUSDC ${Number(balance) / 1e6}. Mint thêm trên Sepolia.`,
+    );
+  }
+
+  if (allowance < fee) {
+    return fee;
+  }
+
+  return 0n;
 }
 
 async function readOnchainJob(jobId: bigint): Promise<OnChainJob> {
@@ -216,41 +289,15 @@ export function useClientJobActions() {
       const wallet = getAddress(address);
       const jobId = BigInt(onchainJobId);
       const onchainJob = await readOnchainJob(jobId);
-      const isClient = addressesEqual(onchainJob.client, wallet);
-      const isFreelancer = addressesEqual(onchainJob.freelancer, wallet);
+      const needsApprove = await preflightRaiseDispute(wallet, onchainJob);
 
-      if (!isClient && !isFreelancer) {
-        throw new Error(
-          `Ví MetaMask (${wallet}) không phải client/freelancer của job on-chain. ` +
-            'Chỉ một trong hai bên mới được mở tranh chấp.',
-        );
-      }
-
-      if (
-        onchainJob.status !== ONCHAIN_JOB_STATUS.SUBMITTED &&
-        onchainJob.status !== ONCHAIN_JOB_STATUS.IN_PROGRESS
-      ) {
-        throw new Error(
-          `Job on-chain đang ${onchainStatusLabel(onchainJob.status)} — ` +
-            'chỉ khiếu nại khi SUBMITTED hoặc IN_PROGRESS.',
-        );
-      }
-
-      const fee = computeDisputeFee(onchainJob.contractValue);
-
-      const allowance = (await readContract(wagmiConfig, {
-        ...contracts.mockUsdc,
-        functionName: 'allowance',
-        args: [wallet, CONTRACT_ADDRESSES.EscrowVault],
-      })) as bigint;
-
-      if (allowance < fee) {
+      if (needsApprove > 0n) {
         await tx.runTx('Đang approve phí tranh chấp USDC…', () =>
           executeContractWrite({
             address: contracts.mockUsdc.address,
             abi: contracts.mockUsdc.abi as Abi,
             functionName: 'approve',
-            args: [CONTRACT_ADDRESSES.EscrowVault, fee],
+            args: [CONTRACT_ADDRESSES.EscrowVault, needsApprove],
             account: wallet,
           }),
         );
