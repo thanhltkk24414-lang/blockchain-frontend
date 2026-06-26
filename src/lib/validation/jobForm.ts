@@ -26,6 +26,10 @@ export interface CreateJobPayload {
   skills?: string[];
   deliverables: string;
   acceptanceCriteria: string;
+  /** Sequential id from JobRegistry after client-signed createJob. */
+  onchainJobId: number;
+  metadataCID: string;
+  createTxHash?: string;
 }
 
 export function parseSkillsInput(raw: string): string[] {

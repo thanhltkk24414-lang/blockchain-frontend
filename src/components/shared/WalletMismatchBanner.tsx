@@ -112,14 +112,13 @@ export function WalletMismatchBanner({ job, isJobOwner = false }: WalletMismatch
           Ví MetaMask của bạn: <code className="mono">{walletCs}</code>
         </p>
         <p className="muted">
-          Chỉ client on-chain mới gọi được <code>depositEscrow</code>. Thường là ví backend
-          (INDEXER) đã tạo job — không phải ví SIWE đăng nhập. Chuyển MetaMask sang ví client
-          on-chain trước khi nạp escrow.
+          Chỉ client on-chain mới gọi được <code>depositEscrow</code>. Đây phải là cùng ví MetaMask
+          đã ký <code>createJob</code> và đăng nhập SIWE — chuyển MetaMask sang ví đó trước khi nạp
+          escrow.
         </p>
         <p className="muted phase-note">
-          <strong>Mint MockUSDC</strong> vẫn dùng được với ví hiện tại (permissionless), nhưng
-          USDC mint vào ví đang kết nối — để deposit, mint sau khi đã chuyển sang ví client
-          on-chain ở trên.
+          <strong>Mint MockUSDC</strong> vào ví client on-chain (permissionless trên Sepolia) trước khi
+          approve &amp; deposit.
         </p>
         {onchainStatusLabel && (
           <p className="muted phase-note">

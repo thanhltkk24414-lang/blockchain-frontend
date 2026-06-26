@@ -188,7 +188,7 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
   const depositDisabledReason = useMemo(() => {
     if (depositComplete) return 'Escrow đã được nạp on-chain.';
     if (walletMismatch && onchainClientAddr) {
-      return `Chuyển MetaMask sang ${shortAddress(onchainClientAddr)} (client on-chain / INDEXER) để approve & deposit.`;
+      return `Chuyển MetaMask sang ${shortAddress(onchainClientAddr)} (ví đã tạo job on-chain) để approve & deposit.`;
     }
     if (registryMismatch && registryMismatchMessage) return registryMismatchMessage;
     if (depositBlocked && onchainBlocker) return onchainBlocker;
@@ -217,7 +217,7 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
     freelancerInput,
   ]);
 
-  const showMintSection = insufficientUsdc || walletMismatch;
+  const showMintSection = insufficientUsdc;
 
   async function handleMint() {
     setLocalError(null);
@@ -241,7 +241,7 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
     }
     if (walletMismatch && onchainClientAddr) {
       setLocalError(
-        `Ví MetaMask phải là client on-chain ${onchainClientAddr.slice(0, 6)}…${onchainClientAddr.slice(-4)} (INDEXER). Phiên API vẫn là ${user?.walletAddress?.slice(0, 6)}…`,
+        `Ví MetaMask phải là client on-chain ${onchainClientAddr.slice(0, 6)}…${onchainClientAddr.slice(-4)} (cùng ví đã tạo job).`,
       );
       return;
     }
@@ -417,13 +417,11 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
           <h4>Ví MetaMask không khớp client on-chain</h4>
           <p className="muted">
             <strong>Deposit escrow</strong> chỉ thành công khi MetaMask là{' '}
-            <code className="mono">{shortAddress(onchainClientAddr)}</code> (ví INDEXER tạo job
-            on-chain). Ví hiện tại: <code className="mono">{shortAddress(address)}</code>.
+            <code className="mono">{shortAddress(onchainClientAddr)}</code> (ví đã ký{' '}
+            <code>createJob</code>). Ví hiện tại: <code className="mono">{shortAddress(address)}</code>.
           </p>
           <p className="muted">
-            <strong>Mint MockUSDC</strong> có thể dùng bất kỳ ví nào (permissionless trên Sepolia).
-            USDC mint sẽ vào ví đang kết nối — để deposit, hãy{' '}
-            <strong>chuyển sang ví client on-chain</strong> rồi mint + approve &amp; deposit.
+            Dùng cùng ví đăng nhập SIWE khi tạo job — không cần chuyển sang ví backend.
           </p>
         </div>
       )}
@@ -468,9 +466,8 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
           </p>
           {walletMismatch && address && onchainClientAddr && (
             <p className="muted phase-note">
-              Mint sẽ cộng USDC vào ví đang kết nối ({shortAddress(address)}). Để nạp escrow, chuyển
-              MetaMask sang <code className="mono">{shortAddress(onchainClientAddr)}</code> trước
-              khi mint (hoặc mint trên ví hiện tại chỉ để thử — không dùng được cho deposit).
+              Mint sẽ cộng USDC vào ví đang kết nối ({shortAddress(address)}). Cần đủ MockUSDC trên ví
+              client on-chain trước khi deposit.
             </p>
           )}
           <button

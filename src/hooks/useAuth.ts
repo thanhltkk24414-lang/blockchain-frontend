@@ -31,7 +31,7 @@ export function useAuth() {
   const connectedWallet = address ?? null;
   const isAuthenticated = Boolean(token && user);
 
-  // SIWE session stays valid when MetaMask switches accounts (e.g. INDEXER for depositEscrow).
+  // SIWE session stays valid when MetaMask switches accounts; on-chain txs use the connected wallet.
   useEffect(() => {
     if (!isConnected || !address || !user?.walletAddress) {
       setWalletSessionNotice(null);
