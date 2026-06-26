@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useAccount, useChainId, useWriteContract } from 'wagmi';
+import { useAccount, useChainId } from 'wagmi';
 import { readContract, waitForTransactionReceipt } from 'wagmi/actions';
 import { getAddress, isAddress, parseEventLogs, type Abi, type Log } from 'viem';
 import { wagmiConfig } from '@/config/wagmi';
@@ -59,7 +59,6 @@ function assertCreateJobParams({
 export function useCreateJob() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
-  const { writeContractAsync } = useWriteContract();
   const [txStatus, setTxStatus] = useState<TxStatus>('idle');
   const [txHash, setTxHash] = useState('');
   const [txLabel, setTxLabel] = useState('');
@@ -110,7 +109,7 @@ export function useCreateJob() {
         }
 
         const valueUnits = toUsdcUnits(contractValue);
-        const hash = await executeContractWrite(writeContractAsync, {
+        const hash = await executeContractWrite({
           address: contracts.jobRegistry.address,
           abi: contracts.jobRegistry.abi as Abi,
           functionName: 'createJob',
@@ -142,7 +141,7 @@ export function useCreateJob() {
         throw new Error(message);
       }
     },
-    [address, chainId, isConnected, resetTx, writeContractAsync],
+    [address, chainId, isConnected, resetTx],
   );
 
   return {

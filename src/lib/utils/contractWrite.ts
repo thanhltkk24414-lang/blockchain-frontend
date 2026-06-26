@@ -1,4 +1,4 @@
-import { simulateContract } from 'wagmi/actions';
+import { getConnectorClient, simulateContract, writeContract } from 'wagmi/actions';
 import {
   BaseError,
   ContractFunctionRevertedError,
@@ -156,47 +156,67 @@ export function decodeContractError(
 }
 
 export type ContractWriteInput = GasEstimateInput & {
-  account: Address;
+  /** Optional — when set, must match the wallet RainbowKit/MetaMask connector will sign with. */
+  account?: Address;
 };
 
-export async function executeContractWrite(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- wagmi accepts simulateContract().request
-  writeContractAsync: (request: any) => Promise<`0x${string}`>,
-  params: ContractWriteInput,
-): Promise<`0x${string}`> {
+export async function executeContractWrite(params: ContractWriteInput): Promise<`0x${string}`> {
   if (!params.address || !isAddress(params.address)) {
     throw new Error(
       `Địa chỉ contract không hợp lệ (${String(params.address)}). Kiểm tra VITE_JOB_REGISTRY_ADDRESS / deployments-sepolia.json.`,
     );
   }
 
-  const { gas } = await withGasLimit(params);
+  const chainId = CHAIN_ID as 11155111;
 
-  let simulation;
+  let connectorClient;
   try {
-    simulation = await simulateContract(wagmiConfig, {
+    connectorClient = await getConnectorClient(wagmiConfig, { chainId });
+  } catch {
+    throw new Error('Kết nối ví MetaMask trên Sepolia trước khi gửi giao dịch.');
+  }
+
+  const signerAddress = connectorClient.account.address;
+  if (
+    params.account &&
+    params.account.toLowerCase() !== signerAddress.toLowerCase()
+  ) {
+    throw new Error(
+      'Account MetaMask không khớp — chọn đúng account trong extension (phải trùng ví kết nối RainbowKit).',
+    );
+  }
+
+  const { gas } = await withGasLimit({
+    ...params,
+    account: signerAddress,
+  });
+
+  try {
+    // Preflight on public client with connector account (resolved inside wagmi).
+    await simulateContract(wagmiConfig, {
       address: params.address,
       abi: params.abi,
       functionName: params.functionName,
       args: params.args,
-      account: params.account,
       value: params.value,
       gas,
-      chainId: CHAIN_ID as 11155111,
+      chainId,
     });
   } catch (simErr) {
     throw new Error(decodeContractError(simErr, params.abi, params.functionName));
   }
 
-  // Use viem/wagmi simulate request so MetaMask gets chainId + encoded calldata (manual rebuild omitted chainId).
-  const writeRequest = {
-    ...simulation.request,
-    gas,
-    chainId: CHAIN_ID as 11155111,
-  };
-
   try {
-    return await writeContractAsync(writeRequest);
+    // Explicit chainId + connector-driven signing (wagmi writeContract action).
+    return await writeContract(wagmiConfig, {
+      address: params.address,
+      abi: params.abi,
+      functionName: params.functionName,
+      args: params.args,
+      value: params.value,
+      gas,
+      chainId,
+    });
   } catch (writeErr) {
     throw new Error(decodeContractError(writeErr, params.abi, params.functionName));
   }

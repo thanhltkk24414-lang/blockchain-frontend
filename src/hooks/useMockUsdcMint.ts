@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useAccount, useWriteContract } from 'wagmi';
+import { useAccount } from 'wagmi';
 import { waitForTransactionReceipt } from 'wagmi/actions';
 import type { Abi } from 'viem';
 import { wagmiConfig } from '@/config/wagmi';
@@ -13,7 +13,6 @@ export const DEMO_MINT_USDC = 1000;
 
 export function useMockUsdcMint() {
   const { address } = useAccount();
-  const { writeContractAsync } = useWriteContract();
   const [txStatus, setTxStatus] = useState<TxStatus>('idle');
   const [txHash, setTxHash] = useState('');
   const [txError, setTxError] = useState<string>();
@@ -34,7 +33,7 @@ export function useMockUsdcMint() {
       setTxStatus('pending');
 
       try {
-        const hash = await executeContractWrite(writeContractAsync, {
+        const hash = await executeContractWrite({
           address: contracts.mockUsdc.address,
           abi: contracts.mockUsdc.abi as Abi,
           functionName: 'mint',
@@ -57,7 +56,7 @@ export function useMockUsdcMint() {
         setMinting(false);
       }
     },
-    [address, resetTx, writeContractAsync],
+    [address, resetTx],
   );
 
   return { mint, minting, txStatus, txHash, txError, resetTx };

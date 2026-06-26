@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useAccount, useReadContract, useWriteContract } from 'wagmi';
+import { useAccount, useReadContract } from 'wagmi';
 import { readContract, waitForTransactionReceipt } from 'wagmi/actions';
 import { getAddress, zeroAddress, type Abi } from 'viem';
 import { wagmiConfig } from '@/config/wagmi';
@@ -27,7 +27,6 @@ interface EscrowDepositParams {
 
 export function useEscrowDeposit() {
   const { address } = useAccount();
-  const { writeContractAsync } = useWriteContract();
   const [txStatus, setTxStatus] = useState<TxStatus>('idle');
   const [txHash, setTxHash] = useState('');
   const [txLabel, setTxLabel] = useState('');
@@ -114,7 +113,7 @@ export function useEscrowDeposit() {
 
         if (allowance < totalAmount) {
           setTxLabel('Approving USDC for EscrowVault…');
-          const approveHash = await executeContractWrite(writeContractAsync, {
+          const approveHash = await executeContractWrite({
             address: contracts.mockUsdc.address,
             abi: contracts.mockUsdc.abi as Abi,
             functionName: 'approve',
@@ -131,7 +130,7 @@ export function useEscrowDeposit() {
         }
 
         setTxLabel('Depositing escrow on-chain…');
-        const depositHash = await executeContractWrite(writeContractAsync, {
+        const depositHash = await executeContractWrite({
           address: contracts.escrowVault.address,
           abi: contracts.escrowVault.abi as Abi,
           functionName: 'depositEscrow',
@@ -160,7 +159,7 @@ export function useEscrowDeposit() {
         throw err;
       }
     },
-    [address, checkEscrowFunded, readOnChainJob, resetTx, writeContractAsync],
+    [address, checkEscrowFunded, readOnChainJob, resetTx],
   );
 
   return {
