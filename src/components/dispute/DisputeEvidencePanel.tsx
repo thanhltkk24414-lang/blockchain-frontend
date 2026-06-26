@@ -1,22 +1,171 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Job } from '@/lib/api';
 import {
   fetchDisputeByJob,
+  fetchDisputeByOnchainJob,
+  fetchDisputeEvidences,
   submitDisputeEvidence,
   uploadIpfsFile,
   uploadIpfsMetadata,
 } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
-import { useDisputeActions } from '@/hooks/useDisputeActions';
+import {
+  cidToEvidenceHash,
+  readOnchainDispute,
+  readOnChainEvidences,
+  useDisputeActions,
+  type OnChainEvidence,
+} from '@/hooks/useDisputeActions';
 import { useOnChainJob } from '@/hooks/useOnChainJob';
 import { TxStatusModal } from '@/components/shared/TxStatusModal';
 import { addressesEqual } from '@/lib/utils/address';
 import { isValidOnchainJobId } from '@/lib/utils/etherscan';
 import { DISPUTE_PHASES } from '@/lib/contracts/disputeTimings';
 import { ONCHAIN_JOB_STATUS } from '@/lib/utils/onchainJob';
+import { getDisputePhaseInfo } from '@/lib/utils/disputePhase';
+
+const IPFS_GATEWAY = 'https://gateway.pinata.cloud/ipfs';
+
+type OffChainEvidence = {
+  submitter: string;
+  ipfsHash: string;
+  description?: string;
+  submittedAt?: string;
+  content?: {
+    description?: string;
+    evidenceUrl?: string;
+    imageCid?: string;
+    submitter?: string;
+    type?: string;
+  } | null;
+};
+
+type DisplayEvidence = {
+  key: string;
+  submitter: string;
+  submittedAt?: number;
+  cid?: string;
+  description?: string;
+  evidenceUrl?: string;
+  imageCid?: string;
+  onChainOnly?: boolean;
+  ipfsHashBytes?: string;
+};
 
 interface DisputeEvidencePanelProps {
   job: Job;
+}
+
+function shortAddr(addr: string): string {
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
+function mergeEvidence(
+  onChain: OnChainEvidence[],
+  offChain: OffChainEvidence[],
+): DisplayEvidence[] {
+  const byHash = new Map<string, DisplayEvidence>();
+
+  for (const ev of offChain) {
+    let hashKey = '';
+    try {
+      hashKey = cidToEvidenceHash(ev.ipfsHash).toLowerCase();
+    } catch {
+      hashKey = ev.ipfsHash.toLowerCase();
+    }
+    const content = ev.content ?? undefined;
+    byHash.set(hashKey, {
+      key: hashKey || ev.ipfsHash,
+      submitter: ev.submitter,
+      submittedAt: ev.submittedAt ? new Date(ev.submittedAt).getTime() / 1000 : undefined,
+      cid: ev.ipfsHash,
+      description: content?.description ?? ev.description,
+      evidenceUrl: content?.evidenceUrl,
+      imageCid: content?.imageCid,
+    });
+  }
+
+  for (const ev of onChain) {
+    const hashKey = ev.ipfsHash.toLowerCase();
+    const existing = byHash.get(hashKey);
+    if (existing) {
+      byHash.set(hashKey, {
+        ...existing,
+        submitter: existing.submitter || ev.submitter,
+        submittedAt: existing.submittedAt ?? ev.submittedAt,
+      });
+    } else {
+      byHash.set(hashKey, {
+        key: hashKey,
+        submitter: ev.submitter,
+        submittedAt: ev.submittedAt,
+        onChainOnly: true,
+        ipfsHashBytes: ev.ipfsHash,
+      });
+    }
+  }
+
+  return [...byHash.values()].sort((a, b) => (b.submittedAt ?? 0) - (a.submittedAt ?? 0));
+}
+
+function EvidenceList({ items }: { items: DisplayEvidence[] }) {
+  if (items.length === 0) {
+    return <p className="muted phase-note">Chưa có bằng chứng nào được nộp.</p>;
+  }
+
+  return (
+    <ul className="evidence-list">
+      {items.map((ev) => (
+        <li key={ev.key} className="evidence-item">
+          <div className="evidence-meta">
+            <strong>{shortAddr(ev.submitter)}</strong>
+            {ev.submittedAt != null && (
+              <span className="muted">
+                {' '}
+                · {new Date(ev.submittedAt * 1000).toLocaleString('vi-VN')}
+              </span>
+            )}
+          </div>
+          {ev.description && <p>{ev.description}</p>}
+          {ev.evidenceUrl && (
+            <p>
+              <a href={ev.evidenceUrl} target="_blank" rel="noopener noreferrer">
+                Link bằng chứng ↗
+              </a>
+            </p>
+          )}
+          {ev.cid && (
+            <p>
+              <a
+                href={`${IPFS_GATEWAY}/${ev.cid}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mono"
+              >
+                IPFS: {ev.cid.slice(0, 20)}… ↗
+              </a>
+            </p>
+          )}
+          {ev.imageCid && (
+            <a href={`${IPFS_GATEWAY}/${ev.imageCid}`} target="_blank" rel="noopener noreferrer">
+              <img
+                src={`${IPFS_GATEWAY}/${ev.imageCid}`}
+                alt="Bằng chứng đính kèm"
+                className="evidence-thumb"
+                loading="lazy"
+              />
+            </a>
+          )}
+          {ev.onChainOnly && (
+            <p className="muted phase-note">
+              Chỉ có hash on-chain (<code className="mono">{ev.ipfsHashBytes?.slice(0, 14)}…</code>
+              ) — metadata IPFS chưa index off-chain.
+            </p>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 export function DisputeEvidencePanel({ job }: DisputeEvidencePanelProps) {
@@ -27,9 +176,12 @@ export function DisputeEvidencePanel({ job }: DisputeEvidencePanelProps) {
   const [evidenceUrl, setEvidenceUrl] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [listLoading, setListLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [disputeInfo, setDisputeInfo] = useState<string | null>(null);
   const [disputeId, setDisputeId] = useState<string | null>(null);
+  const [evidenceItems, setEvidenceItems] = useState<DisplayEvidence[]>([]);
+  const [createdAtSec, setCreatedAtSec] = useState(0);
+  const [evidenceWindowOpen, setEvidenceWindowOpen] = useState(true);
 
   const isDisputed =
     onchainStatus === ONCHAIN_JOB_STATUS.DISPUTED || job.status?.toUpperCase() === 'DISPUTED';
@@ -40,18 +192,69 @@ export function DisputeEvidencePanel({ job }: DisputeEvidencePanelProps) {
         addressesEqual(address, job.freelancerAddress)),
   );
 
-  useEffect(() => {
-    if (!job._id || !isDisputed) return;
-    fetchDisputeByJob(job._id)
-      .then((res) => {
-        if (res.success && res.dispute) {
-          setDisputeId(res.dispute._id);
-          const count = res.dispute.evidence?.length ?? 0;
-          setDisputeInfo(`${count} bằng chứng đã lưu off-chain`);
+  const loadEvidence = useCallback(async () => {
+    if (!isValidOnchainJobId(job.onchainJobId)) return;
+    setListLoading(true);
+    try {
+      const jobId = BigInt(job.onchainJobId!);
+      const [onChain, dispute] = await Promise.all([
+        readOnChainEvidences(jobId),
+        readOnchainDispute(jobId),
+      ]);
+      setCreatedAtSec(Number(dispute.createdAt));
+
+      let offChain: OffChainEvidence[] = [];
+      if (job._id) {
+        const byJob = await fetchDisputeByJob(job._id).catch(() => null);
+        if (byJob?.success && byJob.dispute) {
+          setDisputeId(byJob.dispute._id);
+          if (byJob.dispute._id) {
+            const evRes = await fetchDisputeEvidences(byJob.dispute._id).catch(() => null);
+            if (evRes?.success && evRes.evidence) {
+              offChain = evRes.evidence;
+            } else {
+              offChain = (byJob.dispute.evidence ?? []) as OffChainEvidence[];
+            }
+          }
         }
-      })
-      .catch(() => {});
-  }, [job._id, isDisputed]);
+      }
+      if (offChain.length === 0 && job.onchainJobId != null) {
+        const byOnchain = await fetchDisputeByOnchainJob(job.onchainJobId).catch(() => null);
+        if (byOnchain?.success && byOnchain.dispute) {
+          setDisputeId(byOnchain.dispute._id);
+          if (byOnchain.dispute._id) {
+            const evRes = await fetchDisputeEvidences(byOnchain.dispute._id).catch(() => null);
+            offChain =
+              evRes?.success && evRes.evidence
+                ? evRes.evidence
+                : ((byOnchain.dispute.evidence ?? []) as OffChainEvidence[]);
+          }
+        }
+      }
+
+      setEvidenceItems(mergeEvidence(onChain, offChain));
+    } catch {
+      setEvidenceItems([]);
+    } finally {
+      setListLoading(false);
+    }
+  }, [job._id, job.onchainJobId]);
+
+  useEffect(() => {
+    if (!isDisputed) return;
+    void loadEvidence();
+  }, [isDisputed, loadEvidence]);
+
+  useEffect(() => {
+    if (!createdAtSec) return;
+    const tick = () => {
+      const info = getDisputePhaseInfo(createdAtSec, 0, false);
+      setEvidenceWindowOpen(info.phase === 'evidence');
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [createdAtSec]);
 
   if (!isDisputed || !isValidOnchainJobId(job.onchainJobId)) return null;
 
@@ -108,6 +311,7 @@ export function DisputeEvidencePanel({ job }: DisputeEvidencePanelProps) {
       setNotes('');
       setEvidenceUrl('');
       setImageFile(null);
+      await loadEvidence();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Nộp bằng chứng thất bại');
     } finally {
@@ -115,22 +319,37 @@ export function DisputeEvidencePanel({ job }: DisputeEvidencePanelProps) {
     }
   }
 
+  const canSubmit = isParty && evidenceWindowOpen;
+
   return (
     <section className="panel dispute-panel">
-      <h3>Tranh chấp — nộp bằng chứng</h3>
+      <h3>Tranh chấp — bằng chứng</h3>
       <p className="muted">
-        Job đang <strong>DISPUTED</strong>. Client hoặc freelancer có thể nộp bằng chứng trong{' '}
+        Job đang <strong>DISPUTED</strong>. Client/freelancer nộp bằng chứng trong{' '}
         <strong>{DISPUTE_PHASES.evidenceRebuttalEndMin} phút</strong> đầu (on-chain{' '}
-        <code>submitEvidence</code>).
+        <code>submitEvidence</code>). Arbitrator và các bên xem danh sách bên dưới.
       </p>
-      {disputeInfo && <p className="muted phase-note">{disputeInfo}</p>}
 
-      {!isParty && (
-        <p className="muted">Chỉ client/freelancer của job mới nộp được bằng chứng.</p>
+      {listLoading && <p className="muted">Đang tải bằng chứng…</p>}
+
+      <div className="evidence-list-section">
+        <h4>Bằng chứng đã nộp ({evidenceItems.length})</h4>
+        <EvidenceList items={evidenceItems} />
+      </div>
+
+      {!evidenceWindowOpen && (
+        <p className="muted phase-note">
+          Cửa sổ nộp bằng chứng đã đóng — chỉ xem, không nộp thêm.
+        </p>
       )}
 
-      {isParty && (
+      {!isParty && (
+        <p className="muted">Chỉ client/freelancer mới nộp được bằng chứng mới.</p>
+      )}
+
+      {canSubmit && (
         <form onSubmit={handleSubmit}>
+          <h4>Nộp bằng chứng mới</h4>
           <label className="field">
             Mô tả bằng chứng
             <textarea

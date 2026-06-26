@@ -3,23 +3,56 @@ import type { Job } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useOnChainJob } from '@/hooks/useOnChainJob';
 import {
+  hasArbitratorRevealed,
   isAssignedArbitrator,
   readChosenArbitrators,
+  readDisputeRound,
   readOnchainDispute,
+  readPendingResult,
+  readVoteTally,
   useDisputeActions,
   VOTE_CHOICES,
 } from '@/hooks/useDisputeActions';
 import { TxStatusModal } from '@/components/shared/TxStatusModal';
 import { DISPUTE_PHASES } from '@/lib/contracts/disputeTimings';
+import { formatDisputeChoice, type VoteTally } from '@/lib/utils/disputeChoice';
 import { isValidOnchainJobId } from '@/lib/utils/etherscan';
 import { ONCHAIN_JOB_STATUS } from '@/lib/utils/onchainJob';
 import { formatCountdown, getDisputePhaseInfo } from '@/lib/utils/disputePhase';
+import { getAddress } from 'viem';
 
 const SALT_STORAGE_PREFIX = 'fapex-arb-salt-';
 
 interface ArbitratorDisputePanelProps {
   job: Job;
   onActionComplete?: () => void;
+}
+
+function VoteTallyDisplay({ tally, commitCount, revealCount }: {
+  tally: VoteTally;
+  commitCount: number;
+  revealCount: number;
+}) {
+  return (
+    <div className="vote-tally-box">
+      <h4>Kết quả vote (đã reveal)</h4>
+      <ul className="vote-tally-list">
+        <li>
+          Freelancer thắng: <strong>{tally.freelancer}</strong>
+        </li>
+        <li>
+          Client thắng: <strong>{tally.client}</strong>
+        </li>
+        <li>
+          Chia 50-50: <strong>{tally.split}</strong>
+        </li>
+      </ul>
+      <p className="muted phase-note">
+        Commit {commitCount} · Reveal {revealCount} · Đã mở {tally.total} phiếu (cần ≥3 hợp lệ để
+        finalize)
+      </p>
+    </div>
+  );
 }
 
 export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisputePanelProps) {
@@ -44,6 +77,10 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
   const [isResolved, setIsResolved] = useState(false);
   const [commitCount, setCommitCount] = useState(0);
   const [revealCount, setRevealCount] = useState(0);
+  const [pendingResult, setPendingResult] = useState(0);
+  const [round, setRound] = useState(1);
+  const [voteTally, setVoteTally] = useState<VoteTally | null>(null);
+  const [hasRevealed, setHasRevealed] = useState(false);
   const [countdown, setCountdown] = useState('');
   const [phaseLabel, setPhaseLabel] = useState('');
   const [currentPhase, setCurrentPhase] = useState<string>('evidence');
@@ -63,9 +100,12 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
     if (!isValidOnchainJobId(job.onchainJobId)) return;
     setDisputeLoading(true);
     try {
-      const [arbs, dispute] = await Promise.all([
+      const jobId = BigInt(job.onchainJobId!);
+      const [arbs, dispute, result, disputeRound] = await Promise.all([
         readChosenArbitrators(job.onchainJobId!),
-        readOnchainDispute(BigInt(job.onchainJobId!)),
+        readOnchainDispute(jobId),
+        readPendingResult(jobId),
+        readDisputeRound(jobId),
       ]);
       setChosenArbs(arbs);
       setCreatedAtSec(Number(dispute.createdAt));
@@ -73,12 +113,23 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
       setIsResolved(dispute.isResolved);
       setCommitCount(dispute.commitCount);
       setRevealCount(dispute.revealCount);
+      setPendingResult(result > 0 ? result : dispute.pendingResult);
+      setRound(disputeRound);
+
+      const tally = await readVoteTally(jobId, arbs);
+      setVoteTally(tally);
+
+      if (address) {
+        setHasRevealed(await hasArbitratorRevealed(jobId, getAddress(address)));
+      } else {
+        setHasRevealed(false);
+      }
     } catch {
       setChosenArbs([]);
     } finally {
       setDisputeLoading(false);
     }
-  }, [job.onchainJobId]);
+  }, [job.onchainJobId, address]);
 
   useEffect(() => {
     if (!isDisputed) return;
@@ -96,7 +147,7 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
     if (!createdAtSec) return;
 
     const tick = () => {
-      const info = getDisputePhaseInfo(createdAtSec, resultAtSec, isResolved);
+      const info = getDisputePhaseInfo(createdAtSec, resultAtSec, false);
       setCurrentPhase(info.phase);
       setPhaseLabel(info.label);
       setCountdown(
@@ -111,7 +162,7 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [createdAtSec, resultAtSec, isResolved]);
+  }, [createdAtSec, resultAtSec]);
 
   if (!isDisputed || !isValidOnchainJobId(job.onchainJobId)) return null;
 
@@ -143,9 +194,17 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
   }
 
   const canCommit = currentPhase === 'commit' && isAssigned;
-  const canReveal = currentPhase === 'reveal' && isAssigned;
+  const canReveal = currentPhase === 'reveal' && isAssigned && !hasRevealed;
   const canFinalize = currentPhase === 'finalize' && !isResolved && resultAtSec === 0;
-  const canExecute = currentPhase === 'execute' && !isResolved && resultAtSec > 0;
+  const canExecute = currentPhase === 'execute' && isResolved && resultAtSec > 0;
+  const showVoteTally =
+    voteTally != null &&
+    (currentPhase === 'reveal' ||
+      currentPhase === 'finalize' ||
+      currentPhase === 'appeal' ||
+      currentPhase === 'execute' ||
+      isResolved) &&
+    (voteTally.total > 0 || revealCount > 0);
 
   return (
     <section className="panel dispute-arbitrator-panel">
@@ -155,6 +214,7 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
 
       <div className="dispute-phase-banner">
         <span className="badge warning">Giai đoạn: {phaseLabel}</span>
+        {round > 1 && <span className="badge">Vòng {round} (kháng cáo)</span>}
         {countdown !== '—' && countdown !== '00:00' && (
           <span className="badge countdown">Còn lại: {countdown}</span>
         )}
@@ -187,6 +247,22 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
         (cần ≥3 vote hợp lệ)
       </p>
 
+      {showVoteTally && voteTally && (
+        <VoteTallyDisplay tally={voteTally} commitCount={commitCount} revealCount={revealCount} />
+      )}
+
+      {isResolved && pendingResult > 0 && (
+        <p className="badge success">
+          Kết quả voting vòng {round}: <strong>{formatDisputeChoice(pendingResult)}</strong>
+          {resultAtSec > 0 && (
+            <span className="muted">
+              {' '}
+              · Finalize {new Date(resultAtSec * 1000).toLocaleString('vi-VN')}
+            </span>
+          )}
+        </p>
+      )}
+
       {address && isAssigned && (
         <p className="badge success">Bạn được chọn làm arbitrator cho job #{job.onchainJobId}</p>
       )}
@@ -211,13 +287,17 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
             Hash = keccak256(choice, salt). Giữ salt an toàn — cần lại khi reveal.
           </p>
 
+          {hasRevealed && (
+            <p className="badge success">Bạn đã reveal vote — không cần gửi lại.</p>
+          )}
+
           <label className="field">
             Lựa chọn
             <select
               className="input full"
               value={voteChoice}
               onChange={(e) => setVoteChoice(e.target.value)}
-              disabled={!canCommit && !canReveal}
+              disabled={(!canCommit && !canReveal) || hasRevealed}
             >
               <option value={VOTE_CHOICES.FREELANCER_WIN}>Freelancer thắng</option>
               <option value={VOTE_CHOICES.CLIENT_WIN}>Client thắng</option>
@@ -231,12 +311,12 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
               className="input full mono"
               value={voteSalt}
               onChange={(e) => setVoteSalt(e.target.value)}
-              disabled={!canCommit && !canReveal}
+              disabled={(!canCommit && !canReveal) || hasRevealed}
               placeholder="demo-salt-1"
             />
           </label>
 
-          {canReveal && voteSalt && (
+          {canReveal && voteSalt && !hasRevealed && (
             <p className="muted phase-note">
               Nhắc salt: <code className="mono">{voteSalt}</code>
             </p>
@@ -256,14 +336,15 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
               type="button"
               disabled={!canReveal || actionLoading || txStatus === 'pending' || !isAuthenticated}
               onClick={() => runAction('reveal')}
+              title={hasRevealed ? 'AlreadyRevealed: bạn đã reveal' : undefined}
             >
-              Reveal vote
+              {hasRevealed ? 'Đã reveal' : 'Reveal vote'}
             </button>
           </div>
         </div>
       )}
 
-      {!isResolved && (
+      {(canFinalize || canExecute) && (
         <div className="form-actions dispute-admin-actions">
           <button
             className="btn ghost"
@@ -286,7 +367,9 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
         </div>
       )}
 
-      {isResolved && <p className="badge success">Tranh chấp đã giải quyết on-chain.</p>}
+      {isResolved && pendingResult === 0 && (
+        <p className="badge success">Voting đã finalize — chờ kháng cáo hoặc thực thi kết quả.</p>
+      )}
 
       {formError && <p className="error">{formError}</p>}
 

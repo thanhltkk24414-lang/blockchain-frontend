@@ -11,6 +11,8 @@ import { sendCommitVoteTx } from '@/lib/utils/sendCommitVoteTx';
 import { sendRevealVoteTx } from '@/lib/utils/sendRevealVoteTx';
 import { sendFinalizeDisputeTx } from '@/lib/utils/sendFinalizeDisputeTx';
 import { sendExecuteArbitrationResultTx } from '@/lib/utils/sendExecuteArbitrationResultTx';
+import { sendFileAppealTx } from '@/lib/utils/sendFileAppealTx';
+import { addVoteToTally, emptyVoteTally, type VoteTally } from '@/lib/utils/disputeChoice';
 import { addressesEqual } from '@/lib/utils/address';
 import {
   normalizeOnchainStatus,
@@ -18,6 +20,7 @@ import {
   onchainStatusLabel,
   type OnChainJob,
 } from '@/lib/utils/onchainJob';
+import { decodeContractError } from '@/lib/utils/contractWrite';
 import { useContractTx } from './useContractTx';
 
 export const VOTE_CHOICES = {
@@ -130,6 +133,113 @@ export async function readOnchainDispute(jobId: bigint): Promise<OnChainDispute>
   return normalizeOnchainDispute(raw);
 }
 
+export type OnChainEvidence = {
+  submitter: Address;
+  submittedAt: number;
+  ipfsHash: `0x${string}`;
+};
+
+export async function readOnChainEvidences(jobId: bigint): Promise<OnChainEvidence[]> {
+  const raw = (await readContract(wagmiConfig, {
+    ...contracts.arbitratorPanel,
+    functionName: 'getEvidences',
+    args: [jobId],
+  })) as Array<{ submitter: Address; submittedAt: number | bigint; ipfsHash: `0x${string}` }>;
+
+  return (raw ?? []).map((ev) => ({
+    submitter: getAddress(ev.submitter),
+    submittedAt: Number(ev.submittedAt),
+    ipfsHash: ev.ipfsHash,
+  }));
+}
+
+export async function readArbitratorVote(
+  jobId: bigint,
+  arbitrator: Address,
+): Promise<number> {
+  const vote = (await readContract(wagmiConfig, {
+    ...contracts.arbitratorPanel,
+    functionName: 'getVote',
+    args: [jobId, getAddress(arbitrator)],
+  })) as number;
+  return Number(vote);
+}
+
+export async function readVoteTally(
+  jobId: bigint,
+  arbitrators: string[],
+): Promise<VoteTally> {
+  let tally = emptyVoteTally();
+  await Promise.all(
+    arbitrators.map(async (arb) => {
+      try {
+        const choice = await readArbitratorVote(jobId, getAddress(arb));
+        tally = addVoteToTally(tally, choice);
+      } catch {
+        /* skip unreadable */
+      }
+    }),
+  );
+  return tally;
+}
+
+export async function readDisputeRound(jobId: bigint): Promise<number> {
+  const round = (await readContract(wagmiConfig, {
+    ...contracts.arbitratorPanel,
+    functionName: 'getDisputeRound',
+    args: [jobId],
+  })) as number;
+  return Number(round);
+}
+
+export async function readPendingResult(jobId: bigint): Promise<number> {
+  const result = (await readContract(wagmiConfig, {
+    ...contracts.arbitratorPanel,
+    functionName: 'getPendingResult',
+    args: [jobId],
+  })) as number;
+  return Number(result);
+}
+
+export async function readIsVotingFinalized(jobId: bigint): Promise<boolean> {
+  return (await readContract(wagmiConfig, {
+    ...contracts.arbitratorPanel,
+    functionName: 'isVotingFinalized',
+    args: [jobId],
+  })) as boolean;
+}
+
+export async function readAppealFiled(jobId: bigint): Promise<boolean> {
+  return (await readContract(wagmiConfig, {
+    ...contracts.escrowVault,
+    functionName: 'appealFiled',
+    args: [jobId],
+  })) as boolean;
+}
+
+export async function hasArbitratorRevealed(
+  jobId: bigint,
+  wallet: Address,
+): Promise<boolean> {
+  const vote = await readArbitratorVote(jobId, wallet);
+  return vote !== 0;
+}
+
+async function preflightRevealVote(
+  wallet: Address,
+  jobId: bigint,
+  choice: number,
+  salt: string,
+): Promise<void> {
+  await simulateContract(wagmiConfig, {
+    address: contracts.arbitratorPanel.address,
+    abi: contracts.arbitratorPanel.abi as Abi,
+    functionName: 'revealVote',
+    args: [jobId, choice, salt],
+    account: wallet,
+  });
+}
+
 async function preflightSubmitEvidence(
   wallet: Address,
   jobId: bigint,
@@ -220,10 +330,23 @@ export function useDisputeActions() {
     async (onchainJobId: number, choice: number, salt: string) => {
       if (!address) throw new Error('Hãy kết nối ví MetaMask trước.');
       const wallet = getAddress(address);
+      const jobId = BigInt(onchainJobId);
+
+      if (await hasArbitratorRevealed(jobId, wallet)) {
+        throw new Error('AlreadyRevealed: bạn đã reveal vote cho job này — không cần gửi lại.');
+      }
+
+      try {
+        await preflightRevealVote(wallet, jobId, choice, salt);
+      } catch (simErr) {
+        throw new Error(
+          decodeContractError(simErr, contracts.arbitratorPanel.abi as Abi, 'revealVote'),
+        );
+      }
 
       await tx.runTx('Đang reveal vote…', () =>
         sendRevealVoteTx({
-          onchainJobId: BigInt(onchainJobId),
+          onchainJobId: jobId,
           choice,
           salt,
           account: wallet,
@@ -263,12 +386,28 @@ export function useDisputeActions() {
     [address, tx],
   );
 
+  const fileAppeal = useCallback(
+    async (onchainJobId: number) => {
+      if (!address) throw new Error('Hãy kết nối ví MetaMask trước.');
+      const wallet = getAddress(address);
+
+      await tx.runTx('Đang nộp kháng cáo…', () =>
+        sendFileAppealTx({
+          onchainJobId: BigInt(onchainJobId),
+          account: wallet,
+        }),
+      );
+    },
+    [address, tx],
+  );
+
   return {
     submitEvidence,
     commitVote,
     revealVote,
     finalizeDisputeVoting,
     executeArbitrationResult,
+    fileAppeal,
     ...tx,
   };
 }

@@ -887,3 +887,48 @@ body {
   margin-top: 1rem;
 }
 
+.vote-tally-box {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid hsl(var(--border) / 0.5);
+  border-radius: 8px;
+  background: hsl(var(--muted) / 0.15);
+}
+
+.vote-tally-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.evidence-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.evidence-item {
+  padding: 0.75rem;
+  border: 1px solid #2a2f3a;
+  border-radius: 8px;
+}
+
+.evidence-thumb {
+  max-width: 100%;
+  max-height: 240px;
+  margin-top: 0.5rem;
+  border-radius: 6px;
+}
+
+.dispute-result-panel .dispute-result-banner {
+  margin: 0.75rem 0;
+}
+
+.dispute-result-panel .dispute-appeal-window {
+  margin-top: 0.75rem;
+}
+
