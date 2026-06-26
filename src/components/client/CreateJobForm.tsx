@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from 'react';
-import { useAccount } from 'wagmi';
+import { useAccount, useChainId } from 'wagmi';
+import { isAddress } from 'viem';
 import { createJob, uploadIpfsMetadata } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useCreateJob } from '@/hooks/useCreateJob';
 import { TxStatusModal } from '@/components/shared/TxStatusModal';
+import { CHAIN_ID } from '@/lib/contracts/addresses';
 import {
   EMPTY_CREATE_JOB_FORM,
   JOB_CATEGORIES,
@@ -20,6 +22,7 @@ interface CreateJobFormProps {
 
 export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
   const { address, isConnected } = useAccount();
+  const chainId = useChainId();
   const { user, isAuthenticated } = useAuth();
   const { createOnChain, txStatus, txHash, txLabel, txError, resetTx } = useCreateJob();
   const [values, setValues] = useState<CreateJobFormValues>(EMPTY_CREATE_JOB_FORM);
@@ -51,6 +54,16 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
       setSubmitError('Kết nối ví MetaMask trên Sepolia trước khi tạo job.');
       return;
     }
+    if (!isAddress(address)) {
+      setSubmitError(
+        `Địa chỉ MetaMask không hợp lệ (${String(address).length} ký tự). Cần 0x + 40 hex — kiểm tra account import.`,
+      );
+      return;
+    }
+    if (chainId !== CHAIN_ID) {
+      setSubmitError(`Chuyển MetaMask sang Sepolia (chainId ${CHAIN_ID}) — hiện tại: ${chainId ?? 'unknown'}.`);
+      return;
+    }
     if (!isAuthenticated || !user?.walletAddress) {
       setSubmitError('Đăng nhập SIWE trước khi tạo job.');
       return;
@@ -78,7 +91,7 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
         createdAt: new Date().toISOString(),
       });
       if (!metadataRes.success || !metadataRes.cid) {
-        throw new Error('IPFS metadata upload failed');
+        throw new Error('IPFS metadata upload failed — kiểm tra đăng nhập SIWE và Pinata backend.');
       }
 
       setStep('onchain');
@@ -104,7 +117,10 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
       setValues(EMPTY_CREATE_JOB_FORM);
       resetTx();
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : 'Failed to create job');
+      const raw = err instanceof Error ? err.message : 'Failed to create job';
+      const prefix =
+        step === 'ipfs' ? '[IPFS] ' : step === 'onchain' ? '[On-chain] ' : step === 'api' ? '[API] ' : '';
+      setSubmitError(`${prefix}${raw}`);
     } finally {
       setSubmitting(false);
       setStep('idle');
@@ -205,7 +221,7 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
           value={values.durationDays}
           onChange={(e) => updateField('durationDays', e.target.value)}
         />
-        <span className="muted phase-note">Minimum 1 day (3600 seconds on-chain).</span>
+        <span className="muted phase-note">Minimum 1 day ({86400} seconds on-chain).</span>
         {fieldErrors.durationDays && <span className="field-error">{fieldErrors.durationDays}</span>}
       </div>
 
@@ -258,7 +274,7 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
         status={txStatus}
         label={txLabel}
         hash={txHash}
-        error={txError}
+        error={txError ?? submitError ?? undefined}
         onClose={resetTx}
       />
     </form>
