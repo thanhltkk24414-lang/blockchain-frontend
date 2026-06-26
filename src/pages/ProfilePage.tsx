@@ -191,13 +191,6 @@ export function ProfilePage() {
         <p className="muted banner info">{walletSessionNotice}</p>
       )}
 
-      {address && isAuthenticated && walletSessionNotice && (
-        <p className="muted banner info">
-          Phiên API vẫn hợp lệ với ví đăng nhập ({user?.walletAddress}). Chuyển MetaMask sang ví INDEXER
-          chỉ để giao dịch on-chain (deposit escrow) — không cần đăng xuất.
-        </p>
-      )}
-
       {address &&
         isAuthenticated &&
         user?.walletAddress?.toLowerCase() === address.toLowerCase() &&

@@ -9,7 +9,7 @@ Tài liệu ngắn về quyền admin / grant role trên smart contracts Fapex. 
 | INDEXER / deployer | `0x523eBd853a1638065f148A05c0Ca423E490D92f7` |
 | JobRegistry | `0xE5425cFE21BAe73d54138Bb290B671bF4c55FBC9` |
 
-Sau `scripts/deploy.js`, **deployer là admin** trên tất cả core contracts. Backend dùng `INDEXER_PRIVATE_KEY` của ví này để `createJob` on-chain (msg.sender = client on-chain).
+Sau `scripts/deploy.js`, **deployer là admin** trên tất cả core contracts. Backend `INDEXER_PRIVATE_KEY` dùng ví deployer để **đọc events** và relay admin — **không** gọi `createJob` thay client (client ký từ MetaMask).
 
 ## Contracts & roles
 

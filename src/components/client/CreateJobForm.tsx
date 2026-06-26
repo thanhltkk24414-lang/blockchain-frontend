@@ -1,5 +1,9 @@
 import { useState, type FormEvent } from 'react';
-import { createJob } from '@/lib/api';
+import { useAccount } from 'wagmi';
+import { createJob, uploadIpfsMetadata } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
+import { useCreateJob } from '@/hooks/useCreateJob';
+import { TxStatusModal } from '@/components/shared/TxStatusModal';
 import {
   EMPTY_CREATE_JOB_FORM,
   JOB_CATEGORIES,
@@ -15,10 +19,14 @@ interface CreateJobFormProps {
 }
 
 export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
+  const { address, isConnected } = useAccount();
+  const { user, isAuthenticated } = useAuth();
+  const { createOnChain, txStatus, txHash, txLabel, txError, resetTx } = useCreateJob();
   const [values, setValues] = useState<CreateJobFormValues>(EMPTY_CREATE_JOB_FORM);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [step, setStep] = useState<'idle' | 'ipfs' | 'onchain' | 'api'>('idle');
 
   function updateField<K extends keyof CreateJobFormValues>(key: K, value: CreateJobFormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -39,22 +47,78 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
       return;
     }
 
+    if (!isConnected || !address) {
+      setSubmitError('Kết nối ví MetaMask trên Sepolia trước khi tạo job.');
+      return;
+    }
+    if (!isAuthenticated || !user?.walletAddress) {
+      setSubmitError('Đăng nhập SIWE trước khi tạo job.');
+      return;
+    }
+    if (address.toLowerCase() !== user.walletAddress.toLowerCase()) {
+      setSubmitError(
+        'Ví MetaMask phải trùng ví đăng nhập SIWE — cùng ví sẽ là client on-chain và nạp escrow sau này.',
+      );
+      return;
+    }
+
+    const payload = formValuesToPayload(values);
     setSubmitting(true);
+
     try {
-      const payload = formValuesToPayload(values);
-      const res = await createJob(payload);
+      setStep('ipfs');
+      const metadataRes = await uploadIpfsMetadata({
+        title: payload.title,
+        description: payload.description,
+        category: payload.category,
+        skills: payload.skills,
+        deliverables: payload.deliverables,
+        acceptanceCriteria: payload.acceptanceCriteria,
+        clientAddress: user.walletAddress,
+        createdAt: new Date().toISOString(),
+      });
+      if (!metadataRes.success || !metadataRes.cid) {
+        throw new Error('IPFS metadata upload failed');
+      }
+
+      setStep('onchain');
+      const { onchainJobId, createTxHash } = await createOnChain({
+        metadataCID: metadataRes.cid,
+        contractValue: payload.contractValue,
+        durationSeconds: payload.duration,
+      });
+
+      setStep('api');
+      const res = await createJob({
+        ...payload,
+        onchainJobId,
+        metadataCID: metadataRes.cid,
+        createTxHash,
+      });
       if (!res.success || !res.job) {
         const detail = [res.error, res.hint].filter(Boolean).join(' — ');
-        throw new Error(detail || 'Failed to create job');
+        throw new Error(detail || 'Failed to register job in API');
       }
+
       onCreated(res.job);
       setValues(EMPTY_CREATE_JOB_FORM);
+      resetTx();
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Failed to create job');
     } finally {
       setSubmitting(false);
+      setStep('idle');
     }
   }
+
+  const stepLabel =
+    step === 'ipfs'
+      ? 'Uploading metadata to IPFS…'
+      : step === 'onchain'
+        ? 'Confirm createJob in MetaMask…'
+        : step === 'api'
+          ? 'Saving job to API…'
+          : null;
 
   return (
     <form className="create-job-form" onSubmit={handleSubmit}>
@@ -172,6 +236,7 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
       </div>
 
       {submitError && <p className="error">{submitError}</p>}
+      {stepLabel && submitting && <p className="muted phase-note">{stepLabel}</p>}
 
       <div className="form-actions">
         {onCancel && (
@@ -179,13 +244,23 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
             Cancel
           </button>
         )}
-        <button className="btn primary" type="submit" disabled={submitting}>
+        <button className="btn primary" type="submit" disabled={submitting || txStatus === 'pending'}>
           {submitting ? 'Creating…' : 'Create job'}
         </button>
       </div>
       <p className="muted phase-note">
-        Metadata is uploaded to IPFS by the backend; on-chain <code>createJob</code> runs server-side.
+        Bạn ký <code>JobRegistry.createJob</code> từ ví MetaMask (cần Sepolia ETH cho gas). Backend chỉ
+        lưu metadata IPFS và đồng bộ MongoDB — cùng ví sẽ nạp escrow sau khi accept bid.
       </p>
+
+      <TxStatusModal
+        open={txStatus !== 'idle'}
+        status={txStatus}
+        label={txLabel}
+        hash={txHash}
+        error={txError}
+        onClose={resetTx}
+      />
     </form>
   );
 }
