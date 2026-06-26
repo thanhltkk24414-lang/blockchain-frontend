@@ -52,7 +52,7 @@ export function BrowsePage() {
         : fetchJobs({
             status: filters.status || undefined,
             category: filters.category || undefined,
-            limit: 50,
+            limit: 100,
           }));
 
       if (res.success) {

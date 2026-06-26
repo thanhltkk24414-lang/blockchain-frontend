@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { getAddress, isAddress, zeroAddress } from 'viem';
 import type { Bid, Job } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 import { useEscrowDeposit } from '@/hooks/useEscrowDeposit';
 import { useOnChainJob } from '@/hooks/useOnChainJob';
 import { computeTotalDeposit, fromUsdcUnits } from '@/lib/utils/usdc';
@@ -59,7 +60,6 @@ function resolveAcceptedFreelancer(job: Job, bids: Bid[]): string | null {
     return tryChecksumAddress(accepted.freelancerAddress) ?? accepted.freelancerAddress;
   }
 
-  // Fallback when job is ASSIGNED in DB but bid status was not refreshed in the list.
   if (job.status?.toUpperCase() === 'ASSIGNED') {
     const candidates = bids.filter((b) => b.status?.toLowerCase() !== 'rejected');
     if (candidates.length === 1 && isNonZeroAddress(candidates[0].freelancerAddress)) {
@@ -74,10 +74,11 @@ function resolveAcceptedFreelancer(job: Job, bids: Bid[]): string | null {
 
 export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) {
   const { address, isConnected } = useAccount();
+  const { user, isAuthenticated } = useAuth();
   const clientAddr = resolveClientAddress(job);
   const onchainClientAddr = resolveOnchainClientAddress(job);
-  const isSiweClient = Boolean(
-    address && clientAddr && address.toLowerCase() === clientAddr,
+  const isApiClientOwner = Boolean(
+    user?.walletAddress && clientAddr && user.walletAddress.toLowerCase() === clientAddr,
   );
   const isOnchainClient = Boolean(
     address &&
@@ -160,7 +161,7 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
       !addressesEqual(acceptedFreelancer, onchainFreelancerCs),
   );
 
-  if (!isValidOnchainJobId(job.onchainJobId) || !isSiweClient) {
+  if (!isValidOnchainJobId(job.onchainJobId) || !isAuthenticated || !isApiClientOwner) {
     return null;
   }
 
@@ -240,7 +241,7 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
     }
     if (walletMismatch && onchainClientAddr) {
       setLocalError(
-        `Ví đang kết nối không phải client on-chain. Hãy chuyển sang ${onchainClientAddr.slice(0, 6)}…${onchainClientAddr.slice(-4)} (ví backend tạo job).`,
+        `Ví MetaMask phải là client on-chain ${onchainClientAddr.slice(0, 6)}…${onchainClientAddr.slice(-4)} (INDEXER). Phiên API vẫn là ${user?.walletAddress?.slice(0, 6)}…`,
       );
       return;
     }
@@ -311,6 +312,19 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
     <section className="panel escrow-panel">
       <h3>Fund escrow (USDC)</h3>
       <p className="muted" title="Nạp tiền ký quỹ on-chain">
+        {user?.walletAddress && clientAddr && (
+          <span className="phase-note">
+            Đăng nhập API: <code className="mono">{shortAddress(user.walletAddress)}</code>
+            {onchainClientAddr && (
+              <>
+                {' '}
+                · Client on-chain (deposit):{' '}
+                <code className="mono">{shortAddress(onchainClientAddr)}</code>
+              </>
+            )}
+            <br />
+          </span>
+        )}
         <strong>Nạp ký quỹ (Fund escrow):</strong> Client gửi MockUSDC vào hợp đồng{' '}
         <code>EscrowVault</code> để khóa tiền cho freelancer. Tổng nạp = giá job + 3% phí
         nền tảng. Bước này gồm <em>approve</em> USDC rồi <em>depositEscrow</em> — chỉ ví{' '}
@@ -503,7 +517,8 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
           registryMismatch ||
           acceptedVsOnchainMismatch ||
           depositComplete ||
-          (!acceptedFreelancer && !freelancerInput.trim())
+          (!acceptedFreelancer && !freelancerInput.trim()) ||
+          !isConnected
         }
         title={depositDisabledReason ?? undefined}
       >

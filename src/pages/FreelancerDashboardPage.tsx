@@ -9,7 +9,8 @@ import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { sortByDateDesc } from '@/lib/utils/dates';
 
 export function FreelancerDashboardPage() {
-  const { address, isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
+  const freelancerWallet = user?.walletAddress;
   const [jobs, setJobs] = useState<Job[]>([]);
   const [bids, setBids] = useState<Bid[]>([]);
   const [stats, setStats] = useState<{ jobsCompleted?: number; totalEarned?: number } | null>(null);
@@ -18,14 +19,14 @@ export function FreelancerDashboardPage() {
   const { data: jobCounter } = useJobCounter();
 
   const loadData = useCallback(async () => {
-    if (!address) return;
+    if (!freelancerWallet) return;
     setLoading(true);
     setError(null);
     try {
       const [jobsRes, statsRes, bidsRes] = await Promise.all([
-        fetchJobsByFreelancer(address),
-        fetchUserStats(address),
-        fetchMyBids(address),
+        fetchJobsByFreelancer(freelancerWallet),
+        fetchUserStats(freelancerWallet),
+        fetchMyBids(freelancerWallet),
       ]);
       if (jobsRes.success) setJobs(jobsRes.jobs || []);
       else setError(jobsRes.error || 'Failed to load freelancer jobs');
@@ -38,7 +39,7 @@ export function FreelancerDashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [address]);
+  }, [freelancerWallet]);
 
   useEffect(() => {
     loadData();

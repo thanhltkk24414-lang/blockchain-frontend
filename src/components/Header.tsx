@@ -3,7 +3,18 @@ import { useAuth } from '../context/AuthContext';
 import { API_URL } from '../config/env';
 
 export function Header() {
-  const { isConnected, isAuthenticated, user, loading, error, signIn, signOut } = useAuth();
+  const {
+    isConnected,
+    isAuthenticated,
+    user,
+    sessionWallet,
+    connectedWallet,
+    walletSessionNotice,
+    loading,
+    error,
+    signIn,
+    signOut,
+  } = useAuth();
 
   return (
     <header className="header">
@@ -21,13 +32,23 @@ export function Header() {
         {isAuthenticated && (
           <div className="auth-status">
             <span className="badge success">Authenticated</span>
-            <span className="wallet">{user?.walletAddress}</span>
+            <span className="wallet" title="SIWE session wallet (API)">
+              API: {sessionWallet}
+            </span>
+            {connectedWallet &&
+              sessionWallet &&
+              connectedWallet.toLowerCase() !== sessionWallet.toLowerCase() && (
+                <span className="wallet muted" title="MetaMask connected wallet (on-chain txs)">
+                  MetaMask: {connectedWallet}
+                </span>
+              )}
             <button className="btn ghost" onClick={() => signOut(true)} type="button">
               Sign out
             </button>
           </div>
         )}
       </div>
+      {walletSessionNotice && <p className="muted banner info">{walletSessionNotice}</p>}
       {error && <p className="error banner">{error}</p>}
     </header>
   );
