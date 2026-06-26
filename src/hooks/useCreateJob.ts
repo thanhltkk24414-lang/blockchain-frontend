@@ -5,7 +5,8 @@ import { getAddress, isAddress, parseEventLogs, type Abi, type Log } from 'viem'
 import { wagmiConfig } from '@/config/wagmi';
 import { contracts } from '@/lib/contracts/config';
 import { CHAIN_ID, CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
-import { decodeContractError, executeContractWrite } from '@/lib/utils/contractWrite';
+import { decodeContractError } from '@/lib/utils/contractWrite';
+import { sendCreateJobTx } from '@/lib/utils/sendCreateJobTx';
 import { toUsdcUnits } from '@/lib/utils/usdc';
 import type { TxStatus } from '@/components/shared/TxStatusModal';
 
@@ -109,11 +110,10 @@ export function useCreateJob() {
         }
 
         const valueUnits = toUsdcUnits(contractValue);
-        const hash = await executeContractWrite({
-          address: contracts.jobRegistry.address,
-          abi: contracts.jobRegistry.abi as Abi,
-          functionName: 'createJob',
-          args: [metadataCID.trim(), valueUnits, BigInt(Math.round(durationSeconds))],
+        const hash = await sendCreateJobTx({
+          metadataCID: metadataCID.trim(),
+          contractValueUnits: valueUnits,
+          durationSeconds: BigInt(Math.round(durationSeconds)),
           account: client,
         });
         setTxHash(hash);

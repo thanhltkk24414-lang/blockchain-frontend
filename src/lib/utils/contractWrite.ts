@@ -1,11 +1,15 @@
-import { getConnectorClient, simulateContract, writeContract } from 'wagmi/actions';
+import { getWalletClient, simulateContract, writeContract } from 'wagmi/actions';
+import { sepolia } from 'wagmi/chains';
 import {
   BaseError,
   ContractFunctionRevertedError,
   UserRejectedRequestError,
+  encodeFunctionData,
   isAddress,
   type Abi,
   type Address,
+  type Hash,
+  type WalletClient,
 } from 'viem';
 import { wagmiConfig } from '@/config/wagmi';
 import { CHAIN_ID } from '@/lib/contracts/addresses';
@@ -160,7 +164,103 @@ export type ContractWriteInput = GasEstimateInput & {
   account?: Address;
 };
 
-export async function executeContractWrite(params: ContractWriteInput): Promise<`0x${string}`> {
+type EthereumProvider = {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+};
+
+function getInjectedProvider(): EthereumProvider | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const w = window as Window & { ethereum?: EthereumProvider };
+  return w.ethereum;
+}
+
+function isUserRejection(err: unknown): boolean {
+  if (err instanceof BaseError) {
+    return Boolean(err.walk((e) => e instanceof UserRejectedRequestError));
+  }
+  const msg = err instanceof Error ? err.message : String(err);
+  return /user rejected|user denied|rejected the request/i.test(msg);
+}
+
+function debugWriteFailure(strategy: string, err: unknown): void {
+  if (!import.meta.env.DEV) return;
+  const msg = err instanceof Error ? err.message : String(err);
+  console.debug(`[contractWrite] ${strategy} failed:`, msg);
+}
+
+/**
+ * MetaMask (injected provider) rejects eth_sendTransaction when wagmi/viem forwards
+ * pre-estimated gas / EIP-1559 fee fields from the public RPC simulate path.
+ * Preflight uses gas on the read client only; signing omits gas so MetaMask estimates locally.
+ */
+async function writeViaWalletClient(
+  walletClient: WalletClient,
+  params: ContractWriteInput,
+): Promise<Hash> {
+  return walletClient.writeContract({
+    address: params.address,
+    abi: params.abi,
+    functionName: params.functionName,
+    args: params.args,
+    value: params.value,
+    account: walletClient.account!,
+    chain: sepolia,
+  });
+}
+
+async function writeViaWagmiAction(
+  params: ContractWriteInput,
+  chainId: 11155111,
+): Promise<Hash> {
+  return writeContract(wagmiConfig, {
+    address: params.address,
+    abi: params.abi,
+    functionName: params.functionName,
+    args: params.args,
+    value: params.value,
+    chainId,
+  });
+}
+
+/** Last resort: minimal eth_sendTransaction params MetaMask accepts (from/to/data only). */
+async function writeViaInjectedProvider(
+  from: Address,
+  params: ContractWriteInput,
+): Promise<Hash> {
+  const provider = getInjectedProvider();
+  if (!provider?.request) {
+    throw new Error('MetaMask provider không khả dụng — cài/kích hoạt extension.');
+  }
+
+  const data = encodeFunctionData({
+    abi: params.abi,
+    functionName: params.functionName,
+    args: params.args,
+  });
+
+  const hash = (await provider.request({
+    method: 'eth_sendTransaction',
+    params: [
+      {
+        from,
+        to: params.address,
+        data,
+      },
+    ],
+  })) as Hash;
+
+  return hash;
+}
+
+/**
+ * Sign a contract write with MetaMask-safe fallbacks:
+ * 1) walletClient.writeContract (full Sepolia chain object, no gas field)
+ * 2) wagmi writeContract action (chainId only, no gas)
+ * 3) raw window.ethereum eth_sendTransaction after encodeFunctionData
+ */
+export async function sendContractTransaction(
+  params: ContractWriteInput,
+): Promise<`0x${string}`> {
   if (!params.address || !isAddress(params.address)) {
     throw new Error(
       `Địa chỉ contract không hợp lệ (${String(params.address)}). Kiểm tra VITE_JOB_REGISTRY_ADDRESS / deployments-sepolia.json.`,
@@ -169,14 +269,12 @@ export async function executeContractWrite(params: ContractWriteInput): Promise<
 
   const chainId = CHAIN_ID as 11155111;
 
-  let connectorClient;
-  try {
-    connectorClient = await getConnectorClient(wagmiConfig, { chainId });
-  } catch {
+  const walletClient = await getWalletClient(wagmiConfig, { chainId });
+  if (!walletClient?.account) {
     throw new Error('Kết nối ví MetaMask trên Sepolia trước khi gửi giao dịch.');
   }
 
-  const signerAddress = connectorClient.account.address;
+  const signerAddress = walletClient.account.address;
   if (
     params.account &&
     params.account.toLowerCase() !== signerAddress.toLowerCase()
@@ -192,12 +290,12 @@ export async function executeContractWrite(params: ContractWriteInput): Promise<
   });
 
   try {
-    // Preflight on public client with connector account (resolved inside wagmi).
     await simulateContract(wagmiConfig, {
       address: params.address,
       abi: params.abi,
       functionName: params.functionName,
       args: params.args,
+      account: signerAddress,
       value: params.value,
       gas,
       chainId,
@@ -206,18 +304,34 @@ export async function executeContractWrite(params: ContractWriteInput): Promise<
     throw new Error(decodeContractError(simErr, params.abi, params.functionName));
   }
 
-  try {
-    // Explicit chainId + connector-driven signing (wagmi writeContract action).
-    return await writeContract(wagmiConfig, {
-      address: params.address,
-      abi: params.abi,
-      functionName: params.functionName,
-      args: params.args,
-      value: params.value,
-      gas,
-      chainId,
-    });
-  } catch (writeErr) {
-    throw new Error(decodeContractError(writeErr, params.abi, params.functionName));
+  const strategies: Array<() => Promise<Hash>> = [
+    () => writeViaWalletClient(walletClient, params),
+    () => writeViaWagmiAction(params, chainId),
+    () => writeViaInjectedProvider(signerAddress, params),
+  ];
+
+  const strategyNames = ['walletClient.writeContract', 'wagmi.writeContract', 'eth_sendTransaction'];
+
+  let lastErr: unknown;
+  for (let i = 0; i < strategies.length; i++) {
+    try {
+      const hash = await strategies[i]();
+      if (import.meta.env.DEV) {
+        console.debug(`[contractWrite] signed via ${strategyNames[i]}`, hash);
+      }
+      return hash;
+    } catch (err) {
+      if (isUserRejection(err)) {
+        throw new Error(decodeContractError(err, params.abi, params.functionName));
+      }
+      debugWriteFailure(strategyNames[i], err);
+      lastErr = err;
+    }
   }
+
+  throw new Error(decodeContractError(lastErr, params.abi, params.functionName));
+}
+
+export async function executeContractWrite(params: ContractWriteInput): Promise<`0x${string}`> {
+  return sendContractTransaction(params);
 }
