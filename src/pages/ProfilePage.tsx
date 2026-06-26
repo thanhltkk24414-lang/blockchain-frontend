@@ -15,7 +15,7 @@ import {
 } from '@/lib/utils/profile';
 
 export function ProfilePage() {
-  const { address, isAuthenticated, user, signIn, loading: authLoading, refreshSession } = useAuth();
+  const { address, user, isAuthenticated, walletSessionNotice, signIn, loading: authLoading, refreshSession } = useAuth();
   const location = useLocation();
   const state = location.state as {
     needRole?: RegistrationRole;
@@ -187,10 +187,14 @@ export function ProfilePage() {
         </section>
       )}
 
-      {address && isAuthenticated && user?.walletAddress?.toLowerCase() !== address.toLowerCase() && (
-        <p className="error banner">
-          Connected wallet ({address}) differs from signed-in session ({user?.walletAddress}). Sign out and
-          sign in again.
+      {walletSessionNotice && (
+        <p className="muted banner info">{walletSessionNotice}</p>
+      )}
+
+      {address && isAuthenticated && walletSessionNotice && (
+        <p className="muted banner info">
+          Phiên API vẫn hợp lệ với ví đăng nhập ({user?.walletAddress}). Chuyển MetaMask sang ví INDEXER
+          chỉ để giao dịch on-chain (deposit escrow) — không cần đăng xuất.
         </p>
       )}
 

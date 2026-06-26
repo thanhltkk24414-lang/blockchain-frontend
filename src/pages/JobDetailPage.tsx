@@ -133,13 +133,20 @@ export function JobDetailPage() {
   const deliverables = metadata?.deliverables ?? job.deliverables;
   const acceptance = metadata?.acceptanceCriteria ?? job.acceptanceCriteria;
   const skills = metadata?.skills ?? job.skills;
-  const clientAddr = resolveClientAddress(job);
+  const clientAddr =
+    job.clientAddress?.toLowerCase() ?? resolveClientAddress(job);
   const isJobOwner = Boolean(
-    address && clientAddr && address.toLowerCase() === clientAddr,
+    user?.walletAddress &&
+      clientAddr &&
+      user.walletAddress.toLowerCase() === clientAddr,
   );
   const canManageJob = isJobOwner && isAuthenticated;
   const isOnPublicJobRoute = /^\/jobs\/[^/]+$/.test(location.pathname);
-  const showBidForm = job.status === 'OPEN' && user?.role === 'freelancer';
+  const showBidForm =
+    job.status === 'OPEN' &&
+    user?.role === 'freelancer' &&
+    !job.freelancerAddress &&
+    !bids.some((b) => b.status?.toLowerCase() === 'accepted');
 
   return (
     <main className="page job-detail">

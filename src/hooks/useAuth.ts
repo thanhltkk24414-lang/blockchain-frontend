@@ -14,6 +14,10 @@ import {
 
 const SIWE_STATEMENT = 'Sign in to Fapex';
 
+function shortWallet(addr: string): string {
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
 export function useAuth() {
   const { address, isConnected } = useAccount();
   const { signMessageAsync } = useSignMessage();
@@ -21,17 +25,24 @@ export function useAuth() {
   const [user, setUser] = useState<AuthUser | null>(() => getStoredUser());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [walletSessionNotice, setWalletSessionNotice] = useState<string | null>(null);
 
+  const sessionWallet = user?.walletAddress ?? null;
+  const connectedWallet = address ?? null;
   const isAuthenticated = Boolean(token && user);
 
-  // MetaMask account switch must not reuse another wallet's JWT session.
+  // SIWE session stays valid when MetaMask switches accounts (e.g. INDEXER for depositEscrow).
   useEffect(() => {
-    if (!isConnected || !address || !user?.walletAddress) return;
+    if (!isConnected || !address || !user?.walletAddress) {
+      setWalletSessionNotice(null);
+      return;
+    }
     if (address.toLowerCase() !== user.walletAddress.toLowerCase()) {
-      clearAuth();
-      setToken(null);
-      setUser(null);
-      setError('Wallet changed — sign in again with the connected account.');
+      setWalletSessionNotice(
+        `Đăng nhập API: ${shortWallet(user.walletAddress)} · MetaMask: ${shortWallet(address)} — giao dịch on-chain dùng ví đang kết nối.`,
+      );
+    } else {
+      setWalletSessionNotice(null);
     }
   }, [address, isConnected, user?.walletAddress]);
 
@@ -87,6 +98,7 @@ export function useAuth() {
       storeAuth(verifyRes.token, verifyRes.user);
       setToken(verifyRes.token);
       setUser(verifyRes.user);
+      setWalletSessionNotice(null);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Sign-in failed';
       setError(msg);
@@ -111,6 +123,7 @@ export function useAuth() {
     setToken(null);
     setUser(null);
     setError(null);
+    setWalletSessionNotice(null);
     if (redirectHome && typeof window !== 'undefined') {
       window.location.assign('/');
     }
@@ -118,6 +131,9 @@ export function useAuth() {
 
   return {
     address,
+    connectedWallet,
+    sessionWallet,
+    walletSessionNotice,
     isConnected,
     token,
     user,

@@ -9,18 +9,19 @@ import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 
 export function ClientDashboardPage() {
   const navigate = useNavigate();
-  const { address, isAuthenticated, token } = useAuth();
+  const { user, isAuthenticated, token } = useAuth();
+  const clientWallet = user?.walletAddress;
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
 
   const loadJobs = useCallback(async () => {
-    if (!address) return;
+    if (!clientWallet) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchJobsByClient(address);
+      const res = await fetchJobsByClient(clientWallet);
       if (res.success) setJobs(res.jobs || []);
       else setError('Failed to load client jobs');
     } catch (err) {
@@ -28,7 +29,7 @@ export function ClientDashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [address]);
+  }, [clientWallet]);
 
   useEffect(() => {
     loadJobs();
