@@ -39,7 +39,7 @@ function resolveClientAddress(job: Job): string | null {
 export function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
-  const { address, user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [job, setJob] = useState<Job | null>(null);
   const [metadata, setMetadata] = useState<JobMetadata | null>(null);
   const [bids, setBids] = useState<Bid[]>([]);

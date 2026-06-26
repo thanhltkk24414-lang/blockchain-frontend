@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useAccount, useWriteContract } from 'wagmi';
-import { parseEventLogs, waitForTransactionReceipt, type Abi } from 'viem';
+import { waitForTransactionReceipt } from 'wagmi/actions';
+import { parseEventLogs, type Abi, type Log } from 'viem';
 import { wagmiConfig } from '@/config/wagmi';
 import { contracts } from '@/lib/contracts/config';
 import { executeContractWrite } from '@/lib/utils/contractWrite';
@@ -18,9 +19,7 @@ export interface CreateJobOnChainResult {
   createTxHash: `0x${string}`;
 }
 
-function parseJobIdFromReceipt(
-  logs: Awaited<ReturnType<typeof waitForTransactionReceipt>>['logs'],
-): number {
+function parseJobIdFromReceipt(logs: Log[]): number {
   const events = parseEventLogs({
     abi: contracts.jobRegistry.abi as Abi,
     eventName: 'JobCreated',
@@ -29,7 +28,7 @@ function parseJobIdFromReceipt(
   if (events.length === 0) {
     throw new Error('JobCreated event not found — kiểm tra giao dịch trên Etherscan.');
   }
-  const jobId = events[0].args.jobId;
+  const jobId = (events[0].args as { jobId: bigint }).jobId;
   const numeric = Number(jobId);
   if (!Number.isFinite(numeric) || numeric <= 0) {
     throw new Error(`Invalid on-chain job id: ${jobId}`);

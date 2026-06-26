@@ -17,7 +17,7 @@ export interface CreateJobFormValues {
   acceptanceCriteria: string;
 }
 
-export interface CreateJobPayload {
+export interface CreateJobFormPayload {
   title: string;
   description: string;
   category: string;
@@ -26,6 +26,9 @@ export interface CreateJobPayload {
   skills?: string[];
   deliverables: string;
   acceptanceCriteria: string;
+}
+
+export interface CreateJobPayload extends CreateJobFormPayload {
   /** Sequential id from JobRegistry after client-signed createJob. */
   onchainJobId: number;
   metadataCID: string;
@@ -74,7 +77,7 @@ export function validateCreateJobForm(values: CreateJobFormValues): Record<strin
   return errors;
 }
 
-export function formValuesToPayload(values: CreateJobFormValues): CreateJobPayload {
+export function formValuesToPayload(values: CreateJobFormValues): CreateJobFormPayload {
   const durationSeconds = Math.max(3600, Math.round(Number(values.durationDays) * 86400));
   const skills = parseSkillsInput(values.skills);
 
