@@ -3,6 +3,7 @@ import EscrowVaultAbi from './abis/EscrowVault.json';
 import MockUSDCAbi from './abis/MockUSDC.json';
 import ArbitratorPanelAbi from './abis/ArbitratorPanel.json';
 import ReputationStoreAbi from './abis/ReputationStore.json';
+import PlatformTreasuryAbi from './abis/PlatformTreasury.json';
 import { CONTRACT_ADDRESSES } from './addresses';
 
 export const contracts = {
@@ -25,6 +26,10 @@ export const contracts = {
   reputationStore: {
     address: CONTRACT_ADDRESSES.ReputationStore,
     abi: ReputationStoreAbi as readonly unknown[],
+  },
+  platformTreasury: {
+    address: CONTRACT_ADDRESSES.PlatformTreasury,
+    abi: PlatformTreasuryAbi as readonly unknown[],
   },
 } as const;
 
