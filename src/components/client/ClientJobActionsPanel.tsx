@@ -23,7 +23,7 @@ function resolveClientAddress(job: Job): string | null {
 
 export function ClientJobActionsPanel({ job, onActionComplete }: ClientJobActionsPanelProps) {
   const { address, user } = useAuth();
-  const { approveAndRelease, raiseDispute, txStatus, txHash, txLabel, txError, resetTx } =
+  const { approveAndRelease, raiseDispute, txStatus, txHash, txLabel, txError, gasEstimate, resetTx } =
     useClientJobActions();
   const { onchainStatus, onchainJob, onchainStatusLabel, onchainClient, loading: chainLoading, refetch } =
     useOnChainJob(job.onchainJobId, job.status);
@@ -153,6 +153,7 @@ export function ClientJobActionsPanel({ job, onActionComplete }: ClientJobAction
         label={txLabel}
         hash={txHash}
         error={txError}
+        gasEstimate={gasEstimate}
         onClose={resetTx}
       />
     </section>
