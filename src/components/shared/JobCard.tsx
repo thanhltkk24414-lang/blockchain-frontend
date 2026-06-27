@@ -24,7 +24,7 @@ export function JobCard({ job, detailPath }: JobCardProps) {
     job.status?.toUpperCase() === 'DISPUTED' || Boolean(job.isDisputed);
 
   return (
-    <li className={`job-card${isDisputed ? ' job-card-disputed' : ''}`}>
+    <li className={`job-card job-card-interactive${isDisputed ? ' job-card-disputed' : ''}`}>
       <div className="job-header">
         <h3>
           <Link to={href} className="job-title-link">
@@ -48,7 +48,9 @@ export function JobCard({ job, detailPath }: JobCardProps) {
       )}
       <div className="job-meta">
         <span className="job-category">{job.category}</span>
-        {job.contractValue != null && <span className="job-budget">{job.contractValue} USDC</span>}
+        {job.contractValue != null && (
+          <span className="job-budget">${job.contractValue.toLocaleString()} USDC</span>
+        )}
         {job.duration != null && <span>{Math.round(job.duration / 86400)}d</span>}
         {isValidOnchainJobId(job.onchainJobId) && <span>On-chain #{job.onchainJobId}</span>}
         {posted && <span>Posted {posted}</span>}

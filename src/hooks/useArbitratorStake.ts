@@ -1,14 +1,27 @@
 import { useCallback, useState } from 'react';
 import { useAccount } from 'wagmi';
-import { waitForTransactionReceipt } from 'wagmi/actions';
+import { readContract, waitForTransactionReceipt } from 'wagmi/actions';
 import type { Abi } from 'viem';
 import { wagmiConfig } from '@/config/wagmi';
 import { contracts } from '@/lib/contracts/config';
+import { CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 import { toUsdcUnits } from '@/lib/utils/usdc';
-import { executeContractWrite, decodeContractError } from '@/lib/utils/contractWrite';
+import { decodeContractError } from '@/lib/utils/contractWrite';
+import {
+  sendApproveUsdcTx,
+  sendJoinPoolTx,
+  sendStakeAsArbitratorTx,
+} from '@/lib/utils/sendArbitratorOnboardingTx';
 import type { TxStatus } from '@/components/shared/TxStatusModal';
 
 export const MIN_ARBITRATOR_STAKE_USDC = 50;
+
+async function waitForSuccess(hash: `0x${string}`): Promise<void> {
+  const receipt = await waitForTransactionReceipt(wagmiConfig, { hash });
+  if (receipt.status === 'reverted') {
+    throw new Error('Transaction reverted on-chain — check Etherscan for details.');
+  }
+}
 
 export function useArbitratorStake() {
   const { address } = useAccount();
@@ -35,28 +48,37 @@ export function useArbitratorStake() {
 
       try {
         const amount = toUsdcUnits(amountUsdc);
+        const treasury = CONTRACT_ADDRESSES.PlatformTreasury;
 
-        setTxLabel('Approving USDC for PlatformTreasury…');
-        const approveHash = await executeContractWrite({
-          address: contracts.mockUsdc.address,
-          abi: contracts.mockUsdc.abi as Abi,
-          functionName: 'approve',
-          args: [contracts.platformTreasury.address, amount],
-          account: address,
-        });
-        setTxHash(approveHash);
-        await waitForTransactionReceipt(wagmiConfig, { hash: approveHash });
+        const balance = (await readContract(wagmiConfig, {
+          ...contracts.mockUsdc,
+          functionName: 'balanceOf',
+          args: [address],
+        })) as bigint;
+
+        if (balance < amount) {
+          throw new Error(
+            `Insufficient MockUSDC balance (${Number(balance) / 1e6} USDC). Mint test USDC in Step 1 first.`,
+          );
+        }
+
+        const allowance = (await readContract(wagmiConfig, {
+          ...contracts.mockUsdc,
+          functionName: 'allowance',
+          args: [address, treasury],
+        })) as bigint;
+
+        if (allowance < amount) {
+          setTxLabel('Approving USDC for PlatformTreasury…');
+          const approveHash = await sendApproveUsdcTx(treasury, amount);
+          setTxHash(approveHash);
+          await waitForSuccess(approveHash);
+        }
 
         setTxLabel(`Staking ${amountUsdc} USDC as arbitrator…`);
-        const stakeHash = await executeContractWrite({
-          address: contracts.platformTreasury.address,
-          abi: contracts.platformTreasury.abi as Abi,
-          functionName: 'stakeAsArbitrator',
-          args: [amount],
-          account: address,
-        });
+        const stakeHash = await sendStakeAsArbitratorTx(amount);
         setTxHash(stakeHash);
-        await waitForTransactionReceipt(wagmiConfig, { hash: stakeHash });
+        await waitForSuccess(stakeHash);
         setTxStatus('success');
         return stakeHash;
       } catch (err) {
@@ -64,7 +86,7 @@ export function useArbitratorStake() {
         setTxError(
           err instanceof Error
             ? err.message
-            : decodeContractError(err, contracts.platformTreasury.abi as Abi),
+            : decodeContractError(err, contracts.platformTreasury.abi as Abi, 'stakeAsArbitrator'),
         );
         throw err;
       } finally {
@@ -83,15 +105,9 @@ export function useArbitratorStake() {
     setTxLabel('Joining arbitrator pool…');
 
     try {
-      const hash = await executeContractWrite({
-        address: contracts.arbitratorPanel.address,
-        abi: contracts.arbitratorPanel.abi as Abi,
-        functionName: 'joinPool',
-        args: [address],
-        account: address,
-      });
+      const hash = await sendJoinPoolTx(address);
       setTxHash(hash);
-      await waitForTransactionReceipt(wagmiConfig, { hash });
+      await waitForSuccess(hash);
       setTxStatus('success');
       return hash;
     } catch (err) {
@@ -99,7 +115,7 @@ export function useArbitratorStake() {
       setTxError(
         err instanceof Error
           ? err.message
-          : decodeContractError(err, contracts.arbitratorPanel.abi as Abi),
+          : decodeContractError(err, contracts.arbitratorPanel.abi as Abi, 'joinPool'),
       );
       throw err;
     } finally {
