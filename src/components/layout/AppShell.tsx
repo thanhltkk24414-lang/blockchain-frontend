@@ -1,14 +1,17 @@
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAuth } from '@/context/AuthContext';
 import { useArbitratorAccess } from '@/hooks/useArbitratorAccess';
+import { useEthUsdPrice } from '@/hooks/useEthUsdPrice';
 import { API_URL } from '@/config/env';
 import { fetchHealth } from '@/lib/api';
 import { CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 import { hasChosenRegistrationRole } from '@/lib/utils/profile';
 import { useReputation } from '@/hooks/useReputation';
 import { ReputationBadge } from '@/components/shared/ReputationBadge';
+import { FapexLogo } from '@/components/shared/FapexLogo';
+import { NetworkBanner } from '@/components/shared/NetworkBanner';
 import type { RegistrationRole } from '@/lib/api';
 
 type NavItem = { to: string; label: string; roles?: RegistrationRole[]; arbitrator?: boolean };
@@ -22,9 +25,12 @@ const NAV: NavItem[] = [
 ];
 
 export function AppShell() {
+  const location = useLocation();
+  const isLanding = location.pathname === '/';
   const { isConnected, isAuthenticated, user, loading, error, signIn, signOut } = useAuth();
   const arbitrator = useArbitratorAccess();
   const { reputation, loading: reputationLoading } = useReputation(user?.walletAddress);
+  const { price: ethUsd } = useEthUsdPrice();
   const [contractMismatch, setContractMismatch] = useState<string | null>(null);
 
   useEffect(() => {
@@ -55,13 +61,17 @@ export function AppShell() {
   };
 
   return (
-    <div className="app">
-      <header className="header">
+    <div className={isLanding ? 'app app-landing' : 'app'}>
+      <NetworkBanner />
+      <header className={`header${isLanding ? ' header-landing' : ''}`}>
         <div className="brand">
-          <Link to="/" className="brand-link">
-            <h1>Fapex</h1>
-          </Link>
-          <span className="api-badge">API: {API_URL}</span>
+          <FapexLogo size="md" />
+          {!isLanding && <span className="api-badge">API: {API_URL}</span>}
+          {ethUsd && !isLanding && (
+            <span className="api-badge eth-badge" title="Chainlink ETH/USD">
+              ETH ${ethUsd.usd.toFixed(0)}
+            </span>
+          )}
         </div>
         <nav className="nav">
           {visibleNav.map((item) => (

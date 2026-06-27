@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { fetchJobs, searchJobs, type Job } from '@/lib/api';
 import { JobCard } from '@/components/shared/JobCard';
 import { JobFilters, type JobFilterState, DEFAULT_JOB_FILTERS } from '@/components/shared/JobFilters';
@@ -24,7 +25,11 @@ function filterBySkill(jobs: Job[], skill: string): Job[] {
 }
 
 export function BrowsePage() {
-  const [filters, setFilters] = useState<JobFilterState>(DEFAULT_JOB_FILTERS);
+  const [searchParams] = useSearchParams();
+  const [filters, setFilters] = useState<JobFilterState>(() => ({
+    ...DEFAULT_JOB_FILTERS,
+    search: searchParams.get('search') ?? searchParams.get('q') ?? '',
+  }));
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +78,13 @@ export function BrowsePage() {
       setLoading(false);
     }
   }, [filters]);
+
+  useEffect(() => {
+    const q = searchParams.get('search') ?? searchParams.get('q') ?? '';
+    if (q) {
+      setFilters((prev) => (prev.search === q ? prev : { ...prev, search: q }));
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     loadJobs();

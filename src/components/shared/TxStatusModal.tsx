@@ -8,10 +8,11 @@ interface TxStatusModalProps {
   label: string;
   hash?: string;
   error?: string;
+  gasEstimate?: string;
   onClose: () => void;
 }
 
-export function TxStatusModal({ open, status, label, hash, error, onClose }: TxStatusModalProps) {
+export function TxStatusModal({ open, status, label, hash, error, gasEstimate, onClose }: TxStatusModalProps) {
   if (!open || status === 'idle') return null;
 
   const canClose = status !== 'pending';
@@ -24,6 +25,9 @@ export function TxStatusModal({ open, status, label, hash, error, onClose }: TxS
             <div className="tx-spinner" aria-hidden />
             <h3>Transaction pending</h3>
             <p className="muted">{label}</p>
+            {gasEstimate && (
+              <p className="muted phase-note gas-estimate-line">Ước tính gas: {gasEstimate}</p>
+            )}
             <p className="muted phase-note">Confirm in your wallet and wait for the block.</p>
           </>
         )}

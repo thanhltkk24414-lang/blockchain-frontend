@@ -269,14 +269,25 @@ export function useClientJobActions() {
         );
       }
 
-      await tx.runTx('Đang phê duyệt bàn giao và giải phóng USDC…', () =>
-        executeContractWrite({
-          address: contracts.escrowVault.address,
-          abi: contracts.escrowVault.abi as Abi,
-          functionName: 'approveAndRelease',
-          args: [jobId],
-          account: wallet,
-        }),
+      await tx.runTx(
+        'Đang phê duyệt bàn giao và giải phóng USDC…',
+        () =>
+          executeContractWrite({
+            address: contracts.escrowVault.address,
+            abi: contracts.escrowVault.abi as Abi,
+            functionName: 'approveAndRelease',
+            args: [jobId],
+            account: wallet,
+          }),
+        {
+          gasParams: {
+            address: contracts.escrowVault.address,
+            abi: contracts.escrowVault.abi as Abi,
+            functionName: 'approveAndRelease',
+            args: [jobId],
+            account: wallet,
+          },
+        },
       );
     },
     [address, tx],

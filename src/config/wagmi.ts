@@ -1,10 +1,16 @@
+import { fallback, http } from 'wagmi';
 import { connectorsForWallets } from '@rainbow-me/rainbowkit';
 import { metaMaskWallet } from '@rainbow-me/rainbowkit/wallets';
-import { createConfig, http } from 'wagmi';
+import { createConfig } from 'wagmi';
 import { sepolia } from 'wagmi/chains';
 
 const dappOrigin =
   typeof window !== 'undefined' ? window.location.origin : 'https://fapex.app';
+
+const primaryRpc =
+  import.meta.env.VITE_SEPOLIA_RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com';
+const fallbackRpc =
+  import.meta.env.VITE_SEPOLIA_RPC_FALLBACK || 'https://rpc.sepolia.org';
 
 const connectors = connectorsForWallets(
   [
@@ -16,7 +22,6 @@ const connectors = connectorsForWallets(
   {
     appName: 'Fapex',
     appUrl: dappOrigin,
-    // WalletConnect unused — MetaMask-only; RainbowKit API still requires a projectId string.
     projectId: 'fapex-metamask-only',
   },
 );
@@ -25,9 +30,8 @@ export const wagmiConfig = createConfig({
   chains: [sepolia],
   connectors,
   transports: {
-    [sepolia.id]: http(),
+    [sepolia.id]: fallback([http(primaryRpc), http(fallbackRpc)], { rank: true }),
   },
   ssr: false,
-  // Critical on Windows when Coinbase/Brave/Rabby inject alongside MetaMask.
   multiInjectedProviderDiscovery: false,
 });
