@@ -15,7 +15,6 @@ import { sendFileAppealTx } from '@/lib/utils/sendFileAppealTx';
 import {
   addVoteToTally,
   emptyVoteTally,
-  VOTE_CHOICES,
   type VoteTally,
 } from '@/lib/utils/disputeChoice';
 import { addressesEqual } from '@/lib/utils/address';
@@ -27,8 +26,6 @@ import {
 } from '@/lib/utils/onchainJob';
 import { decodeContractError } from '@/lib/utils/contractWrite';
 import { useContractTx } from './useContractTx';
-
-export { VOTE_CHOICES };
 
 export function computeVoteHash(choice: number, salt: string): `0x${string}` {
   return keccak256(encodePacked(['uint256', 'string'], [BigInt(choice), salt]));

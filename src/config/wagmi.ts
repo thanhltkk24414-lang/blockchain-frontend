@@ -10,7 +10,8 @@ const dappOrigin =
 const primaryRpc =
   import.meta.env.VITE_SEPOLIA_RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com';
 const fallbackRpc =
-  import.meta.env.VITE_SEPOLIA_RPC_FALLBACK || 'https://rpc.sepolia.org';
+  import.meta.env.VITE_SEPOLIA_RPC_FALLBACK ||
+  'https://ethereum-sepolia-rpc.publicnode.com';
 
 const connectors = connectorsForWallets(
   [
