@@ -18,9 +18,9 @@ export function FapexLogo({ className, href = '/', showWordmark = true, size = '
   const s = sizes[size];
   const content = (
     <span className={cn('inline-flex items-center gap-2.5', className)}>
-      <img src="/fapex-icon.svg" alt="" className={cn(s.icon, 'rounded-lg')} />
+      <img src="/fapex-icon.png" alt="" className={cn(s.icon, 'object-contain')} />
       {showWordmark && (
-        <img src="/fapex-wordmark.svg" alt="FAPEX" className={cn(s.wordmark, 'hidden sm:block')} />
+        <img src="/fapex-wordmark.png" alt="FAPEX" className={cn(s.wordmark, 'w-auto hidden sm:block object-contain')} />
       )}
       {!showWordmark && <span className="text-lg font-bold tracking-wide text-foreground">FAPEX</span>}
     </span>

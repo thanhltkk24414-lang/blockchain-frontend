@@ -19,28 +19,28 @@ const POPULAR_TAGS = [
 
 const FEATURES = [
   {
-    title: 'Escrow on-chain',
-    desc: 'USDC khóa trong EscrowVault — không ai giữ tiền hộ bạn.',
+    title: 'On-chain escrow',
+    desc: 'USDC locked in EscrowVault — no custodian holds your funds.',
   },
   {
-    title: 'Milestone & release',
-    desc: 'Client phê duyệt → tự động giải ngân cho freelancer.',
+    title: 'Milestone release',
+    desc: 'Client approves deliverables → USDC releases to the freelancer.',
   },
   {
-    title: 'Tranh chấp minh bạch',
-    desc: 'Bằng chứng IPFS, arbitrator stake + commit-reveal.',
+    title: 'Transparent disputes',
+    desc: 'IPFS evidence, staked arbitrators, and commit-reveal voting.',
   },
   {
-    title: 'Reputation on-chain',
-    desc: 'ReputationStore soulbound — điểm uy tín không chuyển nhượng.',
+    title: 'On-chain reputation',
+    desc: 'ReputationStore soulbound scores — trust that stays with the wallet.',
   },
   {
-    title: 'SIWE đăng nhập',
-    desc: 'Sign-In with Ethereum — không mật khẩu, ví là danh tính.',
+    title: 'SIWE sign-in',
+    desc: 'Sign-In with Ethereum — your wallet is your identity.',
   },
   {
-    title: 'Stablecoin USDC',
-    desc: 'Giá job và thanh toán bằng MockUSDC trên Sepolia.',
+    title: 'USDC stablecoin',
+    desc: 'Job budgets and payouts in MockUSDC on Sepolia.',
   },
 ];
 
@@ -74,30 +74,30 @@ export function LandingPage() {
           </div>
 
           <h1 className="landing-title">
-            Thuê &amp; bán dịch vụ crypto
-            <span className="landing-title-accent"> — escrow minh bạch on-chain</span>
+            Hire &amp; sell freelance services
+            <span className="landing-title-accent"> — with verifiable on-chain escrow</span>
           </h1>
           <p className="landing-subtitle">
-            Nền tảng freelance Web3: đăng job, ký quỹ USDC, giao hàng IPFS, tranh chấp bởi
-            arbitrator có stake. Không middleman giữ tiền.
+            A Web3 freelance marketplace: post jobs, fund USDC escrow, deliver via IPFS, and resolve
+            disputes with staked arbitrators. No opaque middleman custody.
           </p>
 
           <form className="landing-search" onSubmit={onSearch}>
             <input
               type="search"
               className="landing-search-input"
-              placeholder="Tìm job: Solidity, design, audit…"
+              placeholder="Search jobs: Solidity, design, audit…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              aria-label="Tìm kiếm job"
+              aria-label="Search jobs"
             />
             <button type="submit" className="btn primary landing-search-btn">
-              Tìm job
+              Search jobs
             </button>
           </form>
 
           <div className="landing-tags">
-            <span className="landing-tags-label">Phổ biến:</span>
+            <span className="landing-tags-label">Popular:</span>
             {POPULAR_TAGS.map((tag) => (
               <button key={tag} type="button" className="landing-tag" onClick={() => goTag(tag)}>
                 {tag}
@@ -107,24 +107,24 @@ export function LandingPage() {
 
           <div className="landing-ctas">
             <Link to="/client" className="btn primary landing-cta-hire">
-              Thuê freelancer →
+              Hire a freelancer →
             </Link>
             <Link to="/browse" className="btn ghost landing-cta-sell">
-              Bán dịch vụ / Nhận job
+              Find work / Browse jobs
             </Link>
           </div>
 
           <dl className="landing-stats">
             <div>
-              <dt>Live</dt>
+              <dt>Network</dt>
               <dd>Sepolia</dd>
             </div>
             <div>
-              <dt>Phí</dt>
+              <dt>Platform fee</dt>
               <dd>3%</dd>
             </div>
             <div>
-              <dt>Thanh toán</dt>
+              <dt>Settlement</dt>
               <dd>USDC</dd>
             </div>
             <div>
@@ -136,9 +136,9 @@ export function LandingPage() {
       </section>
 
       <section className="landing-section">
-        <h2>Vì sao FAPEX?</h2>
+        <h2>Why FAPEX?</h2>
         <p className="landing-section-lead">
-          Thay vì tin platform giữ tiền, bạn tin smart contract có thể kiểm chứng trên Sepolia.
+          Instead of trusting a platform to hold funds, you trust auditable smart contracts on Sepolia.
         </p>
         <div className="landing-feature-grid">
           {FEATURES.map((f) => (
@@ -151,19 +151,20 @@ export function LandingPage() {
       </section>
 
       <section className="landing-section landing-steps">
-        <h2>Luồng 4 bước</h2>
+        <h2>How it works</h2>
         <ol className="landing-step-list">
           <li>
-            <strong>Đăng &amp; fund</strong> — Client tạo job + metadata IPFS, nạp escrow USDC.
+            <strong>Post &amp; fund</strong> — Client creates a job with IPFS metadata and deposits USDC
+            escrow.
           </li>
           <li>
-            <strong>Thuê</strong> — Freelancer bid; client accept và gán on-chain.
+            <strong>Hire</strong> — Freelancers bid; the client accepts and assigns on-chain.
           </li>
           <li>
-            <strong>Giao &amp; duyệt</strong> — Deliverable CID on-chain; client approve release.
+            <strong>Deliver &amp; approve</strong> — Deliverable CID on-chain; client approves release.
           </li>
           <li>
-            <strong>Tranh chấp</strong> — Nếu cần: evidence IPFS + arbitrator vote commit-reveal.
+            <strong>Dispute (if needed)</strong> — IPFS evidence + arbitrator commit-reveal voting.
           </li>
         </ol>
       </section>
@@ -171,15 +172,15 @@ export function LandingPage() {
       <section className="landing-section landing-roles">
         <div className="landing-role-grid">
           {[
-            { title: 'Client', desc: 'Đăng job, nạp escrow, duyệt milestone.', to: '/client' },
-            { title: 'Freelancer', desc: 'Browse, bid, deliver IPFS, nhận USDC.', to: '/freelancer' },
-            { title: 'Arbitrator', desc: 'Stake ≥50 USDC, vote tranh chấp.', to: '/arbitrator' },
+            { title: 'Client', desc: 'Post jobs, fund escrow, approve milestones.', to: '/client' },
+            { title: 'Freelancer', desc: 'Browse jobs, bid, deliver on IPFS, get paid in USDC.', to: '/freelancer' },
+            { title: 'Arbitrator', desc: 'Stake ≥50 USDC, join the pool, vote on disputes.', to: '/arbitrator' },
           ].map((r) => (
             <article key={r.title} className="landing-role-card">
               <h3>{r.title}</h3>
               <p>{r.desc}</p>
               <Link to={r.to} className={cn('btn ghost', 'landing-role-link')}>
-                Vào console →
+                Open console →
               </Link>
             </article>
           ))}
@@ -187,8 +188,8 @@ export function LandingPage() {
       </section>
 
       <section className="landing-footer-cta">
-        <h2>Bắt đầu trên Sepolia</h2>
-        <p>Kết nối MetaMask, đăng nhập SIWE, chọn vai trò Client hoặc Freelancer.</p>
+        <h2>Get started on Sepolia</h2>
+        <p>Connect MetaMask, sign in with SIWE, and choose Client or Freelancer.</p>
         <Link to="/profile" className="btn primary">
           Launch FAPEX
         </Link>

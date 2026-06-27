@@ -16,6 +16,7 @@ import {
 import { useArbitratorAccess } from '@/hooks/useArbitratorAccess';
 import { useReputation } from '@/hooks/useReputation';
 import { ReputationBadge } from '@/components/shared/ReputationBadge';
+import { ArbitratorOnboardingPanel } from '@/components/profile/ArbitratorOnboardingPanel';
 
 export function ProfilePage() {
   const { address, user, isAuthenticated, walletSessionNotice, signIn, loading: authLoading, refreshSession } = useAuth();
@@ -189,21 +190,17 @@ export function ProfilePage() {
         </section>
       )}
 
-      {address && !arbitrator.loading && arbitrator.stakedAmount != null && (
+      {address && <ArbitratorOnboardingPanel />}
+
+      {address && !arbitrator.loading && arbitrator.stakedAmount != null && arbitrator.isValid && (
         <section className="panel form-panel">
-          <h3>Arbitrator access</h3>
-          <p className={arbitrator.isValid ? 'badge success' : 'error banner'}>
-            {arbitrator.isValid
-              ? `Eligible — ${arbitrator.stakedAmount} USDC staked${arbitrator.inPool ? ', in pool' : ''}`
-              : `Not eligible — ${arbitrator.stakedAmount} / ${arbitrator.minStake ?? 50} USDC staked`}
+          <h3>Arbitrator status</h3>
+          <p className="badge success">
+            {arbitrator.inPool
+              ? `In pool — ${arbitrator.stakedAmount} USDC staked`
+              : `Stake sufficient (${arbitrator.stakedAmount} USDC) — join pool to receive assignments`}
           </p>
           {arbitrator.message && <p className="muted">{arbitrator.message}</p>}
-          {!arbitrator.isValid && (
-            <p className="muted">
-              Run <code>npm run seed:arbitrators</code> from the monorepo (admin funds stake + joinPool), or
-              stake 50 USDC on PlatformTreasury then <code>npm run join:arbitrators</code>.
-            </p>
-          )}
         </section>
       )}
 

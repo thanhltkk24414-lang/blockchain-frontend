@@ -29,8 +29,8 @@ export function ReputationBadge({ reputation, loading, compact }: ReputationBadg
         <span className="muted">/ 100+</span>
       </div>
       <p className="muted phase-note">
-        Điểm uy tín on-chain (ReputationStore Sepolia). Tier ≥80 mới mở tranh chấp / join pool
-        arbitrator.
+        On-chain reputation (ReputationStore on Sepolia). Tier ≥80 required to raise disputes or join
+        the arbitrator pool.
       </p>
     </div>
   );

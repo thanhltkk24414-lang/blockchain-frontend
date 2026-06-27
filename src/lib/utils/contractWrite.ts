@@ -18,138 +18,134 @@ import { withGasLimit, type GasEstimateInput } from '@/lib/utils/contractGas';
 
 const REVERT_HINTS: Record<string, string> = {
   WrongStatus:
-    'Trạng thái job on-chain không hợp lệ. depositEscrow cần job OPEN; nếu đã ASSIGNED (thường do gọi assignFreelancer / Retry assign trước đó), tạo job mới.',
-  OnlyClient: 'Chỉ ví client on-chain (người tạo job trên JobRegistry) mới gọi được hàm này.',
+    'Invalid on-chain job status. depositEscrow requires OPEN; if already ASSIGNED (often from assignFreelancer), create a new job.',
+  OnlyClient: 'Only the on-chain client (JobRegistry creator) can call this function.',
   OnlyFreelancer:
-    'Chỉ ví freelancer được gán khi nạp escrow mới gọi được hàm này — kiểm tra ví MetaMask.',
-  Unauthorized: 'Ví không có quyền thực hiện giao dịch này.',
-  ContractPaused: 'Hợp đồng đang tạm dừng (emergency pause).',
+    'Only the freelancer assigned at escrow deposit can call this — check MetaMask wallet.',
+  Unauthorized: 'Wallet is not authorized for this transaction.',
+  ContractPaused: 'Contract is paused (emergency pause).',
   TransferFailed:
-    'Chuyển USDC thất bại — kiểm tra số dư MockUSDC và allowance (cần đủ giá job on-chain + 3% phí).',
-  LowReputationTier: 'Reputation tier không đủ để thực hiện thao tác này.',
+    'USDC transfer failed — check MockUSDC balance and allowance (need job value on-chain + 3% fee).',
+  LowReputationTier: 'Reputation tier too low for this action.',
   AccountRestricted:
-    'Reputation tier Restricted (điểm < 50) — không được tạo job hoặc thao tác bị chặn.',
-  JobNotOpen: 'Job không còn OPEN — không thể gán freelancer qua depositEscrow.',
+    'Reputation tier Restricted (score < 50) — cannot create jobs or perform this action.',
+  JobNotOpen: 'Job is not OPEN — cannot assign freelancer via depositEscrow.',
   StartWindowExpired:
-    'Đã quá 72 giờ kể từ khi được gán — client có thể hủy hợp đồng. Liên hệ client.',
+    'More than 72 hours since assignment — client may cancel the contract. Contact the client.',
 };
 
 const REVERT_HINTS_BY_FN: Record<string, Record<string, string>> = {
   createJob: {
     AccountRestricted:
-      'Ví client có tier Restricted — không gọi được createJob. Dùng ví khác hoặc nhờ admin cập nhật reputation.',
-    InvalidJob: 'Tham số job không hợp lệ — kiểm tra budget USDC (> 0) và duration (giây).',
+      'Client wallet has Restricted tier — cannot call createJob. Use another wallet or ask admin to update reputation.',
+    InvalidJob: 'Invalid job parameters — check USDC budget (> 0) and duration (seconds).',
   },
   submitWork: {
     WrongStatus:
-      'Job chưa startWork — đang gọi startWork trước... (submitWork chỉ chạy khi IN_PROGRESS).',
+      'Job has not started — call startWork first (submitWork only when IN_PROGRESS).',
     OnlyFreelancer:
-      'Ví MetaMask không trùng freelancer on-chain. Đổi sang ví đã được gán khi client nạp escrow.',
+      'MetaMask wallet does not match on-chain freelancer. Switch to the wallet assigned at escrow deposit.',
   },
   startWork: {
-    WrongStatus: 'startWork chỉ gọi được khi job ASSIGNED (sau depositEscrow).',
+    WrongStatus: 'startWork only when job is ASSIGNED (after depositEscrow).',
     OnlyFreelancer:
-      'Ví MetaMask không trùng freelancer on-chain. Đổi sang ví đã được gán khi client nạp escrow.',
+      'MetaMask wallet does not match on-chain freelancer. Switch to the wallet assigned at escrow deposit.',
     StartWindowExpired:
-      'Đã quá 72 giờ kể từ khi được gán — client có thể hủy hợp đồng.',
+      'More than 72 hours since assignment — client may cancel the contract.',
   },
   approveAndRelease: {
     WrongStatus:
-      'approveAndRelease chỉ gọi được khi job SUBMITTED (freelancer đã submitWork on-chain).',
+      'approveAndRelease only when job is SUBMITTED (freelancer called submitWork).',
     OnlyClient:
-      'Chỉ ví client on-chain (người tạo job) mới phê duyệt — đổi sang ví client đúng trong MetaMask.',
-    ContractPaused: 'EscrowVault đang pause — thử lại sau.',
-    TransferFailed: 'Chuyển USDC thất bại — escrow có thể chưa khóa đủ tiền cho job này.',
+      'Only the on-chain client can approve — switch to the correct client wallet in MetaMask.',
+    ContractPaused: 'EscrowVault is paused — try again later.',
+    TransferFailed: 'USDC transfer failed — escrow may not hold enough funds for this job.',
   },
   raiseDispute: {
     WrongStatus:
-      'raiseDispute chỉ gọi được khi job SUBMITTED hoặc IN_PROGRESS (chưa COMPLETED).',
-    NotAParty: 'Chỉ client hoặc freelancer on-chain mới mở tranh chấp — đổi ví MetaMask.',
-    AlreadyDisputed: 'Job đã từng mở tranh chấp — không thể mở lại.',
-    LowReputationTier: 'Reputation tier Warning/Restricted không được mở tranh chấp mới.',
+      'raiseDispute only when job is SUBMITTED or IN_PROGRESS (not COMPLETED).',
+    NotAParty: 'Only on-chain client or freelancer can raise a dispute — switch MetaMask wallet.',
+    AlreadyDisputed: 'Job was already disputed — cannot open again.',
+    LowReputationTier: 'Warning/Restricted tiers cannot raise new disputes.',
     TransferFailed:
-      'Chuyển phí tranh chấp USDC thất bại — kiểm tra số dư MockUSDC và allowance cho EscrowVault.',
+      'Dispute fee USDC transfer failed — check MockUSDC balance and allowance for EscrowVault.',
     NotEnoughArbitrators:
-      'Chưa đủ 5 arbitrator trong pool (ArbitratorPanel.poolSize). Admin cần joinPool trước khi demo dispute.',
+      'Fewer than 5 arbitrators in pool (ArbitratorPanel.poolSize). Admin must joinPool before demo disputes.',
   },
   submitEvidence: {
-    JobNotDisputed: 'Job chưa DISPUTED — mở tranh chấp (raiseDispute) trước khi nộp bằng chứng.',
+    JobNotDisputed: 'Job is not DISPUTED — call raiseDispute before submitting evidence.',
     NotAParty:
-      'Chỉ client hoặc freelancer on-chain mới nộp bằng chứng — đổi sang ví đúng trong MetaMask.',
+      'Only on-chain client or freelancer can submit evidence — switch to the correct wallet.',
     EvidenceWindowClosed:
-      'Đã quá cửa sổ nộp bằng chứng (demo Sepolia: 30 phút kể từ raiseDispute).',
+      'Evidence window closed (demo Sepolia: 10 minutes from dispute start).',
   },
   commitVote: {
-    AlreadyCommitted: 'Bạn đã commit vote — chờ giai đoạn reveal để mở phiếu.',
-    WrongPhase: 'Chưa đến hoặc đã hết giai đoạn commit vote.',
-    NotAnArbitrator: 'Ví không nằm hội đồng arbitrator của job này.',
+    AlreadyCommitted: 'You already committed — wait for reveal phase.',
+    WrongPhase: 'Commit phase has not started or has ended.',
+    NotAnArbitrator: 'Wallet is not on the arbitrator panel for this job.',
   },
   revealVote: {
-    AlreadyRevealed: 'Bạn đã reveal vote — không cần gửi lại.',
-    NotCommitted: 'Chưa commit vote — commit trước trong giai đoạn commit.',
-    HashMismatch: 'Salt hoặc lựa chọn không khớp lúc commit — kiểm tra lại salt.',
-    WrongPhase: 'Chưa đến hoặc đã hết giai đoạn reveal vote.',
-    NotAnArbitrator: 'Ví không nằm hội đồng arbitrator của job này.',
+    AlreadyRevealed: 'You already revealed — no need to send again.',
+    NotCommitted: 'No commit found — commit during the commit phase first.',
+    HashMismatch: 'Salt or choice does not match commit — check your salt.',
+    WrongPhase: 'Reveal phase has not started or has ended.',
+    NotAnArbitrator: 'Wallet is not on the arbitrator panel for this job.',
   },
   finalizeDisputeVoting: {
-    VotingStillActive: 'Giai đoạn reveal chưa kết thúc — đợi hết thời gian reveal.',
-    InsufficientQuorum: 'Chưa đủ ≥3 vote reveal hợp lệ — cần thêm arbitrator reveal.',
-    AlreadyResolved: 'Voting đã được finalize trước đó.',
+    VotingStillActive: 'Reveal phase still active — wait until it ends.',
+    InsufficientQuorum: 'Fewer than 3 valid reveal votes — need more arbitrator reveals.',
+    AlreadyResolved: 'Voting was already finalized.',
   },
   fileAppeal: {
-    AppealAlreadyFiled: 'Đã kháng cáo cho job này.',
-    AppealNotAllowed: 'Chỉ kháng cáo được ở vòng 1 — vòng 2 là quyết định cuối.',
-    AppealWindowClosed: 'Đã hết cửa sổ kháng cáo (demo: 2 giờ sau finalize).',
-    VotingNotFinalized: 'Chưa finalize voting — đợi ai đó gọi Finalize voting.',
-    NotAParty: 'Chỉ client hoặc freelancer mới kháng cáo được.',
-    TransferFailed: 'Chuyển phí kháng cáo USDC thất bại — kiểm tra số dư và allowance.',
+    AppealAlreadyFiled: 'Appeal already filed for this job.',
+    AppealNotAllowed: 'Appeals only in round 1 — round 2 is final.',
+    AppealWindowClosed: 'Appeal window closed (demo: 30 minutes after finalize).',
+    VotingNotFinalized: 'Voting not finalized yet — wait for Finalize voting.',
+    NotAParty: 'Only client or freelancer can file an appeal.',
+    TransferFailed: 'Appeal fee USDC transfer failed — check balance and allowance.',
   },
 };
 
 function formatDecodedMessage(msg: string, functionName?: string): string {
   if (/invalid address/i.test(msg)) {
     return (
-      'Địa chỉ ví không hợp lệ (cần 0x + đúng 40 ký tự hex). ' +
-      'Kiểm tra account trong MetaMask — địa chỉ dài hơn 42 ký tự thường bị copy thừa ký tự.'
+      'Invalid wallet address (need 0x + 40 hex chars). ' +
+      'Check MetaMask account — addresses longer than 42 chars are often copy-paste errors.'
     );
   }
   if (/user rejected|user denied|rejected the request/i.test(msg)) {
-    return 'Bạn đã từ chối giao dịch trong MetaMask.';
+    return 'You rejected the transaction in MetaMask.';
   }
   if (/chain.?mismatch|wrong network|unsupported chain/i.test(msg)) {
-    return `MetaMask phải ở Sepolia (chainId ${CHAIN_ID}) trước khi gọi ${functionName ?? 'contract'}.`;
+    return `MetaMask must be on Sepolia (chainId ${CHAIN_ID}) before calling ${functionName ?? 'contract'}.`;
   }
   if (/missing or invalid parameters/i.test(msg)) {
     const clean = msg.replace(/^MetaMask RPC:\s*/i, '').trim();
     return (
-      `MetaMask RPC: ${clean}. Thường do nhiều ví inject (Coinbase/Brave/Rabby) hoặc connector sai — ` +
-      `không phải lỗi calldata/ABI. Thử Disconnect → Connect lại MetaMask; tắt extension ví khác; ` +
-      `refresh trang. createJob/submitEvidence dùng wagmi sendTransaction (không eth_sendTransaction thủ công).`
+      `MetaMask RPC: ${clean}. Often caused by multiple wallet extensions — disconnect MetaMask and refresh.`
     );
   }
   if (/transaction creation failed/i.test(msg)) {
     return (
-      'MetaMask không tạo được giao dịch — kiểm tra extension: đúng account, mạng Sepolia, đủ ETH gas. ' +
-      'Thử disconnect/reconnect ví trên Fapex; chỉ import lại private key nếu địa chỉ hiển thị sai định dạng (không phải 0x + 40 hex).'
+      'MetaMask could not create the transaction — check account, Sepolia network, and ETH for gas.'
     );
   }
   if (/connector account not found|account not found/i.test(msg)) {
     return (
-      'Account MetaMask không khớp yêu cầu giao dịch — chọn đúng account trong extension (phải trùng ví đã kết nối trên Fapex).'
+      'MetaMask account not found — select the same account in the extension as connected on FAPEX.'
     );
   }
   if (/reverted.*unknown|out of gas|intrinsic gas too low|missing revert data/i.test(msg)) {
     const gasHint =
       functionName === 'approveAndRelease'
-        ? 'approveAndRelease cần ~225k+ gas trên Sepolia.'
+        ? 'approveAndRelease needs ~225k+ gas on Sepolia.'
         : functionName === 'submitWork'
-          ? 'submitWork cần ~180k+ gas.'
+          ? 'submitWork needs ~180k+ gas.'
           : functionName === 'createJob'
-            ? 'createJob cần ~120k+ gas; đảm bảo có Sepolia ETH.'
-            : 'gas limit có thể quá thấp.';
+            ? 'createJob needs ~120k+ gas; ensure Sepolia ETH.'
+            : 'gas limit may be too low.';
     return (
-      `Giao dịch bị contract từ chối (revert không decode được). Thường do ${gasHint} ` +
-      'Kiểm tra ví MetaMask đúng role và trạng thái job on-chain.'
+      `Transaction reverted (undecoded). Often ${gasHint} Check MetaMask wallet and job status.`
     );
   }
   return msg;
@@ -163,7 +159,7 @@ export function decodeContractError(
   if (err instanceof BaseError) {
     const rejected = err.walk((e) => e instanceof UserRejectedRequestError);
     if (rejected instanceof UserRejectedRequestError) {
-      return 'Bạn đã từ chối giao dịch trong MetaMask.';
+      return 'You rejected the transaction in MetaMask.';
     }
 
     const revert = err.walk(
@@ -190,7 +186,7 @@ export function decodeContractError(
     return formatDecodedMessage(err.message, functionName);
   }
 
-  return 'Giao dịch thất bại';
+  return 'Transaction failed';
 }
 
 export type ContractWriteInput = GasEstimateInput & {
@@ -289,7 +285,7 @@ async function writeViaInjectedProvider(
 ): Promise<Hash> {
   const provider = (await getSigningProvider()) ?? getInjectedProvider();
   if (!provider?.request) {
-    throw new Error('MetaMask provider không khả dụng — cài/kích hoạt extension.');
+    throw new Error('MetaMask provider unavailable — install or enable the extension.');
   }
 
   await ensureSepoliaOnProvider(provider);
@@ -337,7 +333,7 @@ export async function sendContractTransaction(
 ): Promise<`0x${string}`> {
   if (!params.address || !isAddress(params.address)) {
     throw new Error(
-      `Địa chỉ contract không hợp lệ (${String(params.address)}). Kiểm tra VITE_JOB_REGISTRY_ADDRESS / deployments-sepolia.json.`,
+      `Invalid contract address (${String(params.address)}). Check VITE_JOB_REGISTRY_ADDRESS / deployments-sepolia.json.`,
     );
   }
 
@@ -345,7 +341,7 @@ export async function sendContractTransaction(
 
   const walletClient = await getWalletClient(wagmiConfig, { chainId });
   if (!walletClient?.account) {
-    throw new Error('Kết nối ví MetaMask trên Sepolia trước khi gửi giao dịch.');
+    throw new Error('Connect MetaMask on Sepolia before sending a transaction.');
   }
 
   const signerAddress = walletClient.account.address;
@@ -354,7 +350,7 @@ export async function sendContractTransaction(
     params.account.toLowerCase() !== signerAddress.toLowerCase()
   ) {
     throw new Error(
-      'Account MetaMask không khớp — chọn đúng account trong extension (phải trùng ví đã kết nối trên Fapex).',
+      'MetaMask account mismatch — select the same account in the extension as connected on FAPEX.',
     );
   }
 

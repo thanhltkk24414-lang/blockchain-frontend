@@ -34,7 +34,7 @@ function parseJobIdFromReceipt(logs: Log[]): number {
     logs,
   });
   if (events.length === 0) {
-    throw new Error('JobCreated event not found — kiểm tra giao dịch trên Etherscan.');
+    throw new Error('JobCreated event not found — check the transaction on Etherscan.');
   }
   const jobId = (events[0].args as { jobId: bigint }).jobId;
   const numeric = Number(jobId);
@@ -51,13 +51,13 @@ function assertCreateJobParams({
 }: CreateJobOnChainParams): void {
   const cid = metadataCID?.trim();
   if (!cid) {
-    throw new Error('metadataCID trống — upload IPFS phải hoàn tất trước createJob.');
+    throw new Error('metadataCID is empty — IPFS upload must complete before createJob.');
   }
   if (!Number.isFinite(contractValue) || contractValue < 1) {
-    throw new Error('Budget phải ≥ 1 USDC (on-chain dùng 6 decimals: 1 USDC = 1_000_000 units).');
+    throw new Error('Budget must be ≥ 1 USDC (on-chain uses 6 decimals: 1 USDC = 1_000_000 units).');
   }
   if (!Number.isFinite(durationSeconds) || durationSeconds < 3600) {
-    throw new Error('Duration on-chain phải ≥ 3600 giây (1 giờ). Form dùng ngày × 86400.');
+    throw new Error('On-chain duration must be ≥ 3600 seconds (1 hour). The form uses days × 86400.');
   }
 }
 
@@ -84,7 +84,7 @@ export function useCreateJob() {
   const createOnChain = useCallback(
     async (params: CreateJobOnChainParams): Promise<CreateJobOnChainResult> => {
       if (!isConnected || !address) {
-        throw new Error('Kết nối ví MetaMask trên Sepolia trước khi tạo job on-chain.');
+        throw new Error('Connect your MetaMask wallet on Sepolia before creating a job on-chain.');
       }
 
       const account = getAccount(wagmiConfig);
@@ -94,7 +94,7 @@ export function useCreateJob() {
           : null;
 
       if (!signingAccount || !isAddress(signingAccount)) {
-        throw new Error('Wagmi chưa có account kết nối — Disconnect → Connect lại MetaMask trên Fapex.');
+        throw new Error('Wagmi has no connected account — Disconnect → Connect MetaMask again on Fapex.');
       }
 
       if (chainId !== CHAIN_ID) {
@@ -103,7 +103,7 @@ export function useCreateJob() {
         } catch (switchErr) {
           logContractError('switchChain Sepolia', switchErr);
           throw new Error(
-            `MetaMask đang ở chain ${chainId ?? 'unknown'} — chuyển sang Sepolia (${CHAIN_ID}).`,
+            `MetaMask is on chain ${chainId ?? 'unknown'} — switch to Sepolia (${CHAIN_ID}).`,
           );
         }
       }
@@ -132,7 +132,7 @@ export function useCreateJob() {
         })) as number;
         if (tier === RESTRICTED_TIER) {
           throw new Error(
-            'AccountRestricted: Reputation tier Restricted — ví này không được gọi JobRegistry.createJob.',
+            'AccountRestricted: Reputation tier Restricted — this wallet cannot call JobRegistry.createJob.',
           );
         }
 
@@ -162,7 +162,7 @@ export function useCreateJob() {
         if (receipt.status === 'reverted') {
           throw new Error(
             `createJob revert on-chain (JobRegistry ${CONTRACT_ADDRESSES.JobRegistry}). ` +
-              'Kiểm tra reputation tier và Sepolia ETH.',
+              'Check reputation tier and Sepolia ETH.',
           );
         }
 

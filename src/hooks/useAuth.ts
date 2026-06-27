@@ -39,7 +39,7 @@ export function useAuth() {
     }
     if (address.toLowerCase() !== user.walletAddress.toLowerCase()) {
       setWalletSessionNotice(
-        `Đăng nhập API: ${shortWallet(user.walletAddress)} · MetaMask: ${shortWallet(address)} — giao dịch on-chain dùng ví đang kết nối.`,
+        `API session: ${shortWallet(user.walletAddress)} · MetaMask: ${shortWallet(address)} — on-chain transactions use the connected wallet.`,
       );
     } else {
       setWalletSessionNotice(null);

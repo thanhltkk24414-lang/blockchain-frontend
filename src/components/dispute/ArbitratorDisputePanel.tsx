@@ -14,7 +14,7 @@ import {
   VOTE_CHOICES,
 } from '@/hooks/useDisputeActions';
 import { TxStatusModal } from '@/components/shared/TxStatusModal';
-import { DISPUTE_PHASES } from '@/lib/contracts/disputeTimings';
+import { DISPUTE_PHASES, formatAppealWindow } from '@/lib/contracts/disputeTimings';
 import { formatDisputeChoice, type VoteTally } from '@/lib/utils/disputeChoice';
 import { VoteTallyDisplay } from '@/components/dispute/VoteTallyDisplay';
 import { ReputationBadge } from '@/components/shared/ReputationBadge';
@@ -150,11 +150,11 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
     try {
       const choice = Number(voteChoice);
       if (action === 'commit') {
-        if (!voteSalt.trim()) throw new Error('Nhập salt — giữ bí mật đến giai đoạn reveal.');
+        if (!voteSalt.trim()) throw new Error('Enter a salt — keep it secret until the reveal phase.');
         await commitVote(job.onchainJobId, choice, voteSalt.trim());
         if (saltStorageKey) localStorage.setItem(saltStorageKey, voteSalt.trim());
       } else if (action === 'reveal') {
-        if (!voteSalt.trim()) throw new Error('Salt không khớp — dùng đúng salt lúc commit.');
+        if (!voteSalt.trim()) throw new Error('Salt mismatch — use the same salt from commit.');
         await revealVote(job.onchainJobId, choice, voteSalt.trim());
       } else if (action === 'finalize') {
         await finalizeDisputeVoting(job.onchainJobId);
@@ -164,7 +164,7 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
       await loadDisputeData();
       onActionComplete?.();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Giao dịch thất bại');
+      setFormError(err instanceof Error ? err.message : 'Transaction failed');
     } finally {
       setActionLoading(false);
     }
@@ -185,43 +185,43 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
 
   return (
     <section className="panel dispute-arbitrator-panel">
-      <h3>Tranh chấp — hội đồng arbitrator</h3>
+      <h3>Dispute — arbitrator panel</h3>
 
-      {disputeLoading && <p className="muted">Đang đọc dữ liệu on-chain…</p>}
+      {disputeLoading && <p className="muted">Reading on-chain data…</p>}
 
       <div className="dispute-phase-banner">
-        <span className="badge warning">Giai đoạn: {phaseLabel}</span>
-        {round > 1 && <span className="badge">Vòng {round} (kháng cáo)</span>}
+        <span className="badge warning">Phase: {phaseLabel}</span>
+        {round > 1 && <span className="badge">Round {round} (appeal)</span>}
         {countdown !== '—' && countdown !== '00:00' && (
-          <span className="badge countdown">Còn lại: {countdown}</span>
+          <span className="badge countdown">Remaining: {countdown}</span>
         )}
       </div>
 
       <ul className="muted phase-note">
         <li>
-          <strong>0–{DISPUTE_PHASES.evidenceRebuttalEndMin} phút:</strong> Nộp bằng chứng
+          <strong>0–{DISPUTE_PHASES.evidenceRebuttalEndMin} min:</strong> Submit evidence
         </li>
         <li>
           <strong>
-            {DISPUTE_PHASES.commitStartMin}–{DISPUTE_PHASES.commitEndMin} phút:
+            {DISPUTE_PHASES.commitStartMin}–{DISPUTE_PHASES.commitEndMin} min:
           </strong>{' '}
           Commit vote
         </li>
         <li>
           <strong>
-            {DISPUTE_PHASES.revealStartMin}–{DISPUTE_PHASES.revealEndMin} phút:
+            {DISPUTE_PHASES.revealStartMin}–{DISPUTE_PHASES.revealEndMin} min:
           </strong>{' '}
           Reveal vote
         </li>
         <li>
-          <strong>Sau {DISPUTE_PHASES.revealEndMin} phút:</strong> Finalize → kháng cáo{' '}
-          {DISPUTE_PHASES.appealWindowHours}h → Execute
+          <strong>After {DISPUTE_PHASES.revealEndMin} min:</strong> Finalize → appeal{' '}
+          {formatAppealWindow()} → Execute
         </li>
       </ul>
 
       <p className="muted phase-note">
-        Hội đồng: {chosenArbs.length}/5 arbitrator · Commit {commitCount} · Reveal {revealCount}{' '}
-        (cần ≥3 vote hợp lệ)
+        Panel: {chosenArbs.length}/5 arbitrators · Commit {commitCount} · Reveal {revealCount}{' '}
+        (requires ≥3 valid votes)
       </p>
 
       {showVoteTally && voteTally && (
@@ -230,67 +230,67 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
 
       {isResolved && pendingResult > 0 && (
         <p className="badge success">
-          Kết quả voting vòng {round}: <strong>{formatDisputeChoice(pendingResult)}</strong>
+          Round {round} voting result: <strong>{formatDisputeChoice(pendingResult)}</strong>
           {resultAtSec > 0 && (
             <span className="muted">
               {' '}
-              · Finalize {new Date(resultAtSec * 1000).toLocaleString('vi-VN')}
+              · Finalized {new Date(resultAtSec * 1000).toLocaleString('en-US')}
             </span>
           )}
         </p>
       )}
 
       {address && isAssigned && (
-        <p className="badge success">Bạn được chọn làm arbitrator cho job #{job.onchainJobId}</p>
+        <p className="badge success">You were selected as arbitrator for job #{job.onchainJobId}</p>
       )}
 
       {address && isAssigned && (
         <div className="arbitrator-reputation-inline">
-          <span className="muted">Reputation ví arbitrator:</span>{' '}
+          <span className="muted">Arbitrator wallet reputation:</span>{' '}
           <ReputationBadge reputation={arbReputation} loading={arbRepLoading} compact />
         </div>
       )}
 
       {address && !isAssigned && chosenArbs.length > 0 && (
         <p className="muted">
-          Đang dùng ví <code>{address.slice(0, 6)}…{address.slice(-4)}</code> — không nằm hội
-          đồng job này. Chuyển sang một trong các ví arbitrator:{' '}
+          Using wallet <code>{address.slice(0, 6)}…{address.slice(-4)}</code> — not on this job&apos;s
+          panel. Switch to one of the arbitrator wallets:{' '}
           {chosenArbs.map((a) => (
             <code key={a} style={{ marginRight: '0.5rem' }}>
               {a.slice(0, 6)}…{a.slice(-4)}
             </code>
           ))}{' '}
-          (import từ <code>deployments/sepolia-arbitrators.json</code>).
+          (import from <code>deployments/sepolia-arbitrators.json</code>).
         </p>
       )}
 
       {isAssigned && !isResolved && (
         <div className="arbitrator-vote-form">
-          <h4>Biểu quyết (commit-reveal)</h4>
+          <h4>Vote (commit-reveal)</h4>
           <p className="muted phase-note">
-            Hash = keccak256(choice, salt). Giữ salt an toàn — cần lại khi reveal.
+            Hash = keccak256(choice, salt). Keep the salt safe — you need it again at reveal.
           </p>
 
           {hasRevealed && (
-            <p className="badge success">Bạn đã reveal vote — không cần gửi lại.</p>
+            <p className="badge success">You have already revealed your vote — no need to submit again.</p>
           )}
 
           <label className="field">
-            Lựa chọn
+            Choice
             <select
               className="input full"
               value={voteChoice}
               onChange={(e) => setVoteChoice(e.target.value)}
               disabled={(!canCommit && !canReveal) || hasRevealed}
             >
-              <option value={VOTE_CHOICES.FREELANCER_WIN}>Freelancer thắng</option>
-              <option value={VOTE_CHOICES.CLIENT_WIN}>Client thắng</option>
-              <option value={VOTE_CHOICES.SPLIT}>Chia 50/50</option>
+              <option value={VOTE_CHOICES.FREELANCER_WIN}>Freelancer wins</option>
+              <option value={VOTE_CHOICES.CLIENT_WIN}>Client wins</option>
+              <option value={VOTE_CHOICES.SPLIT}>Split 50/50</option>
             </select>
           </label>
 
           <label className="field">
-            Salt (bí mật)
+            Salt (secret)
             <input
               className="input full mono"
               value={voteSalt}
@@ -302,7 +302,7 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
 
           {canReveal && voteSalt && !hasRevealed && (
             <p className="muted phase-note">
-              Nhắc salt: <code className="mono">{voteSalt}</code>
+              Salt reminder: <code className="mono">{voteSalt}</code>
             </p>
           )}
 
@@ -320,9 +320,9 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
               type="button"
               disabled={!canReveal || actionLoading || txStatus === 'pending' || !isAuthenticated}
               onClick={() => runAction('reveal')}
-              title={hasRevealed ? 'AlreadyRevealed: bạn đã reveal' : undefined}
+              title={hasRevealed ? 'AlreadyRevealed: you have already revealed' : undefined}
             >
-              {hasRevealed ? 'Đã reveal' : 'Reveal vote'}
+              {hasRevealed ? 'Revealed' : 'Reveal vote'}
             </button>
           </div>
         </div>
@@ -335,7 +335,7 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
             type="button"
             disabled={!canFinalize || actionLoading || txStatus === 'pending' || !isAuthenticated}
             onClick={() => runAction('finalize')}
-            title="Bất kỳ ai cũng gọi được sau khi hết giai đoạn reveal"
+            title="Anyone can call this after the reveal phase ends"
           >
             Finalize voting
           </button>
@@ -344,15 +344,15 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
             type="button"
             disabled={!canExecute || actionLoading || txStatus === 'pending' || !isAuthenticated}
             onClick={() => runAction('execute')}
-            title={`Sau ${DISPUTE_PHASES.appealWindowHours}h kháng cáo kể từ finalize`}
+            title={`${formatAppealWindow()} appeal window after finalize`}
           >
-            Thực thi kết quả
+            Execute result
           </button>
         </div>
       )}
 
       {isResolved && pendingResult === 0 && (
-        <p className="badge success">Voting đã finalize — chờ kháng cáo hoặc thực thi kết quả.</p>
+        <p className="badge success">Voting finalized — awaiting appeal or result execution.</p>
       )}
 
       {formError && <p className="error">{formError}</p>}

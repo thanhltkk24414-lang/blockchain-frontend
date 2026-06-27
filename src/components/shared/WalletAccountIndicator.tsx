@@ -8,7 +8,7 @@ interface WalletAccountIndicatorProps {
 
 /**
  * Shows Fapex-connected (wagmi) vs MetaMask extension selected account.
- * Hai địa chỉ phải khớp — nếu không eth_sendTransaction bị -32602.
+ * Both addresses must match — otherwise eth_sendTransaction returns -32602.
  */
 export function WalletAccountIndicator({ showSiwe = true, compact = false }: WalletAccountIndicatorProps) {
   const {
@@ -35,7 +35,7 @@ export function WalletAccountIndicator({ showSiwe = true, compact = false }: Wal
     >
       <div className="wallet-account-lines">
         <p className="muted" style={{ margin: 0 }}>
-          <strong>Fapex đã kết nối</strong> (MetaMask):{' '}
+          <strong>Fapex connected</strong> (MetaMask):{' '}
           <code className="mono">{shortRainbow ?? '—'}</code>
           {rainbowKitAddress && (
             <span className="muted phase-note" title={rainbowKitAddress}>
@@ -45,7 +45,7 @@ export function WalletAccountIndicator({ showSiwe = true, compact = false }: Wal
           )}
         </p>
         <p className="muted" style={{ margin: '0.25rem 0 0' }}>
-          <strong>MetaMask active</strong> (account đang chọn trong extension):{' '}
+          <strong>MetaMask active</strong> (account selected in extension):{' '}
           <code className="mono">{shortMetaMask ?? '—'}</code>
           {metaMaskActive && (
             <span className="muted phase-note" title={metaMaskActive}>
@@ -56,29 +56,29 @@ export function WalletAccountIndicator({ showSiwe = true, compact = false }: Wal
         </p>
         {showSiwe && siweWallet && (
           <p className="muted" style={{ margin: '0.25rem 0 0' }}>
-            <strong>SIWE đăng nhập</strong>: <code className="mono">{shortSiwe}</code>
+            <strong>SIWE session</strong>: <code className="mono">{shortSiwe}</code>
           </p>
         )}
       </div>
 
       {rainbowMismatch && (
         <p className="error" style={{ marginTop: '0.5rem' }}>
-          MetaMask đang chọn account khác với ví Fapex đã kết nối.
-          Giao dịch on-chain dùng <strong>MetaMask active</strong>; chọn đúng account trong
-          extension hoặc Disconnect → Connect lại trên Fapex.
+          MetaMask is using a different account than the Fapex-connected wallet.
+          On-chain transactions use <strong>MetaMask active</strong>; select the correct account in
+          the extension or Disconnect → Connect again on Fapex.
         </p>
       )}
 
       {siweMismatch && !rainbowMismatch && (
         <p className="error" style={{ marginTop: '0.5rem' }}>
-          SIWE khác MetaMask active — đăng nhập lại (Sign in) với ví MetaMask đang chọn trước khi
-          tạo job.
+          SIWE session differs from MetaMask active — sign in again with the currently selected
+          MetaMask wallet before creating a job.
         </p>
       )}
 
       {!rainbowMismatch && !siweMismatch && metaMaskActive && (
         <p className="muted phase-note" style={{ marginTop: '0.35rem', marginBottom: 0 }}>
-          Trùng ví — sẵn sàng ký giao dịch.
+          Wallets match — ready to sign transactions.
         </p>
       )}
 

@@ -32,7 +32,7 @@ export function NetworkBanner() {
     >
       <div className="network-banner-inner">
         <p>
-          <strong>Sai mạng.</strong> FAPEX chạy trên Sepolia (chainId {CHAIN_ID}) — ví đang ở{' '}
+          <strong>Wrong network.</strong> FAPEX runs on Sepolia (chainId {CHAIN_ID}) — wallet is on{' '}
           {chainId ?? 'unknown'}.
         </p>
         <button
@@ -41,7 +41,7 @@ export function NetworkBanner() {
           disabled={isPending}
           onClick={() => void switchChainAsync({ chainId: CHAIN_ID })}
         >
-          {isPending ? 'Đang chuyển…' : 'Chuyển sang Sepolia'}
+          {isPending ? 'Switching…' : 'Switch to Sepolia'}
         </button>
       </div>
     </div>

@@ -76,34 +76,35 @@ export function DisputeStatusPanel({ job }: DisputeStatusPanelProps) {
 
   return (
     <section className="panel dispute-status-panel">
-      <h3>Trạng thái tranh chấp</h3>
+      <h3>Dispute status</h3>
       <p className="badge warning">
         Job #{job.onchainJobId} — {loading ? '…' : onchainStatusLabel ?? 'DISPUTED'}
       </p>
       <ul className="muted phase-note">
         <li>
-          <strong>0–{DISPUTE_PHASES.evidenceRebuttalEndMin} phút:</strong> Nộp bằng chứng (
-          <code>submitEvidence</code>) — công khai cho mọi người xem
+          <strong>0–{DISPUTE_PHASES.evidenceRebuttalEndMin} min:</strong> Submit evidence (
+          <code>submitEvidence</code>) — visible to everyone
         </li>
         <li>
           <strong>
-            {DISPUTE_PHASES.commitStartMin}–{DISPUTE_PHASES.commitEndMin} phút:
+            {DISPUTE_PHASES.commitStartMin}–{DISPUTE_PHASES.commitEndMin} min:
           </strong>{' '}
           Arbitrator commit vote
         </li>
         <li>
           <strong>
-            {DISPUTE_PHASES.revealStartMin}–{DISPUTE_PHASES.revealEndMin} phút:
+            {DISPUTE_PHASES.revealStartMin}–{DISPUTE_PHASES.revealEndMin} min:
           </strong>{' '}
-          Arbitrator reveal vote — tally công khai sau reveal
+          Arbitrator reveal vote — tally is public after reveal
         </li>
         <li>
-          <strong>Sau {DISPUTE_PHASES.revealEndMin} phút:</strong>{' '}
+          <strong>After {DISPUTE_PHASES.revealEndMin} min:</strong>{' '}
           <code>finalizeDisputeVoting</code> → <code>executeArbitrationResult</code>
         </li>
       </ul>
       <p className="muted">
-        Hội đồng 5 arbitrator được chọn ngẫu nhiên từ pool. Cần ≥3 vote hợp lệ (quorum).
+        A panel of 5 arbitrators is randomly selected from the pool. Requires ≥3 valid votes
+        (quorum).
       </p>
 
       {showVoteTally && voteTally && (

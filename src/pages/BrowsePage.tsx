@@ -65,7 +65,14 @@ export function BrowsePage() {
       if (res.success) {
         let list = res.jobs || [];
         if (filters.status) {
-          list = list.filter((j) => j.status?.toUpperCase() === filters.status.toUpperCase());
+          const want = filters.status.toUpperCase();
+          if (want === 'DISPUTED') {
+            list = list.filter(
+              (j) => j.status?.toUpperCase() === 'DISPUTED' || Boolean(j.isDisputed),
+            );
+          } else {
+            list = list.filter((j) => j.status?.toUpperCase() === want);
+          }
         }
         list = filterBySkill(list, filters.skill);
         setJobs(sortJobs(list, filters.sortBy));

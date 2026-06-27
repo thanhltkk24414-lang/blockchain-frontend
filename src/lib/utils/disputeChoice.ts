@@ -5,14 +5,14 @@ export const VOTE_CHOICES = {
 } as const;
 
 export const DISPUTE_CHOICE_LABELS: Record<number, string> = {
-  0: 'Chưa quyết định',
-  [VOTE_CHOICES.FREELANCER_WIN]: 'Freelancer thắng',
-  [VOTE_CHOICES.CLIENT_WIN]: 'Client thắng',
-  [VOTE_CHOICES.SPLIT]: 'Chia 50-50',
+  0: 'Undecided',
+  [VOTE_CHOICES.FREELANCER_WIN]: 'Freelancer wins',
+  [VOTE_CHOICES.CLIENT_WIN]: 'Client wins',
+  [VOTE_CHOICES.SPLIT]: 'Split 50-50',
 };
 
 export function formatDisputeChoice(choice: number): string {
-  return DISPUTE_CHOICE_LABELS[choice] ?? `Lựa chọn #${choice}`;
+  return DISPUTE_CHOICE_LABELS[choice] ?? `Choice #${choice}`;
 }
 
 export type VoteTally = {

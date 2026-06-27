@@ -131,7 +131,7 @@ export function useArbitratorDisputes(address?: string | null, inPool = false) {
       setPoolOnlyDisputes(result.poolOnly);
       setSamplePanelWallets(result.samplePanelWallets);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Không tải được danh sách tranh chấp');
+      setError(err instanceof Error ? err.message : 'Failed to load dispute list');
     } finally {
       setLoading(false);
     }

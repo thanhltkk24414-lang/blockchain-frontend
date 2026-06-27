@@ -37,7 +37,7 @@ export function computeVoteHash(choice: number, salt: string): `0x${string}` {
 export function cidToEvidenceHash(cid: string): `0x${string}` {
   const trimmed = cid.trim();
   if (!trimmed) {
-    throw new Error('IPFS CID trống — upload phải hoàn tất trước submitEvidence.');
+    throw new Error('Empty IPFS CID — complete upload before submitEvidence.');
   }
   return keccak256(toBytes(trimmed));
 }
@@ -252,20 +252,20 @@ async function preflightSubmitEvidence(
   const isFreelancer = addressesEqual(onchainJob.freelancer, wallet);
   if (!isClient && !isFreelancer) {
     throw new Error(
-      `Ví MetaMask (${wallet}) không phải client/freelancer của job on-chain. ` +
-        'Chỉ một trong hai bên mới nộp được bằng chứng.',
+      `MetaMask wallet (${wallet}) is not the on-chain client or freelancer. ` +
+        'Only one of the two parties can submit evidence.',
     );
   }
 
   if (onchainJob.status !== ONCHAIN_JOB_STATUS.DISPUTED) {
     throw new Error(
-      `Job on-chain đang ${onchainStatusLabel(onchainJob.status)} — chỉ nộp bằng chứng khi DISPUTED (sau raiseDispute).`,
+      `On-chain job is ${onchainStatusLabel(onchainJob.status)} — evidence can only be submitted when DISPUTED (after raiseDispute).`,
     );
   }
 
   const dispute = await readOnchainDispute(jobId);
   if (dispute.createdAt === 0n) {
-    throw new Error('Chưa có dispute on-chain cho job này — đợi indexer hoặc kiểm tra raiseDispute.');
+    throw new Error('No on-chain dispute for this job yet — wait for the indexer or verify raiseDispute.');
   }
 
   const nowSec = BigInt(Math.floor(Date.now() / 1000));
@@ -273,7 +273,7 @@ async function preflightSubmitEvidence(
   const windowEnd = dispute.createdAt + evidenceWindowSec;
   if (nowSec > windowEnd) {
     throw new Error(
-      `EvidenceWindowClosed: đã quá ${DISPUTE_PHASES.evidenceRebuttalEndMin} phút kể từ khi mở tranh chấp — không nộp thêm bằng chứng được.`,
+      `EvidenceWindowClosed: more than ${DISPUTE_PHASES.evidenceRebuttalEndMin} minutes since the dispute opened — no further evidence can be submitted.`,
     );
   }
 
@@ -292,14 +292,14 @@ export function useDisputeActions() {
 
   const submitEvidence = useCallback(
     async (onchainJobId: number, cid: string) => {
-      if (!address) throw new Error('Hãy kết nối ví MetaMask trước.');
+      if (!address) throw new Error('Connect your MetaMask wallet first.');
       const wallet = getAddress(address);
       const jobId = BigInt(onchainJobId);
       const evidenceHash = cidToEvidenceHash(cid);
 
       await preflightSubmitEvidence(wallet, jobId, evidenceHash);
 
-      await tx.runTx('Đang nộp bằng chứng on-chain…', () =>
+      await tx.runTx('Submitting evidence on-chain…', () =>
         sendSubmitEvidenceTx({
           onchainJobId: jobId,
           evidenceHash,
@@ -312,11 +312,11 @@ export function useDisputeActions() {
 
   const commitVote = useCallback(
     async (onchainJobId: number, choice: number, salt: string) => {
-      if (!address) throw new Error('Hãy kết nối ví MetaMask trước.');
+      if (!address) throw new Error('Connect your MetaMask wallet first.');
       const wallet = getAddress(address);
       const hash = computeVoteHash(choice, salt);
 
-      await tx.runTx('Đang commit vote…', () =>
+      await tx.runTx('Committing vote…', () =>
         sendCommitVoteTx({
           onchainJobId: BigInt(onchainJobId),
           voteHash: hash,
@@ -329,12 +329,12 @@ export function useDisputeActions() {
 
   const revealVote = useCallback(
     async (onchainJobId: number, choice: number, salt: string) => {
-      if (!address) throw new Error('Hãy kết nối ví MetaMask trước.');
+      if (!address) throw new Error('Connect your MetaMask wallet first.');
       const wallet = getAddress(address);
       const jobId = BigInt(onchainJobId);
 
       if (await hasArbitratorRevealed(jobId, wallet)) {
-        throw new Error('AlreadyRevealed: bạn đã reveal vote cho job này — không cần gửi lại.');
+        throw new Error('AlreadyRevealed: you have already revealed your vote for this job — no need to submit again.');
       }
 
       try {
@@ -345,7 +345,7 @@ export function useDisputeActions() {
         );
       }
 
-      await tx.runTx('Đang reveal vote…', () =>
+      await tx.runTx('Revealing vote…', () =>
         sendRevealVoteTx({
           onchainJobId: jobId,
           choice,
@@ -359,10 +359,10 @@ export function useDisputeActions() {
 
   const finalizeDisputeVoting = useCallback(
     async (onchainJobId: number) => {
-      if (!address) throw new Error('Hãy kết nối ví MetaMask trước.');
+      if (!address) throw new Error('Connect your MetaMask wallet first.');
       const wallet = getAddress(address);
 
-      await tx.runTx('Đang finalize dispute voting…', () =>
+      await tx.runTx('Finalizing dispute voting…', () =>
         sendFinalizeDisputeTx({
           onchainJobId: BigInt(onchainJobId),
           account: wallet,
@@ -374,10 +374,10 @@ export function useDisputeActions() {
 
   const executeArbitrationResult = useCallback(
     async (onchainJobId: number) => {
-      if (!address) throw new Error('Hãy kết nối ví MetaMask trước.');
+      if (!address) throw new Error('Connect your MetaMask wallet first.');
       const wallet = getAddress(address);
 
-      await tx.runTx('Đang thực thi kết quả phân xử…', () =>
+      await tx.runTx('Executing arbitration result…', () =>
         sendExecuteArbitrationResultTx({
           onchainJobId: BigInt(onchainJobId),
           account: wallet,
@@ -389,10 +389,10 @@ export function useDisputeActions() {
 
   const fileAppeal = useCallback(
     async (onchainJobId: number) => {
-      if (!address) throw new Error('Hãy kết nối ví MetaMask trước.');
+      if (!address) throw new Error('Connect your MetaMask wallet first.');
       const wallet = getAddress(address);
 
-      await tx.runTx('Đang nộp kháng cáo…', () =>
+      await tx.runTx('Filing appeal…', () =>
         sendFileAppealTx({
           onchainJobId: BigInt(onchainJobId),
           account: wallet,

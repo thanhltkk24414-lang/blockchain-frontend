@@ -928,6 +928,28 @@ body {
   margin: 0.75rem 0;
 }
 
+.onboarding-steps {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.onboarding-steps li {
+  padding: 1rem;
+  border: 1px solid #2a2f3a;
+  border-radius: 8px;
+}
+
+.onboarding-steps .step-active {
+  border-color: #3b82f6;
+}
+
+.onboarding-steps .step-done {
+  opacity: 0.85;
+}
+
 .dispute-result-panel .dispute-appeal-window {
   margin-top: 0.75rem;
 }

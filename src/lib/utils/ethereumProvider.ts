@@ -50,7 +50,7 @@ export async function ensureSepoliaOnProvider(provider: EthereumProvider): Promi
   } catch (err: unknown) {
     const code = (err as { code?: number })?.code;
     if (code === 4902) {
-      throw new Error('Sepolia chưa có trong MetaMask — thêm mạng Sepolia testnet.');
+      throw new Error('Sepolia is not in MetaMask — add the Sepolia testnet network.');
     }
     throw err;
   }

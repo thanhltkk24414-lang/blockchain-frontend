@@ -79,8 +79,8 @@ export function AcceptBidButton({
         {loading || txStatus === 'pending' ? 'Accepting…' : 'Accept bid'}
       </button>
       <p className="muted phase-note">
-        Chấp nhận trong DB — gán freelancer + nạp escrow on-chain ở bước Fund escrow (MetaMask, ví
-        client on-chain).
+        Accepted in the database — assign freelancer and fund escrow on-chain in the Fund escrow step
+        (MetaMask, on-chain client wallet).
       </p>
       {error && <p className="error">{error}</p>}
       <TxStatusModal
