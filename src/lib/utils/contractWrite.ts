@@ -96,6 +96,16 @@ const REVERT_HINTS_BY_FN: Record<string, Record<string, string>> = {
     InsufficientQuorum: 'Fewer than 3 valid reveal votes — need more arbitrator reveals.',
     AlreadyResolved: 'Voting was already finalized.',
   },
+  stakeAsArbitrator: {
+    InsufficientStake: 'Minimum arbitrator stake is 50 USDC (50_000_000 smallest units).',
+    TransferFailed:
+      'USDC transfer failed — mint MockUSDC (Step 1) and approve PlatformTreasury as spender.',
+  },
+  joinPool: {
+    InsufficientStake: 'Stake at least 50 USDC via PlatformTreasury before joining the pool.',
+    LowReputationTier: 'Reputation tier too low — need Normal or Trusted tier in ReputationStore.',
+    AlreadyInPool: 'Wallet is already in the arbitrator pool.',
+  },
   fileAppeal: {
     AppealAlreadyFiled: 'Appeal already filed for this job.',
     AppealNotAllowed: 'Appeals only in round 1 — round 2 is final.',

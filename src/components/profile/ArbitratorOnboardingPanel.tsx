@@ -115,6 +115,9 @@ export function ArbitratorOnboardingPanel({ onComplete }: ArbitratorOnboardingPa
 
       <ol className="onboarding-steps">
         <li className={needsStake ? 'step-active' : 'step-done'}>
+          <span className="step-num" aria-hidden>
+            <span>1</span>
+          </span>
           <strong>Step 1 — Mint MockUSDC</strong>
           <p className="muted">
             Sepolia test token for escrow fees and arbitrator stake. Mint {DEMO_MINT_USDC} USDC to your
@@ -125,6 +128,9 @@ export function ArbitratorOnboardingPanel({ onComplete }: ArbitratorOnboardingPa
           </button>
         </li>
         <li className={needsStake ? 'step-active' : 'step-done'}>
+          <span className="step-num" aria-hidden>
+            <span>2</span>
+          </span>
           <strong>Step 2 — Stake via PlatformTreasury</strong>
           <p className="muted">
             Current stake: {staked} / {MIN_ARBITRATOR_STAKE_USDC} USDC. Approves and locks stake on-chain.
@@ -139,6 +145,9 @@ export function ArbitratorOnboardingPanel({ onComplete }: ArbitratorOnboardingPa
           </button>
         </li>
         <li className={needsPool ? 'step-active' : 'step-done'}>
+          <span className="step-num" aria-hidden>
+            <span>3</span>
+          </span>
           <strong>Step 3 — Join arbitrator pool</strong>
           <p className="muted">
             Self-join after stake is confirmed. Pool must have ≥5 members for new disputes (run{' '}

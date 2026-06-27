@@ -7,6 +7,7 @@ import { WagmiProvider } from 'wagmi';
 import { sepolia } from 'wagmi/chains';
 import { wagmiConfig } from './config/wagmi';
 import App from './App';
+import { AppErrorBoundary } from '@/components/shared/AppErrorBoundary';
 import './index.css';
 
 const queryClient = new QueryClient();
@@ -16,7 +17,9 @@ createRoot(document.getElementById('root')!).render(
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider initialChain={sepolia}>
-          <App />
+          <AppErrorBoundary>
+            <App />
+          </AppErrorBoundary>
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>

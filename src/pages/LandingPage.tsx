@@ -44,6 +44,15 @@ const FEATURES = [
   },
 ];
 
+const LANDING_TICKER = [
+  { value: 'Sepolia', label: 'Live testnet' },
+  { value: '3%', label: 'Platform fee' },
+  { value: 'USDC', label: 'Stable settlement' },
+  { value: '50 USDC', label: 'Min arbitrator stake' },
+  { value: '5', label: 'Arbitrators per dispute' },
+  { value: '0', label: 'Custodial risk' },
+];
+
 export function LandingPage() {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
@@ -73,9 +82,14 @@ export function LandingPage() {
             )}
           </div>
 
-          <h1 className="landing-title">
+          <div className="landing-live-badge">
+            <span className="dot-pulse" aria-hidden />
+            Live on Sepolia testnet
+          </div>
+
+          <h1 className="landing-title font-display">
             Hire &amp; sell freelance services
-            <span className="landing-title-accent"> — with verifiable on-chain escrow</span>
+            <span className="landing-title-accent text-gradient"> — with verifiable on-chain escrow</span>
           </h1>
           <p className="landing-subtitle">
             A Web3 freelance marketplace: post jobs, fund USDC escrow, deliver via IPFS, and resolve
@@ -134,6 +148,18 @@ export function LandingPage() {
           </dl>
         </div>
       </section>
+
+      <div className="landing-ticker" aria-hidden>
+        <div className="ticker-track">
+          {[...LANDING_TICKER, ...LANDING_TICKER].map((item, i) => (
+            <span key={`${item.label}-${i}`} className="ticker-item">
+              <strong>{item.value}</strong>
+              {item.label}
+              <span style={{ opacity: 0.35 }}>|</span>
+            </span>
+          ))}
+        </div>
+      </div>
 
       <section className="landing-section">
         <h2>Why FAPEX?</h2>

@@ -11,11 +11,10 @@ import {
   readPendingResult,
   readVoteTally,
   useDisputeActions,
-  VOTE_CHOICES,
 } from '@/hooks/useDisputeActions';
 import { TxStatusModal } from '@/components/shared/TxStatusModal';
 import { DISPUTE_PHASES, formatAppealWindow } from '@/lib/contracts/disputeTimings';
-import { formatDisputeChoice, type VoteTally } from '@/lib/utils/disputeChoice';
+import { formatDisputeChoice, VOTE_CHOICES, type VoteTally } from '@/lib/utils/disputeChoice';
 import { VoteTallyDisplay } from '@/components/dispute/VoteTallyDisplay';
 import { ReputationBadge } from '@/components/shared/ReputationBadge';
 import { useReputation } from '@/hooks/useReputation';

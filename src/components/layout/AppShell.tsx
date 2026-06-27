@@ -63,7 +63,7 @@ export function AppShell() {
   return (
     <div className={isLanding ? 'app app-landing' : 'app'}>
       <NetworkBanner />
-      <header className={`header${isLanding ? ' header-landing' : ''}`}>
+      <header className={`header${isLanding ? ' header-landing header-sticky' : ' header-sticky'}`}>
         <div className="brand">
           <FapexLogo size="md" />
           {!isLanding && <span className="api-badge">API: {API_URL}</span>}

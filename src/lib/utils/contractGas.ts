@@ -18,6 +18,9 @@ const GAS_MIN: Record<string, bigint> = {
   /** Sepolia raiseDispute ~641k (sortition + 5× incrementActiveDispute); 400k OOG → undecoded revert. */
   raiseDispute: 700_000n,
   submitEvidence: 180_000n,
+  /** PlatformTreasury.stakeAsArbitrator — ERC20 transferFrom + storage write. */
+  stakeAsArbitrator: 120_000n,
+  joinPool: 150_000n,
 };
 
 /** Per-function caps — avoids Infura "gas limit too high" on failed estimates. */
@@ -34,6 +37,8 @@ const GAS_CAPS: Record<string, bigint> = {
   assignFreelancer: 200_000n,
   createJob: 350_000n,
   submitProposal: 250_000n,
+  stakeAsArbitrator: 200_000n,
+  joinPool: 220_000n,
   default: 300_000n,
 };
 
