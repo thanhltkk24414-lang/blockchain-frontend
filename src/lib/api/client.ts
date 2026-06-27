@@ -19,10 +19,33 @@ function authHeaders(): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function formatFetchError(err: unknown, url: string): Error {
+  if (err instanceof TypeError && err.message === 'Failed to fetch') {
+    return new Error(
+      `Cannot reach API at ${url}. Check that the backend is running and ALLOWED_ORIGINS on Railway includes this site (CORS).`,
+    );
+  }
+  if (err instanceof Error) return err;
+  return new Error('Request failed');
+}
+
+async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await apiFetch(url, init);
+  } catch (err) {
+    throw formatFetchError(err, url);
+  }
+}
+
 async function parseJson<T>(res: Response): Promise<T> {
-  const data = (await res.json()) as T & { error?: string };
+  let data: T & { error?: string };
+  try {
+    data = (await res.json()) as T & { error?: string };
+  } catch {
+    throw new Error(res.ok ? 'Invalid JSON from API' : `${res.status} ${res.statusText}`);
+  }
   if (!res.ok) {
-    throw new Error((data as { error?: string }).error || res.statusText);
+    throw new Error((data as { error?: string }).error || `${res.status} ${res.statusText}`);
   }
   return data;
 }
@@ -45,7 +68,7 @@ export async function fetchJobs(params?: {
   if (params?.sortBy) qs.set('sortBy', params.sortBy);
   if (params?.order) qs.set('order', params.order);
 
-  const res = await fetch(`${API_URL}/api/jobs?${qs}`);
+  const res = await apiFetch(`${API_URL}/api/jobs?${qs}`);
   const data = await parseJson<JobsResponse>(res);
   if (data.success && data.jobs) {
     data.jobs = normalizeJobs(data.jobs);
@@ -66,7 +89,7 @@ export async function searchJobs(params: {
   if (params.minBudget != null) qs.set('minBudget', String(params.minBudget));
   if (params.maxBudget != null) qs.set('maxBudget', String(params.maxBudget));
   if (params.status) qs.set('status', params.status);
-  const res = await fetch(`${API_URL}/api/jobs/search?${qs}`);
+  const res = await apiFetch(`${API_URL}/api/jobs/search?${qs}`);
   const data = await parseJson<{ success: boolean; jobs: Job[]; error?: string }>(res);
   if (data.success && data.jobs) {
     data.jobs = normalizeJobs(data.jobs);
@@ -83,7 +106,7 @@ export async function submitBid(payload: {
   timeline: number;
   proposalCID?: string;
 }) {
-  const res = await fetch(`${API_URL}/api/bids`, {
+  const res = await apiFetch(`${API_URL}/api/bids`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(payload),
@@ -92,7 +115,7 @@ export async function submitBid(payload: {
 }
 
 export async function fetchBidsByJob(jobId: string) {
-  const res = await fetch(`${API_URL}/api/bids/job/${jobId}`);
+  const res = await apiFetch(`${API_URL}/api/bids/job/${jobId}`);
   const data = await parseJson<BidsResponse>(res);
   if (data.success && data.bids) {
     data.bids = normalizeBids(data.bids);
@@ -102,7 +125,7 @@ export async function fetchBidsByJob(jobId: string) {
 
 export async function fetchMyBids(address: string, status?: string) {
   const qs = status ? `?status=${encodeURIComponent(status)}` : '';
-  const res = await fetch(`${API_URL}/api/bids/my/${address}${qs}`);
+  const res = await apiFetch(`${API_URL}/api/bids/my/${address}${qs}`);
   const data = await parseJson<BidsResponse>(res);
   if (data.success && data.bids) {
     data.bids = normalizeBids(data.bids);
@@ -111,7 +134,7 @@ export async function fetchMyBids(address: string, status?: string) {
 }
 
 export async function acceptBid(bidId: string) {
-  const res = await fetch(`${API_URL}/api/bids/${bidId}/accept`, {
+  const res = await apiFetch(`${API_URL}/api/bids/${bidId}/accept`, {
     method: 'PATCH',
     headers: { ...authHeaders() },
   });
@@ -128,7 +151,7 @@ export async function acceptBid(bidId: string) {
 }
 
 export async function retryAssignFreelancer(jobId: string, freelancerAddress: string) {
-  const res = await fetch(`${API_URL}/api/jobs/${jobId}/assign-freelancer`, {
+  const res = await apiFetch(`${API_URL}/api/jobs/${jobId}/assign-freelancer`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ freelancerAddress }),
@@ -143,7 +166,7 @@ export async function retryAssignFreelancer(jobId: string, freelancerAddress: st
 }
 
 export async function rejectBid(bidId: string) {
-  const res = await fetch(`${API_URL}/api/bids/${bidId}/reject`, {
+  const res = await apiFetch(`${API_URL}/api/bids/${bidId}/reject`, {
     method: 'PATCH',
     headers: { ...authHeaders() },
   });
@@ -151,7 +174,7 @@ export async function rejectBid(bidId: string) {
 }
 
 export async function uploadIpfsMetadata(payload: Record<string, unknown>) {
-  const res = await fetch(`${API_URL}/api/ipfs/upload/metadata`, {
+  const res = await apiFetch(`${API_URL}/api/ipfs/upload/metadata`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(payload),
@@ -162,7 +185,7 @@ export async function uploadIpfsMetadata(payload: Record<string, unknown>) {
 export async function uploadIpfsFile(file: File) {
   const form = new FormData();
   form.append('file', file);
-  const res = await fetch(`${API_URL}/api/ipfs/upload/file`, {
+  const res = await apiFetch(`${API_URL}/api/ipfs/upload/file`, {
     method: 'POST',
     headers: { ...authHeaders() },
     body: form,
@@ -171,7 +194,7 @@ export async function uploadIpfsFile(file: File) {
 }
 
 export async function fetchJobById(id: string) {
-  const res = await fetch(`${API_URL}/api/jobs/${id}`);
+  const res = await apiFetch(`${API_URL}/api/jobs/${id}`);
   const data = await parseJson<JobDetailResponse>(res);
   if (data.success && data.job) {
     data.job = normalizeJob(data.job);
@@ -195,7 +218,7 @@ export async function fetchJobById(id: string) {
 }
 
 export async function createJob(payload: CreateJobPayload) {
-  const res = await fetch(`${API_URL}/api/jobs`, {
+  const res = await apiFetch(`${API_URL}/api/jobs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(payload),
@@ -205,7 +228,7 @@ export async function createJob(payload: CreateJobPayload) {
 
 export async function fetchJobsByClient(address: string, status?: string) {
   const qs = status ? `?status=${encodeURIComponent(status)}` : '';
-  const res = await fetch(`${API_URL}/api/jobs/client/${address}${qs}`);
+  const res = await apiFetch(`${API_URL}/api/jobs/client/${address}${qs}`);
   const data = await parseJson<{ success: boolean; jobs: Job[]; error?: string }>(res);
   if (data.success && data.jobs) {
     data.jobs = normalizeJobs(data.jobs);
@@ -215,7 +238,7 @@ export async function fetchJobsByClient(address: string, status?: string) {
 
 export async function fetchJobsByFreelancer(address: string, status?: string) {
   const qs = status ? `?status=${encodeURIComponent(status)}` : '';
-  const res = await fetch(`${API_URL}/api/jobs/freelancer/${address}${qs}`);
+  const res = await apiFetch(`${API_URL}/api/jobs/freelancer/${address}${qs}`);
   const data = await parseJson<{ success: boolean; jobs: Job[]; error?: string }>(res);
   if (data.success && data.jobs) {
     data.jobs = normalizeJobs(data.jobs);
@@ -224,12 +247,12 @@ export async function fetchJobsByFreelancer(address: string, status?: string) {
 }
 
 export async function fetchUserProfile(address: string) {
-  const res = await fetch(`${API_URL}/api/users/profile/${address}`);
+  const res = await apiFetch(`${API_URL}/api/users/profile/${address}`);
   return parseJson<{ success: boolean; user: UserProfile }>(res);
 }
 
 export async function checkUserExists(address: string) {
-  const res = await fetch(`${API_URL}/api/users/check/${address}`);
+  const res = await apiFetch(`${API_URL}/api/users/check/${address}`);
   return parseJson<{ success: boolean; exists: boolean; user?: UserProfile }>(res);
 }
 
@@ -239,7 +262,7 @@ export async function registerUser(payload: {
   role: RegistrationRole;
   email?: string;
 }) {
-  const res = await fetch(`${API_URL}/api/users/register`, {
+  const res = await apiFetch(`${API_URL}/api/users/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(payload),
@@ -250,7 +273,7 @@ export async function registerUser(payload: {
 export async function updateUserProfile(
   payload: Partial<UserProfile['profile']> & { role?: UserProfile['role'] },
 ) {
-  const res = await fetch(`${API_URL}/api/users/profile`, {
+  const res = await apiFetch(`${API_URL}/api/users/profile`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(payload),
@@ -259,17 +282,17 @@ export async function updateUserProfile(
 }
 
 export async function fetchUserReputation(address: string) {
-  const res = await fetch(`${API_URL}/api/users/reputation/${address}`);
+  const res = await apiFetch(`${API_URL}/api/users/reputation/${address}`);
   return parseJson<{ success: boolean; reputation: UserProfile['reputation'] }>(res);
 }
 
 export async function fetchUserStats(address: string) {
-  const res = await fetch(`${API_URL}/api/users/stats/${address}`);
+  const res = await apiFetch(`${API_URL}/api/users/stats/${address}`);
   return parseJson<{ success: boolean; stats: UserProfile['stats'] }>(res);
 }
 
 export async function fetchArbitratorStatus(address: string) {
-  const res = await fetch(`${API_URL}/api/arbitrator/${address}/status`);
+  const res = await apiFetch(`${API_URL}/api/arbitrator/${address}/status`);
   return parseJson<{
     success: boolean;
     address?: string;
@@ -299,7 +322,7 @@ export async function fetchDisputes(params?: { status?: string; page?: number; l
   if (params?.status) qs.set('status', params.status);
   if (params?.page) qs.set('page', String(params.page));
   if (params?.limit) qs.set('limit', String(params.limit));
-  const res = await fetch(`${API_URL}/api/disputes?${qs}`);
+  const res = await apiFetch(`${API_URL}/api/disputes?${qs}`);
   return parseJson<{
     success: boolean;
     disputes: DisputeRecord[];
@@ -308,17 +331,17 @@ export async function fetchDisputes(params?: { status?: string; page?: number; l
 }
 
 export async function fetchDisputeByJob(jobId: string) {
-  const res = await fetch(`${API_URL}/api/disputes/job/${jobId}`);
+  const res = await apiFetch(`${API_URL}/api/disputes/job/${jobId}`);
   return parseJson<{ success: boolean; dispute?: DisputeRecord; error?: string }>(res);
 }
 
 export async function fetchDisputeByOnchainJob(onchainJobId: number) {
-  const res = await fetch(`${API_URL}/api/disputes/onchain/${onchainJobId}`);
+  const res = await apiFetch(`${API_URL}/api/disputes/onchain/${onchainJobId}`);
   return parseJson<{ success: boolean; dispute?: DisputeRecord; error?: string }>(res);
 }
 
 export async function fetchDisputeEvidencesByOnchainJob(onchainJobId: number) {
-  const res = await fetch(`${API_URL}/api/disputes/onchain/${onchainJobId}/evidences`);
+  const res = await apiFetch(`${API_URL}/api/disputes/onchain/${onchainJobId}/evidences`);
   return parseJson<{
     success: boolean;
     disputeId?: string;
@@ -341,7 +364,7 @@ export async function fetchDisputeEvidencesByOnchainJob(onchainJobId: number) {
 }
 
 export async function fetchDisputeEvidences(disputeId: string) {
-  const res = await fetch(`${API_URL}/api/disputes/${disputeId}/evidences`);
+  const res = await apiFetch(`${API_URL}/api/disputes/${disputeId}/evidences`);
   return parseJson<{
     success: boolean;
     evidence?: Array<{
@@ -365,7 +388,7 @@ export async function submitDisputeEvidence(
   disputeId: string,
   payload: { ipfsHash: string; description?: string; onChainHash?: string },
 ) {
-  const res = await fetch(`${API_URL}/api/disputes/${disputeId}/evidence`, {
+  const res = await apiFetch(`${API_URL}/api/disputes/${disputeId}/evidence`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(payload),
@@ -379,7 +402,7 @@ export async function submitDisputeEvidenceByOnchain(
   onchainJobId: number,
   payload: { ipfsHash: string; description?: string; onChainHash?: string },
 ) {
-  const res = await fetch(`${API_URL}/api/disputes/onchain/${onchainJobId}/evidence`, {
+  const res = await apiFetch(`${API_URL}/api/disputes/onchain/${onchainJobId}/evidence`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(payload),
@@ -393,7 +416,7 @@ export async function submitDisputeEvidenceByOnchain(
 }
 
 export async function fetchHealth() {
-  const res = await fetch(`${API_URL}/health`);
+  const res = await apiFetch(`${API_URL}/health`);
   return parseJson<{
     status: string;
     mongodb: string;

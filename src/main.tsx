@@ -16,7 +16,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider initialChain={sepolia}>
+        <RainbowKitProvider initialChain={sepolia} locale="en-US">
           <AppErrorBoundary>
             <App />
           </AppErrorBoundary>
