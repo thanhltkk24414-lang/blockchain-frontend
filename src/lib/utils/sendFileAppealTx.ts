@@ -25,7 +25,7 @@ export async function sendFileAppealTx({
 
   const { address, status, chainId: connectedChainId } = getAccount(wagmiConfig);
   if (status !== 'connected' || !address) {
-    throw new Error('Kết nối ví MetaMask trên Sepolia trước khi kháng cáo.');
+    throw new Error('Connect your MetaMask wallet on Sepolia before filing an appeal.');
   }
 
   const signingAccount = getAddress(address);
@@ -40,7 +40,7 @@ export async function sendFileAppealTx({
 
   if (connectedChainId != null && connectedChainId !== chainId) {
     throw new Error(
-      `MetaMask phải ở Sepolia (chainId ${chainId}) — hiện tại: ${connectedChainId}.`,
+      `MetaMask must be on Sepolia (chainId ${chainId}) — currently: ${connectedChainId}.`,
     );
   }
 

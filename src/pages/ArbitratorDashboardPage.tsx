@@ -7,7 +7,7 @@ import {
   type ArbitratorDisputeItem,
 } from '@/hooks/useArbitratorDisputes';
 import { isAssignedArbitrator } from '@/hooks/useDisputeActions';
-import { DISPUTE_PHASES } from '@/lib/contracts/disputeTimings';
+import { DISPUTE_PHASES, formatAppealWindow } from '@/lib/contracts/disputeTimings';
 
 function DisputeList({
   items,
@@ -25,16 +25,16 @@ function DisputeList({
         {items.map((d) => (
           <li key={d.onchainJobId} className="bid-item">
             <strong>
-              Job on-chain #{d.onchainJobId}
+              On-chain job #{d.onchainJobId}
               {d.title ? ` — ${d.title}` : ''}
             </strong>
             <span className="muted"> · {d.disputeStatus}</span>
             {d.jobId ? (
               <Link to={`/jobs/${d.jobId}`} className="btn primary">
-                Mở chi tiết & vote →
+                Open details & vote →
               </Link>
             ) : (
-              <span className="muted">Chưa sync jobId off-chain</span>
+              <span className="muted">Off-chain jobId not synced yet</span>
             )}
           </li>
         ))}
@@ -65,33 +65,33 @@ export function ArbitratorDashboardPage() {
   return (
     <main className="page">
       <div className="page-header">
-        <h2>Bảng điều khiển Arbitrator</h2>
+        <h2>Arbitrator dashboard</h2>
         <p className="muted">
-          Cần ≥ 50 USDC stake trên PlatformTreasury. Khi được sortition chọn vào hội đồng, vote
-          commit-reveal trên trang chi tiết job.
+          Requires ≥50 USDC stake on PlatformTreasury. When sortition selects you for a panel, commit-reveal
+          vote on the job detail page.
         </p>
       </div>
 
       {!isAuthenticated && (
-        <p className="muted">Kết nối ví MetaMask và đăng nhập SIWE để xem tranh chấp được giao.</p>
+        <p className="muted">Connect MetaMask and sign in with SIWE to see assigned disputes.</p>
       )}
 
-      {stake.loading && <p className="muted">Đang kiểm tra stake…</p>}
+      {stake.loading && <p className="muted">Checking stake…</p>}
       {displayError && <p className="error">{displayError}</p>}
 
       {stake.stakedAmount != null && (
         <div className="stats-row">
           <div className="stat-card">
-            <span className="stat-label">USDC đã stake</span>
+            <span className="stat-label">USDC staked</span>
             <strong>{stake.stakedAmount}</strong>
           </div>
           <div className="stat-card">
-            <span className="stat-label">Stake tối thiểu</span>
+            <span className="stat-label">Minimum stake</span>
             <strong>{stake.minStake ?? 50}</strong>
           </div>
           <div className="stat-card">
-            <span className="stat-label">Đủ điều kiện pool</span>
-            <strong>{stake.isValid ? 'Có' : 'Chưa'}</strong>
+            <span className="stat-label">Pool eligible</span>
+            <strong>{stake.isValid ? 'Yes' : 'No'}</strong>
           </div>
         </div>
       )}
@@ -100,45 +100,45 @@ export function ArbitratorDashboardPage() {
 
       <section className="panel">
         <div className="panel-header-row">
-          <h3>Tranh chấp được giao cho bạn</h3>
+          <h3>Disputes assigned to you</h3>
           <button
             className="btn ghost"
             type="button"
             onClick={() => void reload()}
             disabled={loading}
           >
-            {loading ? 'Đang tải…' : 'Làm mới'}
+            {loading ? 'Loading…' : 'Refresh'}
           </button>
         </div>
 
         <p className="muted phase-note">
-          Demo Sepolia: bằng chứng 0–{DISPUTE_PHASES.evidenceRebuttalEndMin}p → commit{' '}
-          {DISPUTE_PHASES.commitStartMin}–{DISPUTE_PHASES.commitEndMin}p → reveal{' '}
-          {DISPUTE_PHASES.revealStartMin}–{DISPUTE_PHASES.revealEndMin}p → finalize sau{' '}
-          {DISPUTE_PHASES.revealEndMin}p → kháng cáo {DISPUTE_PHASES.appealWindowHours}h.
+          Sepolia demo: evidence 0–{DISPUTE_PHASES.evidenceRebuttalEndMin}m → commit{' '}
+          {DISPUTE_PHASES.commitStartMin}–{DISPUTE_PHASES.commitEndMin}m → reveal{' '}
+          {DISPUTE_PHASES.revealStartMin}–{DISPUTE_PHASES.revealEndMin}m → finalize after{' '}
+          {DISPUTE_PHASES.revealEndMin}m → appeal {formatAppealWindow()}.
         </p>
 
-        {!address && <p className="muted">Chưa kết nối ví.</p>}
+        {!address && <p className="muted">Wallet not connected.</p>}
 
         {address && !loading && assignedDisputes.length === 0 && (
           <div className="muted phase-note">
             <p>
-              Đang dùng ví <code>{shortWallet(address)}</code>
-              {stake.inPool ? ' (trong pool arbitrator)' : ''} —{' '}
+              Using wallet <code>{shortWallet(address)}</code>
+              {stake.inPool ? ' (in arbitrator pool)' : ''} —{' '}
               {samplePanelWallets.length > 0
-                ? 'không nằm hội đồng các job đang tranh chấp.'
-                : 'chưa có job DISPUTED on-chain nào trong phạm vi quét.'}
+                ? 'not on the panel for any active disputed jobs.'
+                : 'no DISPUTED on-chain jobs found in scan range.'}
             </p>
             {samplePanelWallets.length > 0 && (
               <p>
-                Chuyển sang ví arbitrator được chọn (vd.{' '}
-                <code>{shortWallet(hintArbitratorWallet)}</code>) — import private key từ{' '}
+                Switch to a selected arbitrator wallet (e.g.{' '}
+                <code>{shortWallet(hintArbitratorWallet)}</code>) — import a private key from{' '}
                 <code>deployments/sepolia-arbitrators.json</code>.
               </p>
             )}
             {samplePanelWallets.length === 0 && (
               <p>
-                Chạy <code>seed-arbitrator-pool.js</code> và mở tranh chấp trên job SUBMITTED trước.
+                Run <code>seed-arbitrator-pool.js</code> and raise a dispute on a SUBMITTED job first.
               </p>
             )}
           </div>
@@ -148,27 +148,27 @@ export function ArbitratorDashboardPage() {
 
         {poolOnlyDisputes.length > 0 && (
           <>
-            <h4>Tranh chấp khác (trong pool, chưa được chọn)</h4>
+            <h4>Other disputes (in pool, not selected)</h4>
             <DisputeList
               items={poolOnlyDisputes}
-              note="Bạn trong pool arbitrator nhưng sortition không chọn ví này cho hội đồng job này — chỉ xem, không vote."
+              note="You are in the pool but sortition did not select this wallet for these jobs — view only, no vote."
             />
           </>
         )}
       </section>
 
       <section className="panel">
-        <h3>Hướng dẫn test nhanh</h3>
+        <h3>Quick test guide</h3>
         <ol className="muted phase-note">
           <li>
-            Import 1 ví từ <code>deployments/sepolia-arbitrators.json</code> vào MetaMask (Sepolia).
+            Import one wallet from <code>deployments/sepolia-arbitrators.json</code> into MetaMask (Sepolia).
           </li>
-          <li>Stake ≥50 USDC + admin <code>joinPool</code> (script seed đã làm sẵn).</li>
-          <li>Client raise dispute trên job → 5 arbitrator được chọn ngẫu nhiên.</li>
-          <li>Vào job DISPUTED → panel &quot;Hội đồng arbitrator&quot; → commit / reveal theo đồng hồ.</li>
+          <li>Stake ≥50 USDC + join pool (Profile page or scripts).</li>
+          <li>Client raises dispute on a job → 5 arbitrators are selected at random.</li>
+          <li>Open DISPUTED job → Arbitrator panel → commit / reveal on the phase timer.</li>
         </ol>
         <p className="muted">
-          Stake thêm tại <Link to="/profile">Profile</Link>.
+          Stake and mint at <Link to="/profile">Profile</Link>.
         </p>
       </section>
     </main>

@@ -9,20 +9,20 @@ interface VoteTallyDisplayProps {
 export function VoteTallyDisplay({ tally, commitCount, revealCount }: VoteTallyDisplayProps) {
   return (
     <div className="vote-tally-box">
-      <h4>Kết quả vote (công khai sau reveal)</h4>
+      <h4>Vote tally (public after reveal)</h4>
       <ul className="vote-tally-list">
         <li>
-          Freelancer thắng: <strong>{tally.freelancer}</strong>
+          Freelancer wins: <strong>{tally.freelancer}</strong>
         </li>
         <li>
-          Client thắng: <strong>{tally.client}</strong>
+          Client wins: <strong>{tally.client}</strong>
         </li>
         <li>
-          Chia 50-50: <strong>{tally.split}</strong>
+          Split 50-50: <strong>{tally.split}</strong>
         </li>
       </ul>
       <p className="muted phase-note">
-        Commit {commitCount} · Reveal {revealCount} · Đã mở {tally.total} phiếu (cần ≥3 hợp lệ để
+        Commit {commitCount} · Reveal {revealCount} · {tally.total} votes revealed (need ≥3 valid to
         finalize)
       </p>
     </div>

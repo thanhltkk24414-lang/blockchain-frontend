@@ -18,22 +18,29 @@ export type DisputePhaseInfo = {
   phaseEndSec: number;
 };
 
+function appealWindowSec(): number {
+  const phases = DISPUTE_PHASES as Record<string, number | undefined>;
+  if (typeof phases.appealWindowMin === 'number') {
+    return phases.appealWindowMin * 60;
+  }
+  if (typeof phases.appealWindowHours === 'number') {
+    return phases.appealWindowHours * 3600;
+  }
+  return 30 * 60;
+}
+
 const PHASE_LABELS: Record<DisputePhase, string> = {
-  evidence: 'Nộp bằng chứng',
+  evidence: 'Submit evidence',
   commit: 'Commit vote (arbitrator)',
   reveal: 'Reveal vote (arbitrator)',
   finalize: 'Finalize voting',
-  appeal: 'Chờ hết thời gian kháng cáo',
-  execute: 'Thực thi kết quả',
-  resolved: 'Đã giải quyết',
+  appeal: 'Appeal window',
+  execute: 'Execute result',
+  resolved: 'Resolved',
 };
 
 function minToSec(min: number): number {
   return min * 60;
-}
-
-function hoursToSec(h: number): number {
-  return h * 3600;
 }
 
 export function getDisputePhaseInfo(
@@ -56,7 +63,7 @@ export function getDisputePhaseInfo(
   const revealEnd = createdAtSec + minToSec(DISPUTE_PHASES.revealEndMin);
   const appealEnd =
     resultAtSec > 0
-      ? resultAtSec + hoursToSec(DISPUTE_PHASES.appealWindowHours)
+      ? resultAtSec + appealWindowSec()
       : 0;
 
   let phase: DisputePhase;

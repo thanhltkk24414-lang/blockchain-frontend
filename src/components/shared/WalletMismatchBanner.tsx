@@ -44,19 +44,19 @@ export function WalletMismatchBanner({ job, isJobOwner = false }: WalletMismatch
     if (isOpen && !onchainFreelancerCs) {
       return (
         <section className="panel wallet-mismatch-banner info" role="status">
-          <h3>Chưa nạp escrow</h3>
+          <h3>Escrow not funded yet</h3>
           <p className="muted">
-            Freelancer on-chain hiện là <code className="mono">0x000…000</code> — điều này{' '}
-            <strong>bình thường</strong> khi job còn OPEN. Client sẽ gán freelancer khi gọi{' '}
-            <code>depositEscrow</code>.
+            On-chain freelancer is <code className="mono">0x000…000</code> — this is{' '}
+            <strong>normal</strong> while the job is OPEN. The client assigns the freelancer when
+            calling <code>depositEscrow</code>.
           </p>
           <p className="muted">
-            Sau khi client nạp escrow, hãy chuyển MetaMask sang ví đã dùng khi gửi proposal để
-            gọi <code>startWork</code> / <code>submitWork</code>.
+            After the client funds escrow, switch MetaMask to the wallet used when submitting your
+            proposal to call <code>startWork</code> / <code>submitWork</code>.
           </p>
           {onchainStatusLabel && (
             <p className="muted phase-note">
-              Trạng thái on-chain: <strong>{onchainStatusLabel}</strong>
+              On-chain status: <strong>{onchainStatusLabel}</strong>
             </p>
           )}
         </section>
@@ -78,20 +78,20 @@ export function WalletMismatchBanner({ job, isJobOwner = false }: WalletMismatch
 
       return (
         <section className="panel wallet-mismatch-banner" role="alert">
-          <h3>Ví MetaMask không khớp freelancer on-chain</h3>
+          <h3>MetaMask wallet does not match on-chain freelancer</h3>
           <p className="error">
-            Freelancer on-chain: <code className="mono">{onchainFreelancerCs}</code>
+            On-chain freelancer: <code className="mono">{onchainFreelancerCs}</code>
           </p>
           <p className="error">
-            Ví MetaMask của bạn: <code className="mono">{walletCs}</code>
+            Your MetaMask wallet: <code className="mono">{walletCs}</code>
           </p>
           <p className="muted">
-            Chỉ ví freelancer on-chain mới gọi được <code>startWork</code> / <code>submitWork</code>.
-            Đổi tài khoản MetaMask sang ví đã gửi proposal (địa chỉ bid đã accept).
+            Only the on-chain freelancer wallet can call <code>startWork</code> /{' '}
+            <code>submitWork</code>. Switch MetaMask to the wallet that submitted the accepted bid.
           </p>
           {onchainStatusLabel && (
             <p className="muted phase-note">
-              Trạng thái on-chain: <strong>{onchainStatusLabel}</strong>
+              On-chain status: <strong>{onchainStatusLabel}</strong>
             </p>
           )}
         </section>
@@ -104,25 +104,25 @@ export function WalletMismatchBanner({ job, isJobOwner = false }: WalletMismatch
   if (isJobOwner && expectedClient && !addressesEqual(expectedClient, walletCs)) {
     return (
       <section className="panel wallet-mismatch-banner" role="alert">
-        <h3>Ví MetaMask không khớp client on-chain (escrow)</h3>
+        <h3>MetaMask wallet does not match on-chain client (escrow)</h3>
         <p className="error">
-          Client on-chain: <code className="mono">{expectedClient}</code>
+          On-chain client: <code className="mono">{expectedClient}</code>
         </p>
         <p className="error">
-          Ví MetaMask của bạn: <code className="mono">{walletCs}</code>
+          Your MetaMask wallet: <code className="mono">{walletCs}</code>
         </p>
         <p className="muted">
-          Chỉ client on-chain mới gọi được <code>depositEscrow</code>. Đây phải là cùng ví MetaMask
-          đã ký <code>createJob</code> và đăng nhập SIWE — chuyển MetaMask sang ví đó trước khi nạp
-          escrow.
+          Only the on-chain client can call <code>depositEscrow</code>. This must be the same
+          MetaMask wallet that signed <code>createJob</code> and signed in with SIWE — switch
+          MetaMask to that wallet before funding escrow.
         </p>
         <p className="muted phase-note">
-          <strong>Mint MockUSDC</strong> vào ví client on-chain (permissionless trên Sepolia) trước khi
-          approve &amp; deposit.
+          <strong>Mint MockUSDC</strong> to the on-chain client wallet (permissionless on Sepolia)
+          before approve &amp; deposit.
         </p>
         {onchainStatusLabel && (
           <p className="muted phase-note">
-            Trạng thái on-chain: <strong>{onchainStatusLabel}</strong>
+            On-chain status: <strong>{onchainStatusLabel}</strong>
           </p>
         )}
       </section>

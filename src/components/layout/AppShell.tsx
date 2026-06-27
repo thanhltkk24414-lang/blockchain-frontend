@@ -40,7 +40,7 @@ export function AppShell() {
         const frontendRegistry = CONTRACT_ADDRESSES.JobRegistry.toLowerCase();
         if (backendRegistry && backendRegistry !== frontendRegistry) {
           setContractMismatch(
-            `Backend JobRegistry (${health.contracts?.JobRegistry}) ≠ frontend (${CONTRACT_ADDRESSES.JobRegistry}). Cập nhật Railway env.`,
+            `Backend JobRegistry (${health.contracts?.JobRegistry}) ≠ frontend (${CONTRACT_ADDRESSES.JobRegistry}). Update Railway env vars.`,
           );
         } else {
           setContractMismatch(null);

@@ -43,14 +43,14 @@ export function ClientJobActionsPanel({ job, onActionComplete }: ClientJobAction
   if (!isOnChainClient && !chainLoading) {
     return (
       <section className="panel client-actions-panel">
-        <h3>Phê duyệt bàn giao</h3>
+        <h3>Approve deliverable</h3>
         <p className="error">
-          Ví MetaMask không trùng client on-chain — chỉ client đã tạo job mới phê duyệt hoặc
-          khiếu nại.
+          MetaMask wallet does not match the on-chain client — only the job creator can approve or
+          raise a dispute.
         </p>
         {onchainClient && (
           <p className="muted mono">
-            Client on-chain: {onchainClient}
+            On-chain client: {onchainClient}
           </p>
         )}
       </section>
@@ -66,8 +66,8 @@ export function ClientJobActionsPanel({ job, onActionComplete }: ClientJobAction
   if (chainLoading) {
     return (
       <section className="panel client-actions-panel">
-        <h3>Phê duyệt bàn giao</h3>
-        <p className="muted">Đang đọc trạng thái on-chain…</p>
+        <h3>Approve deliverable</h3>
+        <p className="muted">Reading on-chain status…</p>
       </section>
     );
   }
@@ -83,7 +83,7 @@ export function ClientJobActionsPanel({ job, onActionComplete }: ClientJobAction
       await refetch();
       onActionComplete?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Phê duyệt thất bại');
+      setError(err instanceof Error ? err.message : 'Approval failed');
     } finally {
       setBusy(null);
     }
@@ -98,7 +98,7 @@ export function ClientJobActionsPanel({ job, onActionComplete }: ClientJobAction
       await refetch();
       onActionComplete?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Khiếu nại thất bại');
+      setError(err instanceof Error ? err.message : 'Dispute failed');
     } finally {
       setBusy(null);
     }
@@ -106,10 +106,10 @@ export function ClientJobActionsPanel({ job, onActionComplete }: ClientJobAction
 
   return (
     <section className="panel client-actions-panel">
-      <h3>Phê duyệt bàn giao</h3>
+      <h3>Approve deliverable</h3>
       <p className="muted">
-        Freelancer đã nộp bàn giao on-chain ({onchainStatusLabel ?? 'SUBMITTED'}). Xem CID, phê
-        duyệt để giải phóng USDC cho freelancer, hoặc khiếu nại để đóng băng escrow.
+        Freelancer submitted work on-chain ({onchainStatusLabel ?? 'SUBMITTED'}). Review the CID,
+        approve to release USDC to the freelancer, or raise a dispute to freeze escrow.
       </p>
       {onchainJob?.deliverableCID && (
         <p className="muted mono">
@@ -132,7 +132,7 @@ export function ClientJobActionsPanel({ job, onActionComplete }: ClientJobAction
             onClick={handleApprove}
             disabled={busy !== null || txStatus === 'pending'}
           >
-            {busy === 'approve' ? 'Đang phê duyệt…' : 'Phê duyệt & giải phóng USDC'}
+            {busy === 'approve' ? 'Approving…' : 'Approve & release USDC'}
           </button>
         )}
         {canDispute && (
@@ -142,7 +142,7 @@ export function ClientJobActionsPanel({ job, onActionComplete }: ClientJobAction
             onClick={handleDispute}
             disabled={busy !== null || txStatus === 'pending'}
           >
-            {busy === 'dispute' ? 'Đang gửi…' : 'Khiếu nại'}
+            {busy === 'dispute' ? 'Sending…' : 'Raise dispute'}
           </button>
         )}
       </div>

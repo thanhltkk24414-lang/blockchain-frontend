@@ -147,7 +147,7 @@ function mergeEvidence(
 
 function EvidenceList({ items }: { items: DisplayEvidence[] }) {
   if (items.length === 0) {
-    return <p className="muted phase-note">Chưa có bằng chứng nào được nộp.</p>;
+    return <p className="muted phase-note">No evidence submitted yet.</p>;
   }
 
   return (
@@ -159,7 +159,7 @@ function EvidenceList({ items }: { items: DisplayEvidence[] }) {
             {ev.submittedAt != null && (
               <span className="muted">
                 {' '}
-                · {new Date(ev.submittedAt * 1000).toLocaleString('vi-VN')}
+                · {new Date(ev.submittedAt * 1000).toLocaleString()}
               </span>
             )}
           </div>
@@ -167,7 +167,7 @@ function EvidenceList({ items }: { items: DisplayEvidence[] }) {
           {ev.evidenceUrl && (
             <p>
               <a href={ev.evidenceUrl} target="_blank" rel="noopener noreferrer">
-                Link bằng chứng ↗
+                Evidence link ↗
               </a>
             </p>
           )}
@@ -187,7 +187,7 @@ function EvidenceList({ items }: { items: DisplayEvidence[] }) {
             <a href={`${IPFS_GATEWAY}/${ev.imageCid}`} target="_blank" rel="noopener noreferrer">
               <img
                 src={`${IPFS_GATEWAY}/${ev.imageCid}`}
-                alt="Bằng chứng đính kèm"
+                alt="Evidence attachment"
                 className="evidence-thumb"
                 loading="lazy"
               />
@@ -195,8 +195,8 @@ function EvidenceList({ items }: { items: DisplayEvidence[] }) {
           )}
           {ev.onChainOnly && (
             <p className="muted phase-note">
-              Chỉ có hash on-chain (<code className="mono">{ev.ipfsHashBytes?.slice(0, 14)}…</code>
-              ) — metadata IPFS chưa index off-chain.
+              On-chain hash only (<code className="mono">{ev.ipfsHashBytes?.slice(0, 14)}…</code>
+              ) — fetching IPFS metadata; refresh if content was just submitted.
             </p>
           )}
         </li>
@@ -314,7 +314,7 @@ export function DisputeEvidencePanel({ job }: DisputeEvidencePanelProps) {
     const hasContent = trimmedNotes.length >= 10 || Boolean(imageFile) || trimmedUrl.length > 0;
 
     if (!hasContent) {
-      setError('Thêm mô tả (≥10 ký tự), URL hoặc ảnh đính kèm.');
+      setError('Add a description (≥10 chars), URL, or image attachment.');
       return;
     }
 
@@ -339,7 +339,7 @@ export function DisputeEvidencePanel({ job }: DisputeEvidencePanelProps) {
       });
 
       if (!upload.cid?.trim()) {
-        throw new Error('IPFS không trả về CID — thử lại upload.');
+        throw new Error('IPFS did not return a CID — retry upload.');
       }
 
       const evidenceHash = cidToEvidenceHash(upload.cid);
@@ -367,8 +367,8 @@ export function DisputeEvidencePanel({ job }: DisputeEvidencePanelProps) {
       } catch (apiErr) {
         setError(
           apiErr instanceof Error
-            ? `On-chain OK nhưng lưu metadata thất bại: ${apiErr.message}`
-            : 'On-chain OK nhưng lưu metadata off-chain thất bại.',
+            ? `On-chain OK but metadata save failed: ${apiErr.message}`
+            : 'On-chain OK but off-chain metadata save failed.',
         );
       }
 
@@ -377,7 +377,7 @@ export function DisputeEvidencePanel({ job }: DisputeEvidencePanelProps) {
       setImageFile(null);
       await loadEvidence();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Nộp bằng chứng thất bại');
+      setError(err instanceof Error ? err.message : 'Evidence submission failed');
     } finally {
       setLoading(false);
     }
@@ -387,57 +387,57 @@ export function DisputeEvidencePanel({ job }: DisputeEvidencePanelProps) {
 
   return (
     <section className="panel dispute-panel">
-      <h3>Tranh chấp — bằng chứng</h3>
+      <h3>Dispute — evidence</h3>
       <p className="muted">
-        Job đang <strong>DISPUTED</strong>. Client/freelancer nộp bằng chứng trong{' '}
-        <strong>{DISPUTE_PHASES.evidenceRebuttalEndMin} phút</strong> đầu (on-chain{' '}
-        <code>submitEvidence</code>). Arbitrator và các bên xem danh sách bên dưới.
+        Job is <strong>DISPUTED</strong>. Client/freelancer submit evidence within the first{' '}
+        <strong>{DISPUTE_PHASES.evidenceRebuttalEndMin} minutes</strong> (on-chain{' '}
+        <code>submitEvidence</code>). Arbitrators and parties can review the list below.
       </p>
 
-      {listLoading && <p className="muted">Đang tải bằng chứng…</p>}
+      {listLoading && <p className="muted">Loading evidence…</p>}
 
       <div className="evidence-list-section">
-        <h4>Bằng chứng đã nộp ({evidenceItems.length})</h4>
+        <h4>Submitted evidence ({evidenceItems.length})</h4>
         <EvidenceList items={evidenceItems} />
       </div>
 
       {!evidenceWindowOpen && (
         <p className="muted phase-note">
-          Cửa sổ nộp bằng chứng đã đóng — chỉ xem, không nộp thêm.
+          Evidence submission window closed — view only.
         </p>
       )}
 
       {!isParty && (
-        <p className="muted">Chỉ client/freelancer mới nộp được bằng chứng mới.</p>
+        <p className="muted">Only client/freelancer can submit new evidence.</p>
       )}
 
       {canSubmit && (
         <form onSubmit={handleSubmit}>
-          <h4>Nộp bằng chứng mới</h4>
+          <h4>Submit new evidence</h4>
           <label className="field">
-            Mô tả bằng chứng
+            Evidence description
             <textarea
               className="input textarea"
               rows={4}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Giải thích lý do tranh chấp, tóm tắt nội dung đính kèm…"
+              placeholder="Explain the dispute and summarize attachments…"
             />
           </label>
 
           <label className="field">
-            Link bằng chứng (tùy chọn)
+            Evidence link (optional)
             <input
               className="input full"
               type="url"
               value={evidenceUrl}
               onChange={(e) => setEvidenceUrl(e.target.value)}
-              placeholder="https://drive.google.com/… hoặc link demo/screenshot"
+              placeholder="https://drive.google.com/… or screenshot URL"
             />
           </label>
 
           <label className="field">
-            Ảnh đính kèm (tùy chọn)
+            Image attachment (optional)
             <input
               className="input full"
               type="file"
@@ -453,8 +453,8 @@ export function DisputeEvidencePanel({ job }: DisputeEvidencePanelProps) {
             disabled={loading || txStatus === 'pending' || !isAuthenticated}
           >
             {loading || txStatus === 'pending'
-              ? txLabel || 'Đang gửi…'
-              : 'Upload IPFS + nộp on-chain'}
+              ? txLabel || 'Sending…'
+              : 'Upload IPFS + submit on-chain'}
           </button>
           {error && <p className="error">{error}</p>}
         </form>

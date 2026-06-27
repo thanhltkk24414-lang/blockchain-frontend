@@ -67,7 +67,7 @@ export function useOnChainJob(onchainJobId?: number, refreshKey?: string | numbe
       setState(next);
       return next;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Không đọc được job on-chain';
+      const message = err instanceof Error ? err.message : 'Failed to read on-chain job';
       setError(message);
       setState(null);
       return null;

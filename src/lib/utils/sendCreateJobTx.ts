@@ -64,7 +64,7 @@ export async function sendCreateJobTx({
 
   const { address, status, chainId: connectedChainId } = getAccount(wagmiConfig);
   if (status !== 'connected' || !address) {
-    throw new Error('Kết nối ví MetaMask trên Sepolia trước khi gọi createJob.');
+    throw new Error('Connect your MetaMask wallet on Sepolia before calling createJob.');
   }
 
   const signingAccount = getAddress(address);
@@ -82,7 +82,7 @@ export async function sendCreateJobTx({
 
   if (connectedChainId != null && connectedChainId !== chainId) {
     throw new Error(
-      `MetaMask phải ở Sepolia (chainId ${chainId}) — hiện tại: ${connectedChainId}.`,
+      `MetaMask must be on Sepolia (chainId ${chainId}) — currently: ${connectedChainId}.`,
     );
   }
 

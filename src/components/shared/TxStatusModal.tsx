@@ -26,7 +26,7 @@ export function TxStatusModal({ open, status, label, hash, error, gasEstimate, o
             <h3>Transaction pending</h3>
             <p className="muted">{label}</p>
             {gasEstimate && (
-              <p className="muted phase-note gas-estimate-line">Ước tính gas: {gasEstimate}</p>
+              <p className="muted phase-note gas-estimate-line">Estimated gas: {gasEstimate}</p>
             )}
             <p className="muted phase-note">Confirm in your wallet and wait for the block.</p>
           </>

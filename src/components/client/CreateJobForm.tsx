@@ -75,33 +75,33 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
 
     const txWallet = signingAddress ?? address;
     if (!isConnected || !txWallet) {
-      setSubmitError('Kết nối ví MetaMask trên Sepolia trước khi tạo job.');
+      setSubmitError('Connect your MetaMask wallet on Sepolia before creating a job.');
       return;
     }
     if (!isAddress(txWallet)) {
       setSubmitError(
-        `Địa chỉ MetaMask không hợp lệ (${String(txWallet).length} ký tự). Cần đúng định dạng 0x + 40 ký tự hex.`,
+        `Invalid MetaMask address (${String(txWallet).length} characters). Must be 0x + 40 hex characters.`,
       );
       return;
     }
     if (chainId !== CHAIN_ID) {
-      setSubmitError(`Chuyển MetaMask sang Sepolia (chainId ${CHAIN_ID}) — hiện tại: ${chainId ?? 'unknown'}.`);
+      setSubmitError(`Switch MetaMask to Sepolia (chainId ${CHAIN_ID}) — currently: ${chainId ?? 'unknown'}.`);
       return;
     }
     if (!isAuthenticated || !user?.walletAddress) {
-      setSubmitError('Đăng nhập SIWE trước khi tạo job.');
+      setSubmitError('Sign in with SIWE before creating a job.');
       return;
     }
     if (txWallet.toLowerCase() !== user.walletAddress.toLowerCase()) {
       setSubmitError(
-        `SIWE đăng nhập: ${shortSiwe} · MetaMask active: ${shortMetaMask ?? '—'} — ` +
-          'giao dịch createJob dùng ví MetaMask đang chọn. Đăng nhập lại (Sign in) với account MetaMask hiện tại.',
+        `SIWE session: ${shortSiwe} · MetaMask active: ${shortMetaMask ?? '—'} — ` +
+          'createJob uses the currently selected MetaMask wallet. Sign in again with the active MetaMask account.',
       );
       return;
     }
     if (rainbowMismatch) {
       setSubmitError(
-        'Ví Fapex và MetaMask không trùng account — chọn đúng Account trong extension hoặc Disconnect → Connect lại.',
+        'Fapex and MetaMask accounts do not match — select the correct Account in the extension or Disconnect → Connect again.',
       );
       return;
     }
@@ -122,7 +122,7 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
         createdAt: new Date().toISOString(),
       });
       if (!metadataRes.success || !metadataRes.cid) {
-        throw new Error('IPFS metadata upload failed — kiểm tra đăng nhập SIWE và Pinata backend.');
+        throw new Error('IPFS metadata upload failed — verify SIWE login and Pinata backend.');
       }
 
       if (USE_RELAYED_CREATE_JOB) {
@@ -145,7 +145,7 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
       const activeNow = signingAddress ?? address;
       if (!activeNow || activeNow.toLowerCase() !== user.walletAddress.toLowerCase()) {
         throw new Error(
-          `Ví MetaMask đổi trong lúc upload IPFS — chuyển lại về ${shortSiwe} trước khi ký createJob.`,
+          `MetaMask wallet changed during IPFS upload — switch back to ${shortSiwe} before signing createJob.`,
         );
       }
 
@@ -311,9 +311,9 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
       {USE_RELAYED_CREATE_JOB && (
         <div className="panel wallet-mismatch-banner" role="alert" style={{ marginTop: '0.75rem' }}>
           <p className="muted" style={{ margin: 0 }}>
-            <strong>Demo mode — relayed createJob.</strong> Backend dùng ví INDEXER để gọi on-chain;
-            nạp escrow sau này cần ví INDEXER (không phải ví client). Tắt{' '}
-            <code>VITE_USE_RELAYED_CREATE_JOB</code> để ký createJob từ MetaMask.
+            <strong>Demo mode — relayed createJob.</strong> The backend uses the INDEXER wallet for
+            on-chain calls; funding escrow later requires the INDEXER wallet (not the client wallet).
+            Disable <code>VITE_USE_RELAYED_CREATE_JOB</code> to sign createJob from MetaMask.
           </p>
         </div>
       )}
@@ -321,14 +321,14 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
       {siweMismatch && isAuthenticated && (
         <div className="panel wallet-mismatch-banner" role="alert" style={{ marginTop: '0.75rem' }}>
           <p className="error" style={{ margin: 0 }}>
-            SIWE ({shortSiwe}) khác MetaMask active ({shortMetaMask ?? '—'}).{' '}
+            SIWE ({shortSiwe}) differs from MetaMask active ({shortMetaMask ?? '—'}).{' '}
             <button
               type="button"
               className="btn ghost"
               disabled={authLoading}
               onClick={() => void signIn()}
             >
-              Đăng nhập lại với MetaMask hiện tại
+              Sign in again with current MetaMask
             </button>
           </p>
         </div>
@@ -349,12 +349,12 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
           <div>Fapex connected: {address ?? '—'}</div>
           <div>MetaMask active: {metaMaskActive ?? '—'}</div>
           <div>signing: {signingAddress ?? '—'}</div>
-          <div>chainId: {chainId ?? '—'} (cần {CHAIN_ID})</div>
+          <div>chainId: {chainId ?? '—'} (required: {CHAIN_ID})</div>
           <div>JobRegistry: {CONTRACT_ADDRESSES.JobRegistry}</div>
           <div>
             calldata length:{' '}
             {txDebug?.calldataLength ??
-              (submitting && step === 'onchain' ? 'đang ký…' : '— (sau IPFS upload)')}
+              (submitting && step === 'onchain' ? 'signing…' : '— (after IPFS upload)')}
           </div>
         </div>
       )}
@@ -375,13 +375,13 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
       <p className="muted phase-note">
         {USE_RELAYED_CREATE_JOB ? (
           <>
-            Relay demo: backend gọi <code>JobRegistry.createJob</code> qua INDEXER wallet. Production:
-            tắt <code>VITE_USE_RELAYED_CREATE_JOB</code> và ký từ MetaMask.
+            Relay demo: backend calls <code>JobRegistry.createJob</code> via INDEXER wallet. Production:
+            disable <code>VITE_USE_RELAYED_CREATE_JOB</code> and sign from MetaMask.
           </>
         ) : (
           <>
-            Bạn ký <code>JobRegistry.createJob</code> từ ví MetaMask (cần Sepolia ETH cho gas). Backend chỉ
-            lưu metadata IPFS và đồng bộ MongoDB — cùng ví sẽ nạp escrow sau khi accept bid.
+            You sign <code>JobRegistry.createJob</code> from MetaMask (Sepolia ETH required for gas). The backend
+            only stores IPFS metadata and syncs MongoDB — the same wallet will fund escrow after accepting a bid.
           </>
         )}
       </p>

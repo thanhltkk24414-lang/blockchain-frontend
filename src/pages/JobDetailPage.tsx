@@ -161,7 +161,7 @@ export function JobDetailPage() {
           <h2>{job.title}</h2>
           <StatusBadge status={displayStatus} />
           {chainLoading && onchainStatus == null && (
-            <span className="muted phase-note">Đang đọc on-chain…</span>
+            <span className="muted phase-note">Reading on-chain…</span>
           )}
         </div>
         <p className="muted">{job.description}</p>

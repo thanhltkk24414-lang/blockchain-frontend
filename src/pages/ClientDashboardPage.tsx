@@ -70,15 +70,15 @@ export function ClientDashboardPage() {
         {isAuthenticated && jobs.length > 0 && (
           <div className="stats-row">
             <div className="stat-card">
-              <span className="stat-label">Tổng job</span>
+              <span className="stat-label">Total jobs</span>
               <strong>{jobs.length}</strong>
             </div>
             <div className="stat-card">
-              <span className="stat-label">Đang mở</span>
+              <span className="stat-label">Open</span>
               <strong>{jobs.filter((j) => j.status === 'OPEN').length}</strong>
             </div>
             <div className="stat-card">
-              <span className="stat-label">Đang chạy</span>
+              <span className="stat-label">In progress</span>
               <strong>
                 {jobs.filter((j) =>
                   ['ASSIGNED', 'IN_PROGRESS', 'SUBMITTED'].includes(j.status?.toUpperCase() ?? ''),
@@ -86,7 +86,7 @@ export function ClientDashboardPage() {
               </strong>
             </div>
             <div className="stat-card">
-              <span className="stat-label">Tranh chấp</span>
+              <span className="stat-label">Disputed</span>
               <strong>{jobs.filter((j) => j.status?.toUpperCase() === 'DISPUTED').length}</strong>
             </div>
           </div>

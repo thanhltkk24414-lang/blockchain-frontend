@@ -32,12 +32,12 @@ export async function getMetaMaskAccounts(provider?: EthereumProvider): Promise<
 export async function requestMetaMaskAccounts(provider?: EthereumProvider): Promise<Address[]> {
   const p = provider ?? (await getSigningProvider());
   if (!p?.request) {
-    throw new Error('MetaMask provider không khả dụng — cài/kích hoạt extension và refresh trang.');
+    throw new Error('MetaMask provider unavailable — install/enable the extension and refresh the page.');
   }
   const raw = await p.request({ method: 'eth_requestAccounts' });
   const accounts = normalizeAccounts(raw);
   if (accounts.length === 0) {
-    throw new Error('MetaMask không trả về account — mở extension và chọn tài khoản.');
+    throw new Error('MetaMask returned no account — open the extension and select an account.');
   }
   return accounts;
 }
@@ -46,7 +46,7 @@ export async function requestMetaMaskAccounts(provider?: EthereumProvider): Prom
 export async function requestMetaMaskPermissions(provider?: EthereumProvider): Promise<Address[]> {
   const p = provider ?? (await getSigningProvider());
   if (!p?.request) {
-    throw new Error('MetaMask provider không khả dụng.');
+    throw new Error('MetaMask provider unavailable.');
   }
   await p.request({
     method: 'wallet_requestPermissions',
@@ -64,7 +64,7 @@ export async function resolveMetaMaskSigningAccount(options?: {
 }): Promise<Address> {
   const provider = await getSigningProvider();
   if (!provider) {
-    throw new Error('MetaMask provider không khả dụng — cài/kích hoạt extension và refresh trang.');
+    throw new Error('MetaMask provider unavailable — install/enable the extension and refresh the page.');
   }
 
   if (options?.requestPermissions) {

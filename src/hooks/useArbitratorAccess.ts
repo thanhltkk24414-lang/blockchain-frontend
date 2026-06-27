@@ -11,6 +11,10 @@ const MIN_STAKE_USDC = 50;
 /** Share resolved stake/pool reads across hook instances (AppShell vs RoleGuard). */
 let accessCache: { address: string; state: ArbitratorAccess } | null = null;
 
+export function clearArbitratorAccessCache() {
+  accessCache = null;
+}
+
 function initialAccess(address?: string): ArbitratorAccess {
   if (address && accessCache?.address === address.toLowerCase()) {
     return accessCache.state;
@@ -28,7 +32,7 @@ export interface ArbitratorAccess {
   error?: string;
 }
 
-export function useArbitratorAccess(): ArbitratorAccess {
+export function useArbitratorAccess(refreshKey = 0): ArbitratorAccess {
   const { address } = useAccount();
   const [state, setState] = useState<ArbitratorAccess>(() => initialAccess(address));
 
@@ -39,7 +43,8 @@ export function useArbitratorAccess(): ArbitratorAccess {
       return;
     }
 
-    const cached = accessCache?.address === address.toLowerCase() ? accessCache.state : null;
+    const cached =
+      refreshKey === 0 && accessCache?.address === address.toLowerCase() ? accessCache.state : null;
     if (cached && !cached.loading) {
       setState(cached);
       return;
@@ -100,7 +105,7 @@ export function useArbitratorAccess(): ArbitratorAccess {
     return () => {
       cancelled = true;
     };
-  }, [address]);
+  }, [address, refreshKey]);
 
   return state;
 }

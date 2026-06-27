@@ -8,10 +8,10 @@ interface TxRecoveryModalProps {
 }
 
 const STEPS = [
-  'Mở extension MetaMask → chọn đúng Account (ví client / SIWE).',
-  'Kiểm tra mạng Sepolia (chainId 11155111).',
-  'Trên Fapex: Disconnect MetaMask → Connect lại → chọn cùng account.',
-  'Nếu vẫn lỗi: bấm "Yêu cầu quyền MetaMask" bên dưới rồi thử Create job lại.',
+  'Open the MetaMask extension → select the correct Account (client wallet / SIWE).',
+  'Verify the Sepolia network (chainId 11155111).',
+  'On Fapex: Disconnect MetaMask → Connect again → select the same account.',
+  'If it still fails: click "Request MetaMask permissions" below, then try Create job again.',
 ];
 
 export function TxRecoveryModal({ open, error, onClose, onRetry }: TxRecoveryModalProps) {
@@ -30,10 +30,11 @@ export function TxRecoveryModal({ open, error, onClose, onRetry }: TxRecoveryMod
     <div className="modal-overlay" role="dialog" aria-modal="true">
       <div className="modal-panel tx-modal">
         <div className="tx-icon failed">!</div>
-        <h3>MetaMask từ chối tham số giao dịch</h3>
+        <h3>MetaMask rejected transaction parameters</h3>
         {error && <p className="error">{error}</p>}
         <p className="muted">
-          Thường do account trong MetaMask không khớp ví Fapex đã kết nối hoặc SIWE. Làm lần lượt:
+          Usually caused by the MetaMask account not matching the Fapex-connected wallet or SIWE
+          session. Try the following in order:
         </p>
         <ol className="muted" style={{ textAlign: 'left', paddingLeft: '1.25rem' }}>
           {STEPS.map((step) => (
@@ -44,15 +45,15 @@ export function TxRecoveryModal({ open, error, onClose, onRetry }: TxRecoveryMod
         </ol>
         <div className="form-actions" style={{ marginTop: '1rem' }}>
           <button type="button" className="btn primary" onClick={() => void handleRequestPermissions()}>
-            Yêu cầu quyền MetaMask
+            Request MetaMask permissions
           </button>
           {onRetry && (
             <button type="button" className="btn ghost" onClick={onRetry}>
-              Thử lại
+              Retry
             </button>
           )}
           <button type="button" className="btn ghost" onClick={onClose}>
-            Đóng
+            Close
           </button>
         </div>
       </div>

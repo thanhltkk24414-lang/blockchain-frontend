@@ -32,7 +32,7 @@ export function JobCard({ job, detailPath }: JobCardProps) {
           </Link>
         </h3>
         <div className="job-badges">
-          {isDisputed && <span className="badge warning dispute-badge">Tranh chấp</span>}
+          {isDisputed && <span className="badge warning dispute-badge">Disputed</span>}
           <StatusBadge status={job.status} />
         </div>
       </div>

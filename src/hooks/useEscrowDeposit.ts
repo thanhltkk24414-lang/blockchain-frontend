@@ -63,15 +63,15 @@ export function useEscrowDeposit() {
       if (!address) throw new Error('Connect your wallet first');
       const freelancer = getAddress(freelancerAddress);
       if (!isNonZeroAddress(freelancer)) {
-        throw new Error('Địa chỉ freelancer không hợp lệ (không được dùng 0x0).');
+        throw new Error('Invalid freelancer address (0x0 is not allowed).');
       }
       if (expectedFreelancer && !addressesEqual(freelancer, expectedFreelancer)) {
         throw new Error(
-          `Freelancer deposit (${freelancer}) phải trùng bid đã accept (${getAddress(expectedFreelancer)}).`,
+          `Freelancer for deposit (${freelancer}) must match the accepted bid (${getAddress(expectedFreelancer)}).`,
         );
       }
       if (freelancer.toLowerCase() === getAddress(address).toLowerCase()) {
-        throw new Error('Freelancer không thể trùng ví client on-chain.');
+        throw new Error('Freelancer cannot be the same wallet as the on-chain client.');
       }
 
       resetTx();
@@ -99,7 +99,7 @@ export function useEscrowDeposit() {
         }
         if (onChainJob.client.toLowerCase() !== address.toLowerCase()) {
           throw new Error(
-            `Chỉ client on-chain ${onChainJob.client.slice(0, 6)}…${onChainJob.client.slice(-4)} mới nạp escrow.`,
+            `Only on-chain client ${onChainJob.client.slice(0, 6)}…${onChainJob.client.slice(-4)} can deposit escrow.`,
           );
         }
 
@@ -125,7 +125,7 @@ export function useEscrowDeposit() {
             hash: approveHash,
           });
           if (approveReceipt.status === 'reverted') {
-            throw new Error('Approve USDC thất bại on-chain.');
+            throw new Error('USDC approve failed on-chain.');
           }
         }
 
@@ -143,7 +143,7 @@ export function useEscrowDeposit() {
         });
         if (depositReceipt.status === 'reverted') {
           throw new Error(
-            'depositEscrow revert on-chain — kiểm tra job còn OPEN và allowance đủ (giá + 3%).',
+            'depositEscrow reverted on-chain — verify the job is still OPEN and allowance is sufficient (price + 3%).',
           );
         }
 

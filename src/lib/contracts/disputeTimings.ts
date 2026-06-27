@@ -1,12 +1,12 @@
 /** On-chain dispute phase labels — Sepolia demo uses short windows from DisputeTimings.demo.sol */
 export const DISPUTE_PHASES_DEMO = {
-  evidenceInitialEndMin: 15,
-  evidenceRebuttalEndMin: 30,
-  commitStartMin: 30,
-  commitEndMin: 45,
-  revealStartMin: 45,
-  revealEndMin: 60,
-  appealWindowHours: 2,
+  evidenceInitialEndMin: 5,
+  evidenceRebuttalEndMin: 10,
+  commitStartMin: 10,
+  commitEndMin: 13,
+  revealStartMin: 13,
+  revealEndMin: 16,
+  appealWindowMin: 30,
 } as const;
 
 export const DISPUTE_PHASES_PROD = {
@@ -21,3 +21,11 @@ export const DISPUTE_PHASES_PROD = {
 
 /** Active UI copy for Sepolia demo deployment */
 export const DISPUTE_PHASES = DISPUTE_PHASES_DEMO;
+
+/** Human-readable appeal window for UI copy */
+export function formatAppealWindow(): string {
+  if ('appealWindowMin' in DISPUTE_PHASES) {
+    return `${DISPUTE_PHASES.appealWindowMin} min`;
+  }
+  return `${DISPUTE_PHASES_PROD.appealWindowHours} h`;
+}

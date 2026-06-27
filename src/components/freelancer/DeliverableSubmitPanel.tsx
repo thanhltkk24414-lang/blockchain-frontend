@@ -70,8 +70,8 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
   if (chainLoading) {
     return (
       <section className="panel deliverable-panel">
-        <h3>Nộp bàn giao</h3>
-        <p className="muted">Đang đọc trạng thái on-chain…</p>
+        <h3>Submit deliverable</h3>
+        <p className="muted">Reading on-chain status…</p>
       </section>
     );
   }
@@ -87,8 +87,8 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
       if (onchainStatus === ONCHAIN_JOB_STATUS.COMPLETED) {
         return (
           <section className="panel deliverable-panel">
-            <h3>Bàn giao</h3>
-            <p className="badge success">Job đã hoàn thành on-chain (COMPLETED).</p>
+            <h3>Deliverable</h3>
+            <p className="badge success">Job completed on-chain (COMPLETED).</p>
           </section>
         );
       }
@@ -97,10 +97,10 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
       }
       return (
         <section className="panel deliverable-panel">
-          <h3>Nộp bàn giao</h3>
+          <h3>Submit deliverable</h3>
           <p className="muted">
-            Job on-chain: <strong>{chainLabel ?? onchainStatusLabel(onchainStatus!)}</strong> — không
-            thể nộp bàn giao thêm.
+            On-chain job: <strong>{chainLabel ?? onchainStatusLabel(onchainStatus!)}</strong> — cannot
+            submit a deliverable.
           </p>
         </section>
       );
@@ -108,8 +108,8 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
 
     return (
       <section className="panel deliverable-panel">
-        <h3>Nộp bàn giao</h3>
-        <p className="muted">Chờ client nạp escrow trước khi bạn có thể bắt đầu làm việc on-chain.</p>
+        <h3>Submit deliverable</h3>
+        <p className="muted">Wait for the client to fund escrow before you can start work on-chain.</p>
       </section>
     );
   }
@@ -117,8 +117,8 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
   if (onchainSubmitted) {
     return (
       <section className="panel deliverable-panel">
-        <h3>Bàn giao</h3>
-        <p className="badge success">Đã nộp bàn giao on-chain ({chainLabel ?? 'SUBMITTED'}).</p>
+        <h3>Deliverable</h3>
+        <p className="badge success">Deliverable submitted on-chain ({chainLabel ?? 'SUBMITTED'}).</p>
         {onchainJob?.deliverableCID && (
           <p className="muted mono">CID: {onchainJob.deliverableCID}</p>
         )}
@@ -129,10 +129,10 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
             target="_blank"
             rel="noopener noreferrer"
           >
-            Xem trên IPFS ↗
+            View on IPFS ↗
           </a>
         )}
-        <p className="muted phase-note">Chờ client phê duyệt và giải phóng escrow.</p>
+        <p className="muted phase-note">Awaiting client approval and escrow release.</p>
       </section>
     );
   }
@@ -142,7 +142,7 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
     if (!job.onchainJobId) return;
     if (walletMismatch) return;
     if (!file && notes.trim().length < 10) {
-      setError('Thêm file hoặc ghi chú bàn giao ít nhất 10 ký tự.');
+      setError('Add a file or deliverable notes of at least 10 characters.');
       return;
     }
 
@@ -160,7 +160,7 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
       await refetch();
       onSubmitted?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Nộp bàn giao thất bại');
+      setError(err instanceof Error ? err.message : 'Failed to submit deliverable');
     } finally {
       setLoading(false);
     }
@@ -168,24 +168,24 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
 
   return (
     <form className="panel deliverable-panel" onSubmit={handleSubmit}>
-      <h3>Nộp bàn giao</h3>
+      <h3>Submit deliverable</h3>
       <p className="muted">
-        Hệ thống mô phỏng giao dịch on-chain trước khi gửi ví. Khi job còn ASSIGNED, luồng nộp gồm{' '}
-        <strong>2 bước</strong>: <code>startWork</code> (chờ xác nhận) → upload IPFS →{' '}
-        <code>submitWork</code>.
+        The system simulates the on-chain transaction before sending to your wallet. When the job is
+        ASSIGNED, submission is a <strong>2-step</strong> flow: <code>startWork</code> (await
+        confirmation) → IPFS upload → <code>submitWork</code>.
       </p>
 
-      {chainLoading && <p className="muted">Đang đọc trạng thái on-chain…</p>}
+      {chainLoading && <p className="muted">Reading on-chain status…</p>}
 
       {onchainFreelancerCs && walletCs && (
         <dl className="detail-grid wallet-compare">
-          <dt>Freelancer on-chain</dt>
+          <dt>On-chain freelancer</dt>
           <dd className="mono">{onchainFreelancerCs}</dd>
-          <dt>Ví MetaMask</dt>
+          <dt>MetaMask wallet</dt>
           <dd className={walletMismatch ? 'error mono' : 'mono'}>{walletCs}</dd>
           {onchainStatus != null && (
             <>
-              <dt>Trạng thái on-chain</dt>
+              <dt>On-chain status</dt>
               <dd>
                 <strong>{chainLabel ?? onchainStatusLabel(onchainStatus)}</strong>
               </dd>
@@ -196,42 +196,42 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
 
       {walletMismatch && onchainFreelancerCs && walletCs && (
         <p className="error">
-          Ví không khớp — chỉ <code className="mono">{onchainFreelancerCs}</code> mới gọi được{' '}
-          <code>submitWork</code>. Địa chỉ bạn đang dùng: <code className="mono">{walletCs}</code>{' '}
-          (khác byte, không chỉ khác chữ hoa).
+          Wallet mismatch — only <code className="mono">{onchainFreelancerCs}</code> can call{' '}
+          <code>submitWork</code>. Your address: <code className="mono">{walletCs}</code> (different
+          bytes, not just different casing).
         </p>
       )}
 
       {twoStepFlow && (
         <p className="badge info">
-          <strong>Bước 1/2:</strong> <code>startWork</code> (ASSIGNED → IN_PROGRESS) —{' '}
-          <strong>Bước 2/2:</strong> <code>submitWork</code>. MetaMask sẽ hỏi 2 lần; đừng bỏ qua bước
-          1.
+          <strong>Step 1/2:</strong> <code>startWork</code> (ASSIGNED → IN_PROGRESS) —{' '}
+          <strong>Step 2/2:</strong> <code>submitWork</code>. MetaMask will prompt twice; do not skip
+          step 1.
         </p>
       )}
 
       {isOnchainAssigned && walletMismatch && (
         <p className="error muted">
-          Job đang ASSIGNED — cần <code>startWork</code> trước <code>submitWork</code>, nhưng ví không
-          khớp freelancer on-chain.
+          Job is ASSIGNED — <code>startWork</code> is required before <code>submitWork</code>, but
+          your wallet does not match the on-chain freelancer.
         </p>
       )}
 
-      {!isAuthenticated && <p className="muted">Đăng nhập SIWE để upload file.</p>}
+      {!isAuthenticated && <p className="muted">Sign in with SIWE to upload files.</p>}
 
       <label className="field">
-        Ghi chú bàn giao
+        Deliverable notes
         <textarea
           className="input textarea"
           rows={4}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="Tóm tắt nội dung đã giao, link hoặc hướng dẫn…"
+          placeholder="Summary of what was delivered, links, or instructions…"
         />
       </label>
 
       <label className="field">
-        Repository / demo URL (tùy chọn)
+        Repository / demo URL (optional)
         <input
           className="input full"
           type="url"
@@ -242,7 +242,7 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
       </label>
 
       <label className="field">
-        Đính kèm file (tùy chọn)
+        Attach file (optional)
         <input
           className="input full"
           type="file"
@@ -263,10 +263,10 @@ export function DeliverableSubmitPanel({ job, onSubmitted }: DeliverableSubmitPa
         }
       >
         {loading || txStatus === 'pending'
-          ? txLabel || 'Đang nộp…'
+          ? txLabel || 'Submitting…'
           : twoStepFlow
-            ? 'Bước 1–2: startWork + nộp bàn giao'
-            : 'Kiểm tra & nộp on-chain'}
+            ? 'Steps 1–2: startWork + submit deliverable'
+            : 'Verify & submit on-chain'}
       </button>
 
       {error && <p className="error">{error}</p>}

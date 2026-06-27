@@ -38,8 +38,8 @@ async function preflightRaiseDispute(
 
   if (!isClient && !isFreelancer) {
     throw new Error(
-      `Ví MetaMask (${wallet}) không phải client/freelancer của job on-chain. ` +
-        'Chỉ một trong hai bên mới được mở tranh chấp.',
+      `MetaMask wallet (${wallet}) is not the on-chain client or freelancer. ` +
+        'Only a job party can raise a dispute.',
     );
   }
 
@@ -48,8 +48,8 @@ async function preflightRaiseDispute(
     onchainJob.status !== ONCHAIN_JOB_STATUS.IN_PROGRESS
   ) {
     throw new Error(
-      `Job on-chain đang ${onchainStatusLabel(onchainJob.status)} — ` +
-        'chỉ khiếu nại khi SUBMITTED hoặc IN_PROGRESS.',
+      `On-chain job is ${onchainStatusLabel(onchainJob.status)} — ` +
+        'disputes are only allowed when SUBMITTED or IN_PROGRESS.',
     );
   }
 
@@ -60,7 +60,7 @@ async function preflightRaiseDispute(
   })) as number;
   if (tier <= 1) {
     throw new Error(
-      'LowReputationTier: tier Warning/Restricted không được mở tranh chấp mới — cần Normal hoặc Trusted.',
+      'LowReputationTier: Warning/Restricted tiers cannot raise disputes — need Normal or Trusted.',
     );
   }
 
@@ -70,7 +70,7 @@ async function preflightRaiseDispute(
   })) as bigint;
   if (poolSize < MIN_ARBITRATOR_POOL) {
     throw new Error(
-      `NotEnoughArbitrators: pool hiện ${poolSize.toString()} — cần ≥5 arbitrator (chạy scripts/seed-arbitrator-pool.js).`,
+      `NotEnoughArbitrators: pool size is ${poolSize.toString()} — need ≥5 arbitrators (run scripts/seed-arbitrator-pool.js).`,
     );
   }
 
@@ -90,7 +90,7 @@ async function preflightRaiseDispute(
 
   if (balance < fee) {
     throw new Error(
-      `TransferFailed: cần ${Number(fee) / 1e6} USDC phí tranh chấp — số dư MockUSDC ${Number(balance) / 1e6}. Mint thêm trên Sepolia.`,
+      `TransferFailed: need ${Number(fee) / 1e6} USDC dispute fee — MockUSDC balance ${Number(balance) / 1e6}. Mint more on Sepolia.`,
     );
   }
 
@@ -143,7 +143,7 @@ async function waitForInProgress(jobId: bigint): Promise<OnChainJob> {
   const job = await readOnchainJob(jobId);
   if (job.status !== ONCHAIN_JOB_STATUS.IN_PROGRESS) {
     throw new Error(
-      'startWork đã xác nhận nhưng job chưa chuyển sang IN_PROGRESS — đợi vài giây rồi bấm nộp lại.',
+      'startWork confirmed but job is not IN_PROGRESS yet — wait a few seconds and submit again.',
     );
   }
   return job;
@@ -161,7 +161,7 @@ export function useDeliverableSubmit() {
       notes: string;
       repoUrl?: string;
     }) => {
-      if (!address) throw new Error('Hãy kết nối ví MetaMask trước.');
+      if (!address) throw new Error('Connect your MetaMask wallet first.');
 
       const wallet = getAddress(address);
       const jobId = BigInt(params.onchainJobId);
@@ -177,7 +177,7 @@ export function useDeliverableSubmit() {
       }
 
       if (needsStartWork) {
-        await tx.runTx('Bước 1/2: Bắt đầu làm việc on-chain (startWork)…', () =>
+        await tx.runTx('Step 1/2: Start work on-chain (startWork)…', () =>
           executeContractWrite({
             address: contracts.escrowVault.address,
             abi: contracts.escrowVault.abi as Abi,
@@ -207,7 +207,7 @@ export function useDeliverableSubmit() {
       }
 
       if (!deliverableCID?.trim()) {
-        throw new Error('IPFS không trả về CID — thử lại upload.');
+        throw new Error('IPFS did not return a CID — retry the upload.');
       }
 
       onchainJob = await readOnchainJob(jobId);
@@ -215,15 +215,15 @@ export function useDeliverableSubmit() {
 
       if (onchainJob.status !== ONCHAIN_JOB_STATUS.IN_PROGRESS) {
         throw new Error(
-          `Job on-chain đang ${onchainJob.status === ONCHAIN_JOB_STATUS.ASSIGNED ? 'ASSIGNED' : 'không phải IN_PROGRESS'} — cần startWork trước khi submitWork.`,
+          `On-chain job is ${onchainJob.status === ONCHAIN_JOB_STATUS.ASSIGNED ? 'ASSIGNED' : 'not IN_PROGRESS'} — call startWork before submitWork.`,
         );
       }
 
       await simulateSubmitWork(wallet, jobId, deliverableCID.trim());
 
       const submitLabel = needsStartWork
-        ? 'Bước 2/2: Nộp bàn giao on-chain (submitWork)…'
-        : 'Đang nộp bàn giao on-chain (submitWork)…';
+        ? 'Step 2/2: Submit deliverable on-chain (submitWork)…'
+        : 'Submitting deliverable on-chain (submitWork)…';
 
       await tx.runTx(submitLabel, () =>
         executeContractWrite({
@@ -249,7 +249,7 @@ export function useClientJobActions() {
 
   const approveAndRelease = useCallback(
     async (onchainJobId: number) => {
-      if (!address) throw new Error('Hãy kết nối ví MetaMask trước.');
+      if (!address) throw new Error('Connect your MetaMask wallet first.');
 
       const wallet = getAddress(address);
       const jobId = BigInt(onchainJobId);
@@ -257,20 +257,20 @@ export function useClientJobActions() {
 
       if (!addressesEqual(onchainJob.client, wallet)) {
         throw new Error(
-          `Ví MetaMask (${wallet}) không trùng client on-chain (${getAddress(onchainJob.client)}). ` +
-            'Hãy đổi sang ví client đã tạo job.',
+          `MetaMask wallet (${wallet}) does not match on-chain client (${getAddress(onchainJob.client)}). ` +
+            'Switch to the client wallet that created the job.',
         );
       }
 
       if (onchainJob.status !== ONCHAIN_JOB_STATUS.SUBMITTED) {
         throw new Error(
-          `Job on-chain đang ${onchainJob.status === ONCHAIN_JOB_STATUS.DISPUTED ? 'DISPUTED' : `trạng thái #${onchainJob.status}`} — ` +
-            'chỉ phê duyệt khi SUBMITTED (sau khi freelancer submitWork).',
+          `On-chain job is ${onchainJob.status === ONCHAIN_JOB_STATUS.DISPUTED ? 'DISPUTED' : `status #${onchainJob.status}`} — ` +
+            'approve only when SUBMITTED (after freelancer submitWork).',
         );
       }
 
       await tx.runTx(
-        'Đang phê duyệt bàn giao và giải phóng USDC…',
+        'Approving deliverable and releasing USDC…',
         () =>
           executeContractWrite({
             address: contracts.escrowVault.address,
@@ -295,7 +295,7 @@ export function useClientJobActions() {
 
   const raiseDispute = useCallback(
     async (onchainJobId: number) => {
-      if (!address) throw new Error('Hãy kết nối ví MetaMask trước.');
+      if (!address) throw new Error('Connect your MetaMask wallet first.');
 
       const wallet = getAddress(address);
       const jobId = BigInt(onchainJobId);
@@ -303,7 +303,7 @@ export function useClientJobActions() {
       const needsApprove = await preflightRaiseDispute(wallet, onchainJob);
 
       if (needsApprove > 0n) {
-        await tx.runTx('Đang approve phí tranh chấp USDC…', () =>
+        await tx.runTx('Approving USDC dispute fee…', () =>
           executeContractWrite({
             address: contracts.mockUsdc.address,
             abi: contracts.mockUsdc.abi as Abi,
@@ -314,7 +314,7 @@ export function useClientJobActions() {
         );
       }
 
-      await tx.runTx('Đang mở tranh chấp on-chain…', () =>
+      await tx.runTx('Raising dispute on-chain…', () =>
         executeContractWrite({
           address: contracts.escrowVault.address,
           abi: contracts.escrowVault.abi as Abi,

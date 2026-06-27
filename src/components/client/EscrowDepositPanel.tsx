@@ -186,20 +186,20 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
     onchainStatus === ONCHAIN_JOB_STATUS.OPEN && !depositBlocked;
 
   const depositDisabledReason = useMemo(() => {
-    if (depositComplete) return 'Escrow đã được nạp on-chain.';
+    if (depositComplete) return 'Escrow has been funded on-chain.';
     if (walletMismatch && onchainClientAddr) {
-      return `Chuyển MetaMask sang ${shortAddress(onchainClientAddr)} (ví đã tạo job on-chain) để approve & deposit.`;
+      return `Switch MetaMask to ${shortAddress(onchainClientAddr)} (wallet that created the on-chain job) to approve & deposit.`;
     }
     if (registryMismatch && registryMismatchMessage) return registryMismatchMessage;
     if (depositBlocked && onchainBlocker) return onchainBlocker;
     if (acceptedVsOnchainMismatch) {
-      return 'Freelancer on-chain không khớp bid đã accept.';
+      return 'On-chain freelancer does not match the accepted bid.';
     }
     if (insufficientUsdc) {
-      return `Cần ${totalDeposit} MockUSDC trên ví client on-chain — mint bên dưới sau khi chuyển đúng ví.`;
+      return `Need ${totalDeposit} MockUSDC on the on-chain client wallet — mint below after switching to the correct wallet.`;
     }
     if (!acceptedFreelancer && !freelancerInput.trim()) {
-      return 'Nhập địa chỉ freelancer từ proposal đã accept.';
+      return 'Enter the freelancer address from the accepted proposal.';
     }
     return null;
   }, [
@@ -222,7 +222,7 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
   async function handleMint() {
     setLocalError(null);
     if (!isConnected || !address) {
-      setLocalError('Kết nối ví MetaMask trên mạng Sepolia.');
+      setLocalError('Connect your MetaMask wallet on the Sepolia network.');
       return;
     }
     try {
@@ -236,12 +236,12 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
   async function handleDeposit() {
     setLocalError(null);
     if (!isConnected || !address) {
-      setLocalError('Kết nối ví MetaMask trên mạng Sepolia.');
+      setLocalError('Connect your MetaMask wallet on the Sepolia network.');
       return;
     }
     if (walletMismatch && onchainClientAddr) {
       setLocalError(
-        `Ví MetaMask phải là client on-chain ${onchainClientAddr.slice(0, 6)}…${onchainClientAddr.slice(-4)} (cùng ví đã tạo job).`,
+        `MetaMask wallet must be the on-chain client ${onchainClientAddr.slice(0, 6)}…${onchainClientAddr.slice(-4)} (same wallet that created the job).`,
       );
       return;
     }
@@ -251,18 +251,18 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
     }
     if (insufficientUsdc) {
       setLocalError(
-        `Số dư MockUSDC không đủ (cần ${totalDeposit} USDC). Mint testnet USDC trên Sepolia trước.`,
+        `Insufficient MockUSDC balance (need ${totalDeposit} USDC). Mint testnet USDC on Sepolia first.`,
       );
       return;
     }
     if (!job.onchainJobId || !contractValue) {
-      setLocalError('Job thiếu on-chain id hoặc giá trị hợp đồng.');
+      setLocalError('Job is missing on-chain id or contract value.');
       return;
     }
 
     const freelancerRaw = acceptedFreelancer ?? freelancerInput.trim();
     if (!isAddress(freelancerRaw) || freelancerRaw.toLowerCase() === zeroAddress) {
-      setLocalError('Nhập địa chỉ ví freelancer hợp lệ (0x…, không phải 0x0).');
+      setLocalError('Enter a valid freelancer wallet address (0x…, not 0x0).');
       return;
     }
 
@@ -270,13 +270,13 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
     try {
       freelancer = getAddress(freelancerRaw);
     } catch {
-      setLocalError('Địa chỉ freelancer không hợp lệ.');
+      setLocalError('Invalid freelancer address.');
       return;
     }
 
     if (acceptedFreelancer && !addressesEqual(freelancer, acceptedFreelancer)) {
       setLocalError(
-        `Freelancer phải trùng bid đã accept: ${acceptedFreelancer}. Không được nhập địa chỉ khác.`,
+        `Freelancer must match the accepted bid: ${acceptedFreelancer}. Do not enter a different address.`,
       );
       return;
     }
@@ -287,7 +287,7 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
       !addressesEqual(freelancer, onchainFreelancerCs)
     ) {
       setLocalError(
-        `Freelancer on-chain hiện tại là ${onchainFreelancerCs} — không thể deposit với ${freelancer}.`,
+        `Current on-chain freelancer is ${onchainFreelancerCs} — cannot deposit with ${freelancer}.`,
       );
       return;
     }
@@ -311,10 +311,10 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
   return (
     <section className="panel escrow-panel">
       <h3>Fund escrow (USDC)</h3>
-      <p className="muted" title="Nạp tiền ký quỹ on-chain">
+      <p className="muted" title="Fund escrow on-chain">
         {user?.walletAddress && clientAddr && (
           <span className="phase-note">
-            Đăng nhập API: <code className="mono">{shortAddress(user.walletAddress)}</code>
+            API session: <code className="mono">{shortAddress(user.walletAddress)}</code>
             {onchainClientAddr && (
               <>
                 {' '}
@@ -325,12 +325,12 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
             <br />
           </span>
         )}
-        <strong>Nạp ký quỹ (Fund escrow):</strong> Client gửi MockUSDC vào hợp đồng{' '}
-        <code>EscrowVault</code> để khóa tiền cho freelancer. Tổng nạp = giá job + 3% phí
-        nền tảng. Bước này gồm <em>approve</em> USDC rồi <em>depositEscrow</em> — chỉ ví{' '}
-        <strong>client on-chain</strong> (người tạo job trên JobRegistry) mới gọi được.
-        <code>depositEscrow</code> cũng <strong>gán freelancer on-chain</strong> — không gọi{' '}
-        <code>assignFreelancer</code> trước bước này.
+        <strong>Fund escrow:</strong> The client sends MockUSDC to the{' '}
+        <code>EscrowVault</code> contract to lock funds for the freelancer. Total deposit = job price + 3%
+        platform fee. This step includes <em>approve</em> USDC then <em>depositEscrow</em> — only the{' '}
+        <strong>on-chain client</strong> wallet (job creator on JobRegistry) can call it.
+        <code>depositEscrow</code> also <strong>assigns the on-chain freelancer</strong> — do not call{' '}
+        <code>assignFreelancer</code> before this step.
       </p>
 
       {onchainStatus != null && (
@@ -349,9 +349,9 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
 
       {onChainValueMismatch && (
         <p className="error">
-          Giá on-chain ({onchainContractValueUsdc} USDC) khác DB ({contractValue} USDC). Job này
-          được tạo trước khi sửa đơn vị USDC — escrow sẽ khóa số tiền on-chain thực tế (
-          {onchainTotalDepositUsdc ?? '—'} USDC). Tạo job mới để demo đúng số tiền.
+          On-chain price ({onchainContractValueUsdc} USDC) differs from DB ({contractValue} USDC). This job
+          was created before the USDC unit fix — escrow will lock the actual on-chain amount (
+          {onchainTotalDepositUsdc ?? '—'} USDC). Create a new job to demo the correct amount.
         </p>
       )}
 
@@ -373,14 +373,14 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
 
       {acceptedVsOnchainMismatch && acceptedFreelancer && onchainFreelancerCs && (
         <p className="error">
-          Freelancer on-chain ({onchainFreelancerCs}) khác bid đã accept ({acceptedFreelancer}).
-          Job này không sửa được on-chain — freelancer phải dùng ví on-chain hoặc tạo job mới.
+          On-chain freelancer ({onchainFreelancerCs}) differs from accepted bid ({acceptedFreelancer}).
+          This job cannot be changed on-chain — the freelancer must use the on-chain wallet or create a new job.
         </p>
       )}
 
       {readyToDeposit && acceptedFreelancer && (
         <p className="muted phase-note">
-          Job on-chain đang <strong>OPEN</strong> — sẵn sàng nạp escrow cho freelancer{' '}
+          On-chain job is <strong>OPEN</strong> — ready to fund escrow for freelancer{' '}
           <code className="mono">{acceptedFreelancer}</code>.
         </p>
       )}
@@ -388,9 +388,9 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
       {onchainStatus === ONCHAIN_JOB_STATUS.OPEN && !acceptedFreelancer && (
         <div className="escrow-mint-hint">
           <p className="muted">
-            Chưa có địa chỉ freelancer từ bid đã accept. <strong>Không</strong> dùng Retry assign —
-            gọi <code>assignFreelancer</code> sẽ chuyển job sang ASSIGNED và chặn{' '}
-            <code>depositEscrow</code>. Nhập địa chỉ freelancer và bấm Approve &amp; deposit.
+            No freelancer address from an accepted bid yet. <strong>Do not</strong> use Retry assign —
+            calling <code>assignFreelancer</code> moves the job to ASSIGNED and blocks{' '}
+            <code>depositEscrow</code>. Enter the freelancer address and click Approve &amp; deposit.
           </p>
         </div>
       )}
@@ -407,21 +407,21 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
             </>
           )}
           {registryMismatch && (
-            <span className="error"> — lệch contract registry (xem cảnh báo trên).</span>
+            <span className="error"> — contract registry mismatch (see warning above).</span>
           )}
         </p>
       )}
 
       {walletMismatch && onchainClientAddr && address && !registryMismatch && (
         <div className="escrow-wallet-guide panel info" role="status">
-          <h4>Ví MetaMask không khớp client on-chain</h4>
+          <h4>MetaMask wallet does not match on-chain client</h4>
           <p className="muted">
-            <strong>Deposit escrow</strong> chỉ thành công khi MetaMask là{' '}
-            <code className="mono">{shortAddress(onchainClientAddr)}</code> (ví đã ký{' '}
-            <code>createJob</code>). Ví hiện tại: <code className="mono">{shortAddress(address)}</code>.
+            <strong>Deposit escrow</strong> only succeeds when MetaMask is{' '}
+            <code className="mono">{shortAddress(onchainClientAddr)}</code> (wallet that signed{' '}
+            <code>createJob</code>). Current wallet: <code className="mono">{shortAddress(address)}</code>.
           </p>
           <p className="muted">
-            Dùng cùng ví đăng nhập SIWE khi tạo job — không cần chuyển sang ví backend.
+            Use the same wallet you signed in with SIWE when creating the job — no need to switch to a backend wallet.
           </p>
         </div>
       )}
@@ -442,7 +442,7 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
             <dt>Your MockUSDC balance</dt>
             <dd className={insufficientUsdc ? 'error' : undefined}>
               {balanceUsdc.toLocaleString()} USDC
-              {insufficientUsdc && ' — chưa đủ; mint token test bên dưới'}
+              {insufficientUsdc && ' — insufficient; mint test tokens below'}
             </dd>
           </>
         )}
@@ -461,13 +461,13 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
       {showMintSection && (
         <div className="escrow-mint-hint">
           <p className="muted">
-            <strong>Sepolia ETH ≠ MockUSDC.</strong> ETH từ faucet chỉ trả phí gas. Fapex dùng token{' '}
-            <code>MockUSDC</code> tại địa chỉ trên — không phải USDC Circle hay token faucet khác.
+            <strong>Sepolia ETH ≠ MockUSDC.</strong> Faucet ETH only pays gas. Fapex uses the{' '}
+            <code>MockUSDC</code> token at the address above — not Circle USDC or other faucet tokens.
           </p>
           {walletMismatch && address && onchainClientAddr && (
             <p className="muted phase-note">
-              Mint sẽ cộng USDC vào ví đang kết nối ({shortAddress(address)}). Cần đủ MockUSDC trên ví
-              client on-chain trước khi deposit.
+              Mint adds USDC to the connected wallet ({shortAddress(address)}). You need sufficient MockUSDC on the
+              on-chain client wallet before depositing.
             </p>
           )}
           <button
@@ -491,10 +491,10 @@ export function EscrowDepositPanel({ job, bids = [] }: EscrowDepositPanelProps) 
             className="input full"
             value={freelancerInput}
             onChange={(e) => setFreelancerInput(e.target.value)}
-            placeholder="0x… (từ proposal đã chấp nhận)"
+            placeholder="0x… (from accepted proposal)"
           />
           <span className="muted phase-note">
-            Tự điền từ proposal đã accept khi có trong DB.
+            Auto-filled from the accepted proposal when available in the database.
           </span>
         </div>
       )}

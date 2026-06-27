@@ -94,10 +94,10 @@ export function explainRegistryMismatch(
     ? shortAddress(chainClient)
     : '0x0000…0000';
   return (
-    `Job #${onchainJobId} trên JobRegistry frontend (${shortAddress(frontendRegistry)}) có client ${chainLabel}, ` +
-    `nhưng backend ghi client ${shortAddress(apiClient)}. ` +
-    'Railway backend và frontend đang trỏ khác địa chỉ contract — cập nhật env Railway theo deployments/sepolia.json, ' +
-    'rồi tạo job mới. Job cũ không nạp escrow được.'
+    `Job #${onchainJobId} on the frontend JobRegistry (${shortAddress(frontendRegistry)}) has client ${chainLabel}, ` +
+    `but the backend records client ${shortAddress(apiClient)}. ` +
+    'The Railway backend and frontend point to different contract addresses — update Railway env per deployments/sepolia.json, ' +
+    'then create a new job. The old job cannot receive escrow deposits.'
   );
 }
 
@@ -110,21 +110,21 @@ export function shortAddress(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
-/** Throws with a Vietnamese message when the connected wallet cannot submit deliverables. */
+/** Throws when the connected wallet cannot submit deliverables. */
 export function validateDeliverableSubmit(job: OnChainJob, wallet: Address): void {
   const walletCs = getAddress(wallet);
   const freelancerCs = getAddress(job.freelancer);
 
   if (!addressesEqual(freelancerCs, walletCs)) {
     throw new Error(
-      `Ví MetaMask (${walletCs}) không trùng freelancer on-chain (${freelancerCs}). ` +
-        'Hãy đổi sang đúng ví đã được client gán khi nạp escrow (depositEscrow). ' +
-        `Sao chép địa chỉ đúng: ${freelancerCs}`,
+      `MetaMask wallet (${walletCs}) does not match on-chain freelancer (${freelancerCs}). ` +
+        'Switch to the wallet assigned by the client at escrow deposit (depositEscrow). ' +
+        `Correct address: ${freelancerCs}`,
     );
   }
 
   if (job.status === ONCHAIN_JOB_STATUS.SUBMITTED) {
-    throw new Error('Bàn giao đã được nộp on-chain (SUBMITTED). Chờ client phê duyệt.');
+    throw new Error('Deliverable already submitted on-chain (SUBMITTED). Awaiting client approval.');
   }
 
   if (
@@ -132,7 +132,7 @@ export function validateDeliverableSubmit(job: OnChainJob, wallet: Address): voi
     job.status !== ONCHAIN_JOB_STATUS.IN_PROGRESS
   ) {
     throw new Error(
-      `Job on-chain đang ở trạng thái ${onchainStatusLabel(job.status)} — chỉ nộp bàn giao khi ASSIGNED hoặc IN_PROGRESS.`,
+      `On-chain job is ${onchainStatusLabel(job.status)} — deliverables can only be submitted when ASSIGNED or IN_PROGRESS.`,
     );
   }
 }
@@ -149,9 +149,9 @@ export function explainDepositBlocker(
       return null;
     }
     return (
-      'Job đã ASSIGNED on-chain nhưng escrow chưa được nạp (thường do luồng cũ gọi assignFreelancer trước depositEscrow). ' +
-      'depositEscrow chỉ chạy khi job còn OPEN. Job này không thể nạp escrow — hãy tạo job mới để demo.'
+      'Job is ASSIGNED on-chain but escrow was not funded (usually from the legacy flow calling assignFreelancer before depositEscrow). ' +
+      'depositEscrow only runs while the job is OPEN. This job cannot receive escrow — create a new job to demo.'
     );
   }
-  return `Trạng thái on-chain là ${onchainStatusLabel(job.status)} — không thể nạp escrow.`;
+  return `On-chain status is ${onchainStatusLabel(job.status)} — escrow deposit is not available.`;
 }
