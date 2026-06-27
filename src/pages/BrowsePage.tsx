@@ -42,12 +42,14 @@ export function BrowsePage() {
     const maxBudget = filters.maxBudget ? parseInt(filters.maxBudget, 10) : undefined;
 
     try {
-      const res = await (hasSearch || minBudget || maxBudget
+      const useSearch = hasSearch || minBudget != null || maxBudget != null;
+      const res = await (useSearch
         ? searchJobs({
             q: filters.search.trim() || undefined,
             category: filters.category || undefined,
             minBudget,
             maxBudget,
+            status: filters.status || undefined,
           })
         : fetchJobs({
             status: filters.status || undefined,
@@ -57,8 +59,8 @@ export function BrowsePage() {
 
       if (res.success) {
         let list = res.jobs || [];
-        if (!hasSearch && !minBudget && !maxBudget && filters.status) {
-          list = list.filter((j) => j.status === filters.status);
+        if (filters.status) {
+          list = list.filter((j) => j.status?.toUpperCase() === filters.status.toUpperCase());
         }
         list = filterBySkill(list, filters.skill);
         setJobs(sortJobs(list, filters.sortBy));

@@ -1,214 +1,176 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { fetchArbitratorStatus, fetchDisputes } from '@/lib/api';
 import { useArbitratorAccess } from '@/hooks/useArbitratorAccess';
 import {
-  isAssignedArbitrator,
-  readChosenArbitrators,
-  useDisputeActions,
-  VOTE_CHOICES,
-} from '@/hooks/useDisputeActions';
-import { TxStatusModal } from '@/components/shared/TxStatusModal';
+  shortWallet,
+  useArbitratorDisputes,
+  type ArbitratorDisputeItem,
+} from '@/hooks/useArbitratorDisputes';
+import { isAssignedArbitrator } from '@/hooks/useDisputeActions';
 import { DISPUTE_PHASES } from '@/lib/contracts/disputeTimings';
+
+function DisputeList({
+  items,
+  note,
+}: {
+  items: ArbitratorDisputeItem[];
+  note?: string;
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <>
+      {note && <p className="muted phase-note">{note}</p>}
+      <ul className="bids-list">
+        {items.map((d) => (
+          <li key={d.onchainJobId} className="bid-item">
+            <strong>
+              Job on-chain #{d.onchainJobId}
+              {d.title ? ` — ${d.title}` : ''}
+            </strong>
+            <span className="muted"> · {d.disputeStatus}</span>
+            {d.jobId ? (
+              <Link to={`/jobs/${d.jobId}`} className="btn primary">
+                Mở chi tiết & vote →
+              </Link>
+            ) : (
+              <span className="muted">Chưa sync jobId off-chain</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
 
 export function ArbitratorDashboardPage() {
   const { address, isAuthenticated } = useAuth();
   const stake = useArbitratorAccess();
-  const [error, setError] = useState<string | null>(null);
-  const [disputes, setDisputes] = useState<Array<{ _id: string; onchainJobId: number; status?: string }>>([]);
-  const [onchainJobId, setOnchainJobId] = useState('');
-  const [voteChoice, setVoteChoice] = useState(String(VOTE_CHOICES.FREELANCER_WIN));
-  const [voteSalt, setVoteSalt] = useState('demo-salt-1');
-  const [isChosen, setIsChosen] = useState(false);
   const {
-    commitVote,
-    revealVote,
-    finalizeDisputeVoting,
-    executeArbitrationResult,
-    txStatus,
-    txHash,
-    txLabel,
-    txError,
-    resetTx,
-  } = useDisputeActions();
+    assignedDisputes,
+    poolOnlyDisputes,
+    samplePanelWallets,
+    loading,
+    error,
+    reload,
+  } = useArbitratorDisputes(address, stake.inPool);
 
-  useEffect(() => {
-    if (stake.error) setError(stake.error);
-  }, [stake.error]);
+  const displayError = error ?? stake.error;
 
-  useEffect(() => {
-    fetchDisputes({ status: 'OPEN', limit: 20 })
-      .then((res) => {
-        if (res.success) setDisputes(res.disputes || []);
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    const id = Number(onchainJobId);
-    if (!id || !address) {
-      setIsChosen(false);
-      return;
-    }
-    readChosenArbitrators(id)
-      .then((arbs) => setIsChosen(isAssignedArbitrator(arbs, address)))
-      .catch(() => setIsChosen(false));
-  }, [onchainJobId, address]);
-
-  async function runVote(action: 'commit' | 'reveal' | 'finalize' | 'execute') {
-    const id = Number(onchainJobId);
-    if (!id) {
-      setError('Nhập on-chain job ID.');
-      return;
-    }
-    const choice = Number(voteChoice);
-    setError(null);
-    try {
-      if (action === 'commit') await commitVote(id, choice, voteSalt);
-      else if (action === 'reveal') await revealVote(id, choice, voteSalt);
-      else if (action === 'finalize') await finalizeDisputeVoting(id);
-      else await executeArbitrationResult(id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Giao dịch thất bại');
-    }
-  }
+  const hintArbitratorWallet =
+    samplePanelWallets.find((w) => !isAssignedArbitrator([w], address)) ??
+    samplePanelWallets[0] ??
+    '0x59a1E706254fcE3152feeE8D95Ecf74f1f30040e';
 
   return (
     <main className="page">
       <div className="page-header">
-        <h2>Arbitrator console</h2>
+        <h2>Bảng điều khiển Arbitrator</h2>
         <p className="muted">
-          Cần ≥ 50 USDC stake trên PlatformTreasury. Vote qua ArbitratorPanel khi được chọn vào hội
-          đồng.
+          Cần ≥ 50 USDC stake trên PlatformTreasury. Khi được sortition chọn vào hội đồng, vote
+          commit-reveal trên trang chi tiết job.
         </p>
       </div>
 
-      {!isAuthenticated && <p className="muted">Connect wallet và đăng nhập SIWE.</p>}
+      {!isAuthenticated && (
+        <p className="muted">Kết nối ví MetaMask và đăng nhập SIWE để xem tranh chấp được giao.</p>
+      )}
 
-      {stake.loading && <p className="muted">Loading stake status…</p>}
-      {error && <p className="error">{error}</p>}
+      {stake.loading && <p className="muted">Đang kiểm tra stake…</p>}
+      {displayError && <p className="error">{displayError}</p>}
 
       {stake.stakedAmount != null && (
         <div className="stats-row">
           <div className="stat-card">
-            <span className="stat-label">Staked USDC</span>
+            <span className="stat-label">USDC đã stake</span>
             <strong>{stake.stakedAmount}</strong>
           </div>
           <div className="stat-card">
-            <span className="stat-label">Min stake</span>
+            <span className="stat-label">Stake tối thiểu</span>
             <strong>{stake.minStake ?? 50}</strong>
           </div>
           <div className="stat-card">
-            <span className="stat-label">Eligible</span>
-            <strong>{stake.isValid ? 'Yes' : 'No'}</strong>
+            <span className="stat-label">Đủ điều kiện pool</span>
+            <strong>{stake.isValid ? 'Có' : 'Chưa'}</strong>
           </div>
         </div>
       )}
 
-      <section className="panel">
-        <h3>Dispute queue (DB)</h3>
-        {disputes.length === 0 ? (
-          <p className="muted">Chưa có dispute OPEN trong DB — indexer sẽ sync sau raiseDispute on-chain.</p>
-        ) : (
-          <ul className="bids-list">
-            {disputes.map((d) => (
-              <li key={d._id} className="bid-item">
-                <strong>Job #{d.onchainJobId}</strong>
-                <span className="muted"> · {d.status}</span>
-                <button
-                  className="btn ghost"
-                  type="button"
-                  onClick={() => setOnchainJobId(String(d.onchainJobId))}
-                >
-                  Chọn
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {stake.message && <p className="muted phase-note">{stake.message}</p>}
 
       <section className="panel">
-        <h4>Vote on dispute</h4>
-        <p className="muted phase-note">
-          Commit-reveal: hash = keccak256(choice, salt). Sepolia demo: evidence 0–
-          {DISPUTE_PHASES.evidenceRebuttalEndMin}m → commit {DISPUTE_PHASES.commitStartMin}–
-          {DISPUTE_PHASES.commitEndMin}m → reveal {DISPUTE_PHASES.revealStartMin}–
-          {DISPUTE_PHASES.revealEndMin}m → finalize sau {DISPUTE_PHASES.revealEndMin}m.
-        </p>
-
-        <label className="field">
-          On-chain job ID
-          <input
-            className="input full"
-            value={onchainJobId}
-            onChange={(e) => setOnchainJobId(e.target.value)}
-            placeholder="5"
-          />
-        </label>
-
-        {address && onchainJobId && (
-          <p className={isChosen ? 'badge success' : 'badge warning'}>
-            {isChosen
-              ? 'Ví của bạn nằm trong hội đồng job này.'
-              : 'Ví chưa được chọn — import private key arbitrator từ deployments/sepolia-arbitrators.json.'}
-          </p>
-        )}
-
-        <label className="field">
-          Vote choice
-          <select className="input full" value={voteChoice} onChange={(e) => setVoteChoice(e.target.value)}>
-            <option value={VOTE_CHOICES.FREELANCER_WIN}>1 — Freelancer thắng</option>
-            <option value={VOTE_CHOICES.CLIENT_WIN}>2 — Client thắng</option>
-            <option value={VOTE_CHOICES.SPLIT}>3 — Chia 50/50</option>
-          </select>
-        </label>
-
-        <label className="field">
-          Salt (giữ bí mật đến reveal)
-          <input className="input full" value={voteSalt} onChange={(e) => setVoteSalt(e.target.value)} />
-        </label>
-
-        <div className="form-actions">
-          <button className="btn primary" type="button" onClick={() => runVote('commit')} disabled={!isChosen}>
-            Commit vote
-          </button>
-          <button className="btn ghost" type="button" onClick={() => runVote('reveal')} disabled={!isChosen}>
-            Reveal vote
-          </button>
-          <button className="btn ghost" type="button" onClick={() => runVote('finalize')}>
-            Finalize voting
-          </button>
-          <button className="btn ghost" type="button" onClick={() => runVote('execute')}>
-            Execute result
+        <div className="panel-header-row">
+          <h3>Tranh chấp được giao cho bạn</h3>
+          <button
+            className="btn ghost"
+            type="button"
+            onClick={() => void reload()}
+            disabled={loading}
+          >
+            {loading ? 'Đang tải…' : 'Làm mới'}
           </button>
         </div>
+
+        <p className="muted phase-note">
+          Demo Sepolia: bằng chứng 0–{DISPUTE_PHASES.evidenceRebuttalEndMin}p → commit{' '}
+          {DISPUTE_PHASES.commitStartMin}–{DISPUTE_PHASES.commitEndMin}p → reveal{' '}
+          {DISPUTE_PHASES.revealStartMin}–{DISPUTE_PHASES.revealEndMin}p → finalize sau{' '}
+          {DISPUTE_PHASES.revealEndMin}p → kháng cáo {DISPUTE_PHASES.appealWindowHours}h.
+        </p>
+
+        {!address && <p className="muted">Chưa kết nối ví.</p>}
+
+        {address && !loading && assignedDisputes.length === 0 && (
+          <div className="muted phase-note">
+            <p>
+              Đang dùng ví <code>{shortWallet(address)}</code>
+              {stake.inPool ? ' (trong pool arbitrator)' : ''} —{' '}
+              {samplePanelWallets.length > 0
+                ? 'không nằm hội đồng các job đang tranh chấp.'
+                : 'chưa có job DISPUTED on-chain nào trong phạm vi quét.'}
+            </p>
+            {samplePanelWallets.length > 0 && (
+              <p>
+                Chuyển sang ví arbitrator được chọn (vd.{' '}
+                <code>{shortWallet(hintArbitratorWallet)}</code>) — import private key từ{' '}
+                <code>deployments/sepolia-arbitrators.json</code>.
+              </p>
+            )}
+            {samplePanelWallets.length === 0 && (
+              <p>
+                Chạy <code>seed-arbitrator-pool.js</code> và mở tranh chấp trên job SUBMITTED trước.
+              </p>
+            )}
+          </div>
+        )}
+
+        <DisputeList items={assignedDisputes} />
+
+        {poolOnlyDisputes.length > 0 && (
+          <>
+            <h4>Tranh chấp khác (trong pool, chưa được chọn)</h4>
+            <DisputeList
+              items={poolOnlyDisputes}
+              note="Bạn trong pool arbitrator nhưng sortition không chọn ví này cho hội đồng job này — chỉ xem, không vote."
+            />
+          </>
+        )}
       </section>
 
-      {address && (
-        <button
-          className="btn ghost"
-          type="button"
-          onClick={() => fetchArbitratorStatus(address).then(() => window.location.reload())}
-        >
-          Refresh stake
-        </button>
-      )}
-
-      <p className="muted">
-        Stake qua <code>PlatformTreasury.stakeAsArbitrator</code> rồi admin <code>joinPool</code>. Xem{' '}
-        <Link to="/profile">Profile</Link>.
-      </p>
-
-      <TxStatusModal
-        open={txStatus !== 'idle'}
-        status={txStatus}
-        label={txLabel}
-        hash={txHash}
-        error={txError}
-        onClose={resetTx}
-      />
+      <section className="panel">
+        <h3>Hướng dẫn test nhanh</h3>
+        <ol className="muted phase-note">
+          <li>
+            Import 1 ví từ <code>deployments/sepolia-arbitrators.json</code> vào MetaMask (Sepolia).
+          </li>
+          <li>Stake ≥50 USDC + admin <code>joinPool</code> (script seed đã làm sẵn).</li>
+          <li>Client raise dispute trên job → 5 arbitrator được chọn ngẫu nhiên.</li>
+          <li>Vào job DISPUTED → panel &quot;Hội đồng arbitrator&quot; → commit / reveal theo đồng hồ.</li>
+        </ol>
+        <p className="muted">
+          Stake thêm tại <Link to="/profile">Profile</Link>.
+        </p>
+      </section>
     </main>
   );
 }

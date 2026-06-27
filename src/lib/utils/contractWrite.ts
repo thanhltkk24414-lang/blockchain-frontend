@@ -72,6 +72,38 @@ const REVERT_HINTS_BY_FN: Record<string, Record<string, string>> = {
     NotEnoughArbitrators:
       'Chưa đủ 5 arbitrator trong pool (ArbitratorPanel.poolSize). Admin cần joinPool trước khi demo dispute.',
   },
+  submitEvidence: {
+    JobNotDisputed: 'Job chưa DISPUTED — mở tranh chấp (raiseDispute) trước khi nộp bằng chứng.',
+    NotAParty:
+      'Chỉ client hoặc freelancer on-chain mới nộp bằng chứng — đổi sang ví đúng trong MetaMask.',
+    EvidenceWindowClosed:
+      'Đã quá cửa sổ nộp bằng chứng (demo Sepolia: 30 phút kể từ raiseDispute).',
+  },
+  commitVote: {
+    AlreadyCommitted: 'Bạn đã commit vote — chờ giai đoạn reveal để mở phiếu.',
+    WrongPhase: 'Chưa đến hoặc đã hết giai đoạn commit vote.',
+    NotAnArbitrator: 'Ví không nằm hội đồng arbitrator của job này.',
+  },
+  revealVote: {
+    AlreadyRevealed: 'Bạn đã reveal vote — không cần gửi lại.',
+    NotCommitted: 'Chưa commit vote — commit trước trong giai đoạn commit.',
+    HashMismatch: 'Salt hoặc lựa chọn không khớp lúc commit — kiểm tra lại salt.',
+    WrongPhase: 'Chưa đến hoặc đã hết giai đoạn reveal vote.',
+    NotAnArbitrator: 'Ví không nằm hội đồng arbitrator của job này.',
+  },
+  finalizeDisputeVoting: {
+    VotingStillActive: 'Giai đoạn reveal chưa kết thúc — đợi hết thời gian reveal.',
+    InsufficientQuorum: 'Chưa đủ ≥3 vote reveal hợp lệ — cần thêm arbitrator reveal.',
+    AlreadyResolved: 'Voting đã được finalize trước đó.',
+  },
+  fileAppeal: {
+    AppealAlreadyFiled: 'Đã kháng cáo cho job này.',
+    AppealNotAllowed: 'Chỉ kháng cáo được ở vòng 1 — vòng 2 là quyết định cuối.',
+    AppealWindowClosed: 'Đã hết cửa sổ kháng cáo (demo: 2 giờ sau finalize).',
+    VotingNotFinalized: 'Chưa finalize voting — đợi ai đó gọi Finalize voting.',
+    NotAParty: 'Chỉ client hoặc freelancer mới kháng cáo được.',
+    TransferFailed: 'Chuyển phí kháng cáo USDC thất bại — kiểm tra số dư và allowance.',
+  },
 };
 
 function formatDecodedMessage(msg: string, functionName?: string): string {
@@ -92,7 +124,7 @@ function formatDecodedMessage(msg: string, functionName?: string): string {
     return (
       `MetaMask RPC: ${clean}. Thường do nhiều ví inject (Coinbase/Brave/Rabby) hoặc connector sai — ` +
       `không phải lỗi calldata/ABI. Thử Disconnect → Connect lại MetaMask; tắt extension ví khác; ` +
-      `refresh trang. createJob dùng wagmi sendTransaction (không eth_sendTransaction thủ công).`
+      `refresh trang. createJob/submitEvidence dùng wagmi sendTransaction (không eth_sendTransaction thủ công).`
     );
   }
   if (/transaction creation failed/i.test(msg)) {

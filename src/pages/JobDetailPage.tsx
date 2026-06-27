@@ -9,7 +9,8 @@ import { ClientJobActionsPanel } from '@/components/client/ClientJobActionsPanel
 import { BidForm } from '@/components/freelancer/BidForm';
 import { DeliverableSubmitPanel } from '@/components/freelancer/DeliverableSubmitPanel';
 import { DisputeEvidencePanel } from '@/components/dispute/DisputeEvidencePanel';
-import { DisputeStatusPanel } from '@/components/dispute/DisputeStatusPanel';
+import { ArbitratorDisputePanel } from '@/components/dispute/ArbitratorDisputePanel';
+import { DisputeResultPanel } from '@/components/dispute/DisputeResultPanel';
 import { useAuth } from '@/context/AuthContext';
 import {
   etherscanAddressUrl,
@@ -295,7 +296,8 @@ export function JobDetailPage() {
       )}
 
       <DeliverableSubmitPanel job={job} onSubmitted={reloadJob} />
-      <DisputeStatusPanel job={job} />
+      <ArbitratorDisputePanel job={job} onActionComplete={reloadJob} />
+      <DisputeResultPanel job={job} onActionComplete={reloadJob} />
       <DisputeEvidencePanel job={job} />
 
       {canManageJob && bids.length > 0 && (

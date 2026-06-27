@@ -78,6 +78,7 @@ export function JobFilters({ onChange }: JobFiltersProps) {
             <option value="ASSIGNED">Assigned</option>
             <option value="IN_PROGRESS">In progress</option>
             <option value="SUBMITTED">Submitted</option>
+            <option value="DISPUTED">Disputed</option>
             <option value="COMPLETED">Completed</option>
           </select>
         </label>
