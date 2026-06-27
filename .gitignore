@@ -11,3 +11,5 @@ fapex-frontend/node_modules/
 *.pem
 *.log
 .DS_Store
+.vercel
+pnpm-lock.yaml
