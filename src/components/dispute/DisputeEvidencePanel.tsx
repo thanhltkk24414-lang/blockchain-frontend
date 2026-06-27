@@ -4,7 +4,9 @@ import {
   fetchDisputeByJob,
   fetchDisputeByOnchainJob,
   fetchDisputeEvidences,
+  fetchDisputeEvidencesByOnchainJob,
   submitDisputeEvidence,
+  submitDisputeEvidenceByOnchain,
   uploadIpfsFile,
   uploadIpfsMetadata,
 } from '@/lib/api';
@@ -65,8 +67,9 @@ function mergeEvidence(
   offChain: OffChainEvidence[],
 ): DisplayEvidence[] {
   const byHash = new Map<string, DisplayEvidence>();
+  const matchedOffChain = new Set<number>();
 
-  for (const ev of offChain) {
+  for (const [idx, ev] of offChain.entries()) {
     let hashKey = '';
     try {
       hashKey = cidToEvidenceHash(ev.ipfsHash).toLowerCase();
@@ -74,7 +77,7 @@ function mergeEvidence(
       hashKey = ev.ipfsHash.toLowerCase();
     }
     const content = ev.content ?? undefined;
-    byHash.set(hashKey, {
+    byHash.set(hashKey || `off-${idx}`, {
       key: hashKey || ev.ipfsHash,
       submitter: ev.submitter,
       submittedAt: ev.submittedAt ? new Date(ev.submittedAt).getTime() / 1000 : undefined,
@@ -93,6 +96,40 @@ function mergeEvidence(
         ...existing,
         submitter: existing.submitter || ev.submitter,
         submittedAt: existing.submittedAt ?? ev.submittedAt,
+      });
+      const offIdx = offChain.findIndex((o) => {
+        try {
+          return cidToEvidenceHash(o.ipfsHash).toLowerCase() === hashKey;
+        } catch {
+          return o.ipfsHash.toLowerCase() === hashKey;
+        }
+      });
+      if (offIdx >= 0) matchedOffChain.add(offIdx);
+      continue;
+    }
+
+    const submitterLower = ev.submitter.toLowerCase();
+    const fallbackIdx = offChain.findIndex(
+      (o, idx) =>
+        !matchedOffChain.has(idx) &&
+        o.submitter.toLowerCase() === submitterLower &&
+        Boolean(o.ipfsHash),
+    );
+
+    if (fallbackIdx >= 0) {
+      matchedOffChain.add(fallbackIdx);
+      const off = offChain[fallbackIdx];
+      const content = off.content ?? undefined;
+      byHash.set(hashKey, {
+        key: hashKey,
+        submitter: ev.submitter,
+        submittedAt:
+          ev.submittedAt ??
+          (off.submittedAt ? new Date(off.submittedAt).getTime() / 1000 : undefined),
+        cid: off.ipfsHash,
+        description: content?.description ?? off.description,
+        evidenceUrl: content?.evidenceUrl,
+        imageCid: content?.imageCid,
       });
     } else {
       byHash.set(hashKey, {
@@ -204,7 +241,17 @@ export function DisputeEvidencePanel({ job }: DisputeEvidencePanelProps) {
       setCreatedAtSec(Number(dispute.createdAt));
 
       let offChain: OffChainEvidence[] = [];
-      if (job._id) {
+      if (job.onchainJobId != null) {
+        const byOnchainEv = await fetchDisputeEvidencesByOnchainJob(job.onchainJobId).catch(
+          () => null,
+        );
+        if (byOnchainEv?.success && byOnchainEv.evidence?.length) {
+          if (byOnchainEv.disputeId) setDisputeId(byOnchainEv.disputeId);
+          offChain = byOnchainEv.evidence.filter((ev) => Boolean(ev.ipfsHash)) as OffChainEvidence[];
+        }
+      }
+
+      if (offChain.length === 0 && job._id) {
         const byJob = await fetchDisputeByJob(job._id).catch(() => null);
         if (byJob?.success && byJob.dispute) {
           setDisputeId(byJob.dispute._id);
@@ -295,17 +342,34 @@ export function DisputeEvidencePanel({ job }: DisputeEvidencePanelProps) {
         throw new Error('IPFS không trả về CID — thử lại upload.');
       }
 
+      const evidenceHash = cidToEvidenceHash(upload.cid);
       await submitEvidence(job.onchainJobId, upload.cid);
 
-      if (disputeId) {
-        try {
-          await submitDisputeEvidence(disputeId, {
-            ipfsHash: upload.cid,
-            description: trimmedNotes || trimmedUrl || undefined,
-          });
-        } catch {
-          /* on-chain submit succeeded; off-chain backup is optional */
+      let resolvedDisputeId = disputeId;
+      if (!resolvedDisputeId && job.onchainJobId != null) {
+        const byOnchain = await fetchDisputeByOnchainJob(job.onchainJobId).catch(() => null);
+        resolvedDisputeId = byOnchain?.dispute?._id ?? null;
+        if (resolvedDisputeId) setDisputeId(resolvedDisputeId);
+      }
+
+      const evidencePayload = {
+        ipfsHash: upload.cid,
+        description: trimmedNotes || trimmedUrl || undefined,
+        onChainHash: evidenceHash,
+      };
+
+      try {
+        if (resolvedDisputeId) {
+          await submitDisputeEvidence(resolvedDisputeId, evidencePayload);
+        } else if (job.onchainJobId != null) {
+          await submitDisputeEvidenceByOnchain(job.onchainJobId, evidencePayload);
         }
+      } catch (apiErr) {
+        setError(
+          apiErr instanceof Error
+            ? `On-chain OK nhưng lưu metadata thất bại: ${apiErr.message}`
+            : 'On-chain OK nhưng lưu metadata off-chain thất bại.',
+        );
       }
 
       setNotes('');

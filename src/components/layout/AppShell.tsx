@@ -7,6 +7,8 @@ import { API_URL } from '@/config/env';
 import { fetchHealth } from '@/lib/api';
 import { CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 import { hasChosenRegistrationRole } from '@/lib/utils/profile';
+import { useReputation } from '@/hooks/useReputation';
+import { ReputationBadge } from '@/components/shared/ReputationBadge';
 import type { RegistrationRole } from '@/lib/api';
 
 type NavItem = { to: string; label: string; roles?: RegistrationRole[]; arbitrator?: boolean };
@@ -22,6 +24,7 @@ const NAV: NavItem[] = [
 export function AppShell() {
   const { isConnected, isAuthenticated, user, loading, error, signIn, signOut } = useAuth();
   const arbitrator = useArbitratorAccess();
+  const { reputation, loading: reputationLoading } = useReputation(user?.walletAddress);
   const [contractMismatch, setContractMismatch] = useState<string | null>(null);
 
   useEffect(() => {
@@ -84,6 +87,7 @@ export function AppShell() {
               {hasChosenRegistrationRole(user) && (
                 <span className="badge role-badge">{user.role}</span>
               )}
+              <ReputationBadge reputation={reputation} loading={reputationLoading} compact />
               <span className="wallet" title="SIWE session wallet">
                 {user?.walletAddress}
               </span>

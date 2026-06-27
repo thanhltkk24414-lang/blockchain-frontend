@@ -20,16 +20,21 @@ export function JobCard({ job, detailPath }: JobCardProps) {
   const clientAddr = resolveClientAddress(job);
   const href = detailPath ?? `/jobs/${job._id}`;
   const posted = formatApiDateShort(job.createdAt);
+  const isDisputed =
+    job.status?.toUpperCase() === 'DISPUTED' || Boolean(job.isDisputed);
 
   return (
-    <li className="job-card">
+    <li className={`job-card${isDisputed ? ' job-card-disputed' : ''}`}>
       <div className="job-header">
         <h3>
           <Link to={href} className="job-title-link">
             {job.title}
           </Link>
         </h3>
-        <StatusBadge status={job.status} />
+        <div className="job-badges">
+          {isDisputed && <span className="badge warning dispute-badge">Tranh chấp</span>}
+          <StatusBadge status={job.status} />
+        </div>
       </div>
       <p className="job-desc">{job.description?.slice(0, 200)}{job.description && job.description.length > 200 ? '…' : ''}</p>
       {job.skills && job.skills.length > 0 && (

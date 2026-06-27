@@ -932,3 +932,78 @@ body {
   margin-top: 0.75rem;
 }
 
+.job-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.job-card-disputed {
+  border-color: #5a3d1a;
+}
+
+.dispute-badge {
+  font-size: 0.75rem;
+}
+
+.reputation-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+}
+
+.reputation-badge.compact .reputation-score {
+  font-weight: 600;
+  color: #6ee7a8;
+}
+
+.reputation-panel {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.reputation-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.reputation-tier {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.reputation-tier.trusted {
+  background: #1a3d2a;
+  color: #6ee7a8;
+}
+
+.reputation-tier.normal {
+  background: #1a2a3d;
+  color: #7eb8ff;
+}
+
+.reputation-tier.warning {
+  background: #3d3a1a;
+  color: #ffd86c;
+}
+
+.reputation-tier.restricted {
+  background: #3d1a1a;
+  color: #ff8a8a;
+}
+
+.arbitrator-reputation-inline {
+  margin: 0.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+

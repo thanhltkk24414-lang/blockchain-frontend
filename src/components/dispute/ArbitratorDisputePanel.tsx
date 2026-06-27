@@ -16,6 +16,9 @@ import {
 import { TxStatusModal } from '@/components/shared/TxStatusModal';
 import { DISPUTE_PHASES } from '@/lib/contracts/disputeTimings';
 import { formatDisputeChoice, type VoteTally } from '@/lib/utils/disputeChoice';
+import { VoteTallyDisplay } from '@/components/dispute/VoteTallyDisplay';
+import { ReputationBadge } from '@/components/shared/ReputationBadge';
+import { useReputation } from '@/hooks/useReputation';
 import { isValidOnchainJobId } from '@/lib/utils/etherscan';
 import { ONCHAIN_JOB_STATUS } from '@/lib/utils/onchainJob';
 import { formatCountdown, getDisputePhaseInfo } from '@/lib/utils/disputePhase';
@@ -26,33 +29,6 @@ const SALT_STORAGE_PREFIX = 'fapex-arb-salt-';
 interface ArbitratorDisputePanelProps {
   job: Job;
   onActionComplete?: () => void;
-}
-
-function VoteTallyDisplay({ tally, commitCount, revealCount }: {
-  tally: VoteTally;
-  commitCount: number;
-  revealCount: number;
-}) {
-  return (
-    <div className="vote-tally-box">
-      <h4>Kết quả vote (đã reveal)</h4>
-      <ul className="vote-tally-list">
-        <li>
-          Freelancer thắng: <strong>{tally.freelancer}</strong>
-        </li>
-        <li>
-          Client thắng: <strong>{tally.client}</strong>
-        </li>
-        <li>
-          Chia 50-50: <strong>{tally.split}</strong>
-        </li>
-      </ul>
-      <p className="muted phase-note">
-        Commit {commitCount} · Reveal {revealCount} · Đã mở {tally.total} phiếu (cần ≥3 hợp lệ để
-        finalize)
-      </p>
-    </div>
-  );
 }
 
 export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisputePanelProps) {
@@ -69,6 +45,7 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
     txError,
     resetTx,
   } = useDisputeActions();
+  const { reputation: arbReputation, loading: arbRepLoading } = useReputation(address);
 
   const [chosenArbs, setChosenArbs] = useState<string[]>([]);
   const [disputeLoading, setDisputeLoading] = useState(false);
@@ -265,6 +242,13 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
 
       {address && isAssigned && (
         <p className="badge success">Bạn được chọn làm arbitrator cho job #{job.onchainJobId}</p>
+      )}
+
+      {address && isAssigned && (
+        <div className="arbitrator-reputation-inline">
+          <span className="muted">Reputation ví arbitrator:</span>{' '}
+          <ReputationBadge reputation={arbReputation} loading={arbRepLoading} compact />
+        </div>
       )}
 
       {address && !isAssigned && chosenArbs.length > 0 && (

@@ -11,6 +11,7 @@ export interface Job {
   description: string;
   category: string;
   status: string;
+  isDisputed?: boolean;
   contractValue?: number;
   onchainJobId?: number;
   onchainClientAddress?: string;

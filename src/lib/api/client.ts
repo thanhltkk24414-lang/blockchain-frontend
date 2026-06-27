@@ -58,12 +58,14 @@ export async function searchJobs(params: {
   category?: string;
   minBudget?: number;
   maxBudget?: number;
+  status?: string;
 }) {
   const qs = new URLSearchParams();
   if (params.q) qs.set('q', params.q);
   if (params.category) qs.set('category', params.category);
   if (params.minBudget != null) qs.set('minBudget', String(params.minBudget));
   if (params.maxBudget != null) qs.set('maxBudget', String(params.maxBudget));
+  if (params.status) qs.set('status', params.status);
   const res = await fetch(`${API_URL}/api/jobs/search?${qs}`);
   const data = await parseJson<{ success: boolean; jobs: Job[]; error?: string }>(res);
   if (data.success && data.jobs) {
@@ -315,6 +317,29 @@ export async function fetchDisputeByOnchainJob(onchainJobId: number) {
   return parseJson<{ success: boolean; dispute?: DisputeRecord; error?: string }>(res);
 }
 
+export async function fetchDisputeEvidencesByOnchainJob(onchainJobId: number) {
+  const res = await fetch(`${API_URL}/api/disputes/onchain/${onchainJobId}/evidences`);
+  return parseJson<{
+    success: boolean;
+    disputeId?: string;
+    evidence?: Array<{
+      submitter: string;
+      ipfsHash?: string;
+      onChainHash?: string;
+      description?: string;
+      submittedAt?: string;
+      content?: {
+        description?: string;
+        evidenceUrl?: string;
+        imageCid?: string;
+        submitter?: string;
+        type?: string;
+      } | null;
+    }>;
+    error?: string;
+  }>(res);
+}
+
 export async function fetchDisputeEvidences(disputeId: string) {
   const res = await fetch(`${API_URL}/api/disputes/${disputeId}/evidences`);
   return parseJson<{
@@ -338,7 +363,7 @@ export async function fetchDisputeEvidences(disputeId: string) {
 
 export async function submitDisputeEvidence(
   disputeId: string,
-  payload: { ipfsHash: string; description?: string },
+  payload: { ipfsHash: string; description?: string; onChainHash?: string },
 ) {
   const res = await fetch(`${API_URL}/api/disputes/${disputeId}/evidence`, {
     method: 'POST',
@@ -348,6 +373,23 @@ export async function submitDisputeEvidence(
   return parseJson<{ success: boolean; message?: string; evidence?: DisputeRecord['evidence'] }>(
     res,
   );
+}
+
+export async function submitDisputeEvidenceByOnchain(
+  onchainJobId: number,
+  payload: { ipfsHash: string; description?: string; onChainHash?: string },
+) {
+  const res = await fetch(`${API_URL}/api/disputes/onchain/${onchainJobId}/evidence`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  return parseJson<{
+    success: boolean;
+    message?: string;
+    disputeId?: string;
+    evidence?: DisputeRecord['evidence'];
+  }>(res);
 }
 
 export async function fetchHealth() {
