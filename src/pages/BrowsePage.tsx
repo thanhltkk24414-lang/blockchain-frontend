@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { fetchJobs, searchJobs, type Job } from '@/lib/api';
 import { JobCard } from '@/components/shared/JobCard';
 import { JobFilters, type JobFilterState, DEFAULT_JOB_FILTERS } from '@/components/shared/JobFilters';
-import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { useAutoRefresh, type RefreshOptions } from '@/hooks/useAutoRefresh';
 import { sortByDateDesc } from '@/lib/utils/dates';
 
 function sortJobs(jobs: Job[], sortBy: JobFilterState['sortBy']): Job[] {
@@ -41,8 +41,10 @@ export function BrowsePage() {
     setFilters(next);
   }, []);
 
-  const loadJobs = useCallback(async () => {
-    setLoading(true);
+  const loadJobs = useCallback(async (opts?: RefreshOptions) => {
+    if (!opts?.silent) {
+      setLoading(true);
+    }
     setError(null);
 
     const hasSearch = Boolean(filters.search.trim());
@@ -85,7 +87,9 @@ export function BrowsePage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load jobs');
     } finally {
-      setLoading(false);
+      if (!opts?.silent) {
+        setLoading(false);
+      }
     }
   }, [filters]);
 
@@ -97,7 +101,7 @@ export function BrowsePage() {
   }, [searchParams]);
 
   useEffect(() => {
-    loadJobs();
+    void loadJobs();
   }, [loadJobs]);
 
   useAutoRefresh(loadJobs);
@@ -136,7 +140,14 @@ export function BrowsePage() {
       )}
 
       {loading && <p className="muted">Loading jobs…</p>}
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <div className="panel" role="alert">
+          <p className="error" style={{ margin: 0 }}>{error}</p>
+          <button type="button" className="btn ghost btn-compact" style={{ marginTop: '0.5rem' }} onClick={() => void loadJobs()}>
+            Retry
+          </button>
+        </div>
+      )}
       {!loading && !error && jobs.length === 0 && <p className="muted">No jobs match your filters.</p>}
       <ul className={`jobs-list${viewMode === 'grid' ? ' jobs-grid' : ' jobs-list-mode'}`}>
         {jobs.map((job) => (

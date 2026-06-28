@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchJobs, type Job } from '@/lib/api';
-import { useAutoRefresh } from './useAutoRefresh';
+import { useAutoRefresh, type RefreshOptions } from './useAutoRefresh';
 
 export function useJobs() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refetch = useCallback(async () => {
-    setLoading(true);
+  const refetch = useCallback(async (opts?: RefreshOptions) => {
+    if (!opts?.silent) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const res = await fetchJobs();
@@ -20,12 +22,14 @@ export function useJobs() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load jobs');
     } finally {
-      setLoading(false);
+      if (!opts?.silent) {
+        setLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    refetch();
+    void refetch();
   }, [refetch]);
 
   useAutoRefresh(refetch);
