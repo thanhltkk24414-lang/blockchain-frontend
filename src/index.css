@@ -1609,17 +1609,10 @@ body {
 
 /* ——— UI overhaul: theme, header, browse, dashboards ——— */
 
-.fapex-logo-img {
-  image-rendering: auto;
-}
-
+.fapex-logo-img,
 .fapex-logo-wordmark {
   background: transparent;
   image-rendering: auto;
-}
-
-[data-theme='light'] .fapex-logo-img {
-  filter: none;
 }
 
 .sr-only {
