@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useArbitratorAccess } from '@/hooks/useArbitratorAccess';
 import {
@@ -8,6 +8,29 @@ import {
 } from '@/hooks/useArbitratorDisputes';
 import { isAssignedArbitrator } from '@/hooks/useDisputeActions';
 import { DISPUTE_PHASES, formatAppealWindow } from '@/lib/contracts/disputeTimings';
+import { formatCountdown } from '@/lib/utils/disputePhase';
+
+const DISPUTE_STEPS = [
+  { key: 'evidence', label: 'Evidence', endMin: DISPUTE_PHASES.evidenceRebuttalEndMin },
+  { key: 'commit', label: 'Commit', endMin: DISPUTE_PHASES.commitEndMin },
+  { key: 'reveal', label: 'Reveal', endMin: DISPUTE_PHASES.revealEndMin },
+  { key: 'finalize', label: 'Finalize', endMin: DISPUTE_PHASES.revealEndMin },
+  { key: 'appeal', label: 'Appeal', endMin: DISPUTE_PHASES.revealEndMin + DISPUTE_PHASES.appealWindowMin },
+] as const;
+
+function DisputePhaseStepper() {
+  return (
+    <div className="dispute-stepper" aria-label="Dispute timeline">
+      {DISPUTE_STEPS.map((step, i) => (
+        <div key={step.key} className="dispute-step">
+          <span className="dispute-step-num">{i + 1}</span>
+          <span className="dispute-step-label">{step.label}</span>
+          <span className="dispute-step-time">≤{step.endMin}m</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function DisputeList({
   items,
@@ -44,6 +67,8 @@ function DisputeList({
 }
 
 export function ArbitratorDashboardPage() {
+  const [searchParams] = useSearchParams();
+  const showDebugGuide = searchParams.get('debug') === 'true';
   const { address, isAuthenticated } = useAuth();
   const stake = useArbitratorAccess();
   const {
@@ -56,6 +81,10 @@ export function ArbitratorDashboardPage() {
   } = useArbitratorDisputes(address, stake.inPool);
 
   const displayError = error ?? stake.error;
+  const minStake = stake.minStake ?? 50;
+  const staked = stake.stakedAmount ?? 0;
+  const stakePct = Math.min(100, Math.round((staked / minStake) * 100));
+  const stakeEligible = stake.isValid;
 
   const hintArbitratorWallet =
     samplePanelWallets.find((w) => !isAssignedArbitrator([w], address)) ??
@@ -81,22 +110,38 @@ export function ArbitratorDashboardPage() {
 
       {stake.stakedAmount != null && (
         <div className="stats-row">
-          <div className="stat-card">
-            <span className="stat-label">USDC staked</span>
-            <strong>{stake.stakedAmount}</strong>
+          <div className="stat-card stat-card-wide">
+            <span className="stat-label">Stake progress ({staked} / {minStake} USDC)</span>
+            <div className="stake-progress-track" role="progressbar" aria-valuenow={stakePct} aria-valuemin={0} aria-valuemax={100}>
+              <div
+                className={`stake-progress-fill${stakeEligible ? ' stake-eligible' : ' stake-insufficient'}`}
+                style={{ width: `${stakePct}%` }}
+              />
+            </div>
+            <p className={`stake-status${stakeEligible ? ' success' : ' error'}`}>
+              {stakeEligible ? 'Eligible for arbitrator pool' : `Need ${Math.max(0, minStake - staked)} more USDC`}
+            </p>
           </div>
           <div className="stat-card">
-            <span className="stat-label">Minimum stake</span>
-            <strong>{stake.minStake ?? 50}</strong>
-          </div>
-          <div className="stat-card">
-            <span className="stat-label">Pool eligible</span>
-            <strong>{stake.isValid ? 'Yes' : 'No'}</strong>
+            <span className="stat-label">Pool member</span>
+            <strong>{stake.inPool ? 'Yes' : 'No'}</strong>
           </div>
         </div>
       )}
 
       {stake.message && <p className="muted phase-note">{stake.message}</p>}
+
+      <section className="panel">
+        <h3>Dispute phases</h3>
+        <DisputePhaseStepper />
+        <p className="muted phase-note">
+          Sepolia demo windows: evidence 0–{DISPUTE_PHASES.evidenceRebuttalEndMin}m → commit{' '}
+          {DISPUTE_PHASES.commitStartMin}–{DISPUTE_PHASES.commitEndMin}m → reveal{' '}
+          {DISPUTE_PHASES.revealStartMin}–{DISPUTE_PHASES.revealEndMin}m → appeal {formatAppealWindow()}.
+          Countdown on job detail when a dispute is active.
+        </p>
+        <p className="badge countdown">Phase timer example: {formatCountdown(8 * 60 + 42)}</p>
+      </section>
 
       <section className="panel">
         <div className="panel-header-row">
@@ -111,34 +156,25 @@ export function ArbitratorDashboardPage() {
           </button>
         </div>
 
-        <p className="muted phase-note">
-          Sepolia demo: evidence 0–{DISPUTE_PHASES.evidenceRebuttalEndMin}m → commit{' '}
-          {DISPUTE_PHASES.commitStartMin}–{DISPUTE_PHASES.commitEndMin}m → reveal{' '}
-          {DISPUTE_PHASES.revealStartMin}–{DISPUTE_PHASES.revealEndMin}m → finalize after{' '}
-          {DISPUTE_PHASES.revealEndMin}m → appeal {formatAppealWindow()}.
-        </p>
-
         {!address && <p className="muted">Wallet not connected.</p>}
 
         {address && !loading && assignedDisputes.length === 0 && (
-          <div className="muted phase-note">
-            <p>
-              Using wallet <code>{shortWallet(address)}</code>
-              {stake.inPool ? ' (in arbitrator pool)' : ''} —{' '}
-              {samplePanelWallets.length > 0
-                ? 'not on the panel for any active disputed jobs.'
-                : 'no DISPUTED on-chain jobs found in scan range.'}
+          <div className="empty-state arbitrator-empty">
+            <h3>No disputes assigned yet</h3>
+            <p className="muted">
+              When sortition selects your wallet for an active dispute, it will appear here with a link to
+              vote on the job detail page.
             </p>
             {samplePanelWallets.length > 0 && (
-              <p>
-                Switch to a selected arbitrator wallet (e.g.{' '}
-                <code>{shortWallet(hintArbitratorWallet)}</code>) — import a private key from{' '}
-                <code>deployments/sepolia-arbitrators.json</code>.
+              <p className="muted phase-note">
+                Using <code>{shortWallet(address)}</code>
+                {stake.inPool ? ' (in pool)' : ''} — not on a panel for current disputes. Demo wallets
+                include <code>{shortWallet(hintArbitratorWallet)}</code>.
               </p>
             )}
             {samplePanelWallets.length === 0 && (
-              <p>
-                Run <code>seed-arbitrator-pool.js</code> and raise a dispute on a SUBMITTED job first.
+              <p className="muted phase-note">
+                No active on-chain disputes found. Raise a dispute on a submitted job to begin.
               </p>
             )}
           </div>
@@ -157,20 +193,22 @@ export function ArbitratorDashboardPage() {
         )}
       </section>
 
-      <section className="panel">
-        <h3>Quick test guide</h3>
-        <ol className="muted phase-note">
-          <li>
-            Import one wallet from <code>deployments/sepolia-arbitrators.json</code> into MetaMask (Sepolia).
-          </li>
-          <li>Stake ≥50 USDC + join pool (Profile page or scripts).</li>
-          <li>Client raises dispute on a job → 5 arbitrators are selected at random.</li>
-          <li>Open DISPUTED job → Arbitrator panel → commit / reveal on the phase timer.</li>
-        </ol>
-        <p className="muted">
-          Stake and mint at <Link to="/profile">Profile</Link>.
-        </p>
-      </section>
+      {showDebugGuide && (
+        <section className="panel">
+          <h3>Quick test guide</h3>
+          <ol className="muted phase-note">
+            <li>
+              Import one wallet from <code>deployments/sepolia-arbitrators.json</code> into MetaMask (Sepolia).
+            </li>
+            <li>Stake ≥50 USDC + join pool (Profile page or scripts).</li>
+            <li>Client raises dispute on a job → 5 arbitrators are selected at random.</li>
+            <li>Open DISPUTED job → Arbitrator panel → commit / reveal on the phase timer.</li>
+          </ol>
+          <p className="muted">
+            Stake and mint at <Link to="/profile">Profile</Link>.
+          </p>
+        </section>
+      )}
     </main>
   );
 }

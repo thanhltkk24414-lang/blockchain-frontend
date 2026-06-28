@@ -12,13 +12,12 @@ function stepIndex(status: string): number {
   return 0;
 }
 
-/** Placeholder milestone tracker — full milestone UX ships in Phase 3+. */
 export function MilestoneProgress({ status }: MilestoneProgressProps) {
   const current = stepIndex(status);
 
   return (
     <div className="milestone-progress" aria-label="Job progress">
-      <p className="muted phase-note">Milestone progress (preview)</p>
+      <p className="muted phase-note">Milestone progress</p>
       <ol className="milestone-steps">
         {STEPS.map((step, i) => (
           <li key={step} className={i <= current ? 'done' : ''}>

@@ -24,6 +24,8 @@ function filterBySkill(jobs: Job[], skill: string): Job[] {
   );
 }
 
+type ViewMode = 'grid' | 'list';
+
 export function BrowsePage() {
   const [searchParams] = useSearchParams();
   const [filters, setFilters] = useState<JobFilterState>(() => ({
@@ -33,6 +35,7 @@ export function BrowsePage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
 
   const onFiltersChange = useCallback((next: JobFilterState) => {
     setFilters(next);
@@ -101,17 +104,41 @@ export function BrowsePage() {
 
   return (
     <main className="page">
-      <div className="page-header">
-        <h2>Browse jobs</h2>
-        <p className="muted">Filter by skill, budget, and category — open jobs from the Fapex API.</p>
+      <div className="page-header browse-header">
+        <div>
+          <h2>Browse jobs</h2>
+          <p className="muted">Filter by skill, budget, and category — open jobs from the Fapex API.</p>
+        </div>
+        <div className="view-toggle" role="group" aria-label="View mode">
+          <button
+            type="button"
+            className={`btn ghost btn-compact${viewMode === 'grid' ? ' active' : ''}`}
+            onClick={() => setViewMode('grid')}
+          >
+            Grid
+          </button>
+          <button
+            type="button"
+            className={`btn ghost btn-compact${viewMode === 'list' ? ' active' : ''}`}
+            onClick={() => setViewMode('list')}
+          >
+            List
+          </button>
+        </div>
       </div>
 
-      <JobFilters onChange={onFiltersChange} />
+      <JobFilters onChange={onFiltersChange} initialSearch={filters.search} />
+
+      {!loading && !error && (
+        <p className="browse-count muted">
+          Showing <strong>{jobs.length}</strong> job{jobs.length === 1 ? '' : 's'}
+        </p>
+      )}
 
       {loading && <p className="muted">Loading jobs…</p>}
       {error && <p className="error">{error}</p>}
       {!loading && !error && jobs.length === 0 && <p className="muted">No jobs match your filters.</p>}
-      <ul className="jobs-list">
+      <ul className={`jobs-list${viewMode === 'grid' ? ' jobs-grid' : ' jobs-list-mode'}`}>
         {jobs.map((job) => (
           <JobCard key={job._id} job={job} />
         ))}

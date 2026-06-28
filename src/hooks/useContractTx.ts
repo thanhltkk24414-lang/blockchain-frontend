@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { waitForTransactionReceipt } from 'wagmi/actions';
 import { wagmiConfig } from '@/config/wagmi';
 import { withGasLimit, type GasEstimateInput } from '@/lib/utils/contractGas';
-import { formatGasWithUsd } from '@/hooks/useEthUsdPrice';
+import { formatGasEstimate } from '@/lib/utils/contractGas';
 import type { TxStatus } from '@/components/shared/TxStatusModal';
 
 export function useContractTx() {
@@ -24,7 +24,7 @@ export function useContractTx() {
     async (
       label: string,
       send: () => Promise<`0x${string}`>,
-      opts?: { gasParams?: GasEstimateInput; ethUsd?: number | null },
+      opts?: { gasParams?: GasEstimateInput },
     ) => {
       resetTx();
       setTxLabel(label);
@@ -32,7 +32,7 @@ export function useContractTx() {
       if (opts?.gasParams) {
         try {
           const { gas } = await withGasLimit(opts.gasParams);
-          setGasEstimate(formatGasWithUsd(gas, opts.ethUsd ?? null));
+          setGasEstimate(formatGasEstimate(gas));
         } catch {
           setGasEstimate(undefined);
         }

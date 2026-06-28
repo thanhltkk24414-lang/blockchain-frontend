@@ -16,6 +16,8 @@ import {
 import { useArbitratorAccess } from '@/hooks/useArbitratorAccess';
 import { useReputation } from '@/hooks/useReputation';
 import { ReputationBadge } from '@/components/shared/ReputationBadge';
+import { BlockiesAvatar } from '@/components/shared/BlockiesAvatar';
+import { truncateAddress } from '@/lib/utils/address';
 import { ArbitratorOnboardingPanel } from '@/components/profile/ArbitratorOnboardingPanel';
 
 export function ProfilePage() {
@@ -184,25 +186,49 @@ export function ProfilePage() {
       )}
 
       {address && (
-        <section className="panel form-panel">
-          <h3>Reputation (on-chain)</h3>
+        <header className="profile-header panel">
+          <BlockiesAvatar address={address} size={56} />
+          <div className="profile-header-meta">
+            <h2 className="profile-username">{displayUsername ?? 'Anonymous'}</h2>
+            <p className="mono profile-wallet" title={address}>
+              {truncateAddress(address, 6, 4)}
+            </p>
+            {registrationComplete && user?.role && (
+              <span className="badge role-badge">{user.role}</span>
+            )}
+            <p className="muted profile-joined">FAPEX member · Sepolia testnet</p>
+          </div>
+        </header>
+      )}
+
+      {address && (
+        <section className="panel profile-arbitrator-card">
+          <h3>Arbitrator</h3>
+          <p className="muted phase-note">
+            On-chain reputation and stake status for dispute panel eligibility.
+          </p>
           <ReputationBadge reputation={reputation} loading={reputationLoading} />
+          {!arbitrator.loading && arbitrator.stakedAmount != null && (
+            <div className="arbitrator-stake-summary">
+              <p>
+                <strong>{arbitrator.stakedAmount} USDC</strong> staked
+                {arbitrator.minStake != null && ` (min ${arbitrator.minStake})`}
+              </p>
+              <p className={arbitrator.isValid ? 'success' : 'error'}>
+                {arbitrator.isValid
+                  ? arbitrator.inPool
+                    ? 'In arbitrator pool — eligible for assignments'
+                    : 'Stake sufficient — join pool to receive assignments'
+                  : `Stake at least ${arbitrator.minStake ?? 50} USDC for console access`}
+              </p>
+              {arbitrator.message && <p className="muted">{arbitrator.message}</p>}
+            </div>
+          )}
+          {arbitrator.loading && <p className="muted">Checking on-chain stake…</p>}
         </section>
       )}
 
       {address && <ArbitratorOnboardingPanel />}
-
-      {address && !arbitrator.loading && arbitrator.stakedAmount != null && arbitrator.isValid && (
-        <section className="panel form-panel">
-          <h3>Arbitrator status</h3>
-          <p className="badge success">
-            {arbitrator.inPool
-              ? `In pool — ${arbitrator.stakedAmount} USDC staked`
-              : `Stake sufficient (${arbitrator.stakedAmount} USDC) — join pool to receive assignments`}
-          </p>
-          {arbitrator.message && <p className="muted">{arbitrator.message}</p>}
-        </section>
-      )}
 
       {!address && <p className="muted">Connect your wallet to manage your profile.</p>}
       {address && !isAuthenticated && (
