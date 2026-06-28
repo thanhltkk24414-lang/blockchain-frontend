@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { useAdminDisputePreview } from '@/hooks/useAdminDisputePreview';
 import { DISPUTE_QUORUM } from '@/lib/utils/forceResolveEligibility';
 import { VOTE_CHOICES, formatDisputeChoice } from '@/lib/utils/disputeChoice';
@@ -12,16 +12,21 @@ const DISPUTE_FLOW_DOCS =
 
 interface ForceResolvePanelProps {
   onComplete?: () => void;
+  initialJobId?: string;
 }
 
-export function ForceResolvePanel({ onComplete }: ForceResolvePanelProps) {
+export function ForceResolvePanel({ onComplete, initialJobId = '' }: ForceResolvePanelProps) {
   const { txStatus, txHash, txLabel, txError, resetTx, runTx } = useContractTx();
-  const [forceJobId, setForceJobId] = useState('');
+  const [forceJobId, setForceJobId] = useState(initialJobId);
   const [forceDecision, setForceDecision] = useState(String(VOTE_CHOICES.FREELANCER_WIN));
   const [confirmQuorumFailed, setConfirmQuorumFailed] = useState(false);
   const [confirmText, setConfirmText] = useState('');
 
   const preview = useAdminDisputePreview(forceJobId);
+
+  useEffect(() => {
+    if (initialJobId) setForceJobId(initialJobId);
+  }, [initialJobId]);
 
   const confirmOk = confirmQuorumFailed && confirmText.trim().toUpperCase() === 'FORCE';
   const canSubmit =

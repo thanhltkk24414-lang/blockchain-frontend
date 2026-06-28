@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Job } from '@/lib/api';
 import {
   fetchDisputeByJob,
@@ -15,6 +15,7 @@ import {
   cidToEvidenceHash,
   readOnchainDispute,
   readOnChainEvidences,
+  readOnchainJob,
   useDisputeActions,
   type OnChainEvidence,
 } from '@/hooks/useDisputeActions';
@@ -39,6 +40,8 @@ type OffChainEvidence = {
     imageCid?: string;
     submitter?: string;
     type?: string;
+    notes?: string;
+    repoUrl?: string;
   } | null;
 };
 
@@ -52,6 +55,7 @@ type DisplayEvidence = {
   imageCid?: string;
   onChainOnly?: boolean;
   ipfsHashBytes?: string;
+  kind?: 'deliverable' | 'dispute';
 };
 
 interface DisputeEvidencePanelProps {
@@ -65,9 +69,21 @@ function shortAddr(addr: string): string {
 function mergeEvidence(
   onChain: OnChainEvidence[],
   offChain: OffChainEvidence[],
+  deliverable?: { cid: string; submitter: string; submittedAt?: number },
 ): DisplayEvidence[] {
   const byHash = new Map<string, DisplayEvidence>();
   const matchedOffChain = new Set<number>();
+
+  if (deliverable?.cid) {
+    byHash.set(`deliverable-${deliverable.cid}`, {
+      key: `deliverable-${deliverable.cid}`,
+      submitter: deliverable.submitter,
+      submittedAt: deliverable.submittedAt,
+      cid: deliverable.cid,
+      description: 'Submitted deliverable (on-chain deliverableCID)',
+      kind: 'deliverable',
+    });
+  }
 
   for (const [idx, ev] of offChain.entries()) {
     let hashKey = '';
@@ -82,9 +98,10 @@ function mergeEvidence(
       submitter: ev.submitter,
       submittedAt: ev.submittedAt ? new Date(ev.submittedAt).getTime() / 1000 : undefined,
       cid: ev.ipfsHash,
-      description: content?.description ?? ev.description,
-      evidenceUrl: content?.evidenceUrl,
+      description: content?.description ?? content?.notes ?? ev.description,
+      evidenceUrl: content?.evidenceUrl ?? content?.repoUrl,
       imageCid: content?.imageCid,
+      kind: 'dispute',
     });
   }
 
@@ -96,6 +113,7 @@ function mergeEvidence(
         ...existing,
         submitter: existing.submitter || ev.submitter,
         submittedAt: existing.submittedAt ?? ev.submittedAt,
+        kind: 'dispute',
       });
       const offIdx = offChain.findIndex((o) => {
         try {
@@ -130,6 +148,7 @@ function mergeEvidence(
         description: content?.description ?? off.description,
         evidenceUrl: content?.evidenceUrl,
         imageCid: content?.imageCid,
+        kind: 'dispute',
       });
     } else {
       byHash.set(hashKey, {
@@ -138,6 +157,7 @@ function mergeEvidence(
         submittedAt: ev.submittedAt,
         onChainOnly: true,
         ipfsHashBytes: ev.ipfsHash,
+        kind: 'dispute',
       });
     }
   }
@@ -145,69 +165,102 @@ function mergeEvidence(
   return [...byHash.values()].sort((a, b) => (b.submittedAt ?? 0) - (a.submittedAt ?? 0));
 }
 
-function EvidenceList({ items }: { items: DisplayEvidence[] }) {
+function EvidenceList({
+  items,
+  onRetry,
+  retrying,
+}: {
+  items: DisplayEvidence[];
+  onRetry?: () => void;
+  retrying?: boolean;
+}) {
+  const hasUnresolved = items.some((ev) => ev.onChainOnly);
+
   if (items.length === 0) {
-    return <p className="muted phase-note">No evidence submitted yet.</p>;
+    return <p className="muted phase-note">No evidence on-chain yet.</p>;
   }
 
   return (
-    <ul className="evidence-list">
-      {items.map((ev) => (
-        <li key={ev.key} className="evidence-item">
-          <div className="evidence-meta">
-            <strong>{shortAddr(ev.submitter)}</strong>
-            {ev.submittedAt != null && (
-              <span className="muted">
-                {' '}
-                · {new Date(ev.submittedAt * 1000).toLocaleString()}
-              </span>
+    <>
+      {hasUnresolved && onRetry && (
+        <p className="muted phase-note">
+          Some hashes are still resolving from IPFS.{' '}
+          <button type="button" className="btn ghost btn-compact" onClick={onRetry} disabled={retrying}>
+            {retrying ? 'Refreshing…' : 'Retry fetch'}
+          </button>
+        </p>
+      )}
+      <ul className="evidence-list">
+        {items.map((ev) => (
+          <li key={ev.key} className="evidence-item">
+            <div className="evidence-meta">
+              <strong>{shortAddr(ev.submitter)}</strong>
+              {ev.kind === 'deliverable' && (
+                <span className="badge success" style={{ marginLeft: '0.5rem' }}>
+                  Deliverable
+                </span>
+              )}
+              {ev.submittedAt != null && (
+                <span className="muted">
+                  {' '}
+                  · {new Date(ev.submittedAt * 1000).toLocaleString()}
+                </span>
+              )}
+            </div>
+            {ev.description && <p>{ev.description}</p>}
+            {ev.evidenceUrl && (
+              <p>
+                <a href={ev.evidenceUrl} target="_blank" rel="noopener noreferrer">
+                  Evidence link ↗
+                </a>
+              </p>
             )}
-          </div>
-          {ev.description && <p>{ev.description}</p>}
-          {ev.evidenceUrl && (
-            <p>
-              <a href={ev.evidenceUrl} target="_blank" rel="noopener noreferrer">
-                Evidence link ↗
+            {ev.cid && (
+              <p>
+                <a
+                  href={`${IPFS_GATEWAY}/${ev.cid}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mono"
+                >
+                  IPFS: {ev.cid.slice(0, 20)}… ↗
+                </a>
+              </p>
+            )}
+            {ev.imageCid && (
+              <a href={`${IPFS_GATEWAY}/${ev.imageCid}`} target="_blank" rel="noopener noreferrer">
+                <img
+                  src={`${IPFS_GATEWAY}/${ev.imageCid}`}
+                  alt="Evidence attachment"
+                  className="evidence-thumb"
+                  loading="lazy"
+                />
               </a>
-            </p>
-          )}
-          {ev.cid && (
-            <p>
-              <a
-                href={`${IPFS_GATEWAY}/${ev.cid}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mono"
-              >
-                IPFS: {ev.cid.slice(0, 20)}… ↗
-              </a>
-            </p>
-          )}
-          {ev.imageCid && (
-            <a href={`${IPFS_GATEWAY}/${ev.imageCid}`} target="_blank" rel="noopener noreferrer">
-              <img
-                src={`${IPFS_GATEWAY}/${ev.imageCid}`}
-                alt="Evidence attachment"
-                className="evidence-thumb"
-                loading="lazy"
-              />
-            </a>
-          )}
-          {ev.onChainOnly && (
-            <p className="muted phase-note">
-              On-chain hash only (<code className="mono">{ev.ipfsHashBytes?.slice(0, 14)}…</code>
-              ) — fetching IPFS metadata; refresh if content was just submitted.
-            </p>
-          )}
-        </li>
-      ))}
-    </ul>
+            )}
+            {ev.onChainOnly && (
+              <p className="muted phase-note">
+                On-chain hash (<code className="mono">{ev.ipfsHashBytes?.slice(0, 14)}…</code>) —{' '}
+                <a
+                  href={`${IPFS_GATEWAY}/`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="etherscan-link"
+                >
+                  open IPFS gateway ↗
+                </a>{' '}
+                or retry if content was just pinned.
+              </p>
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 
 export function DisputeEvidencePanel({ job }: DisputeEvidencePanelProps) {
   const { address, isAuthenticated } = useAuth();
-  const { onchainStatus } = useOnChainJob(job.onchainJobId, job.status);
+  const { onchainStatus, onchainJob } = useOnChainJob(job.onchainJobId, job.status);
   const { submitEvidence, txStatus, txHash, txLabel, txError, resetTx } = useDisputeActions();
   const [notes, setNotes] = useState('');
   const [evidenceUrl, setEvidenceUrl] = useState('');
@@ -220,8 +273,19 @@ export function DisputeEvidencePanel({ job }: DisputeEvidencePanelProps) {
   const [createdAtSec, setCreatedAtSec] = useState(0);
   const [evidenceWindowOpen, setEvidenceWindowOpen] = useState(true);
 
+  const displayStatus = (job.status?.toUpperCase() ?? 'OPEN') as string;
   const isDisputed =
-    onchainStatus === ONCHAIN_JOB_STATUS.DISPUTED || job.status?.toUpperCase() === 'DISPUTED';
+    onchainStatus === ONCHAIN_JOB_STATUS.DISPUTED || displayStatus === 'DISPUTED';
+
+  const showEvidenceSection = useMemo(() => {
+    if (!isValidOnchainJobId(job.onchainJobId)) return false;
+    const statuses = ['SUBMITTED', 'DISPUTED', 'COMPLETED'];
+    if (statuses.includes(displayStatus)) return true;
+    if (onchainStatus === ONCHAIN_JOB_STATUS.SUBMITTED) return true;
+    if (onchainStatus === ONCHAIN_JOB_STATUS.DISPUTED) return true;
+    if (onchainStatus === ONCHAIN_JOB_STATUS.COMPLETED) return true;
+    return Boolean(onchainJob?.deliverableCID);
+  }, [displayStatus, job.onchainJobId, onchainJob?.deliverableCID, onchainStatus]);
 
   const isParty = Boolean(
     address &&
@@ -234,24 +298,47 @@ export function DisputeEvidencePanel({ job }: DisputeEvidencePanelProps) {
     setListLoading(true);
     try {
       const jobId = BigInt(job.onchainJobId!);
-      const [onChain, dispute] = await Promise.all([
-        readOnChainEvidences(jobId),
-        readOnchainDispute(jobId),
+      const [onChain, dispute, chainJob] = await Promise.all([
+        isDisputed ? readOnChainEvidences(jobId) : Promise.resolve([] as OnChainEvidence[]),
+        isDisputed ? readOnchainDispute(jobId) : Promise.resolve({ createdAt: 0n } as Awaited<ReturnType<typeof readOnchainDispute>>),
+        readOnchainJob(jobId).catch(() => null),
       ]);
       setCreatedAtSec(Number(dispute.createdAt));
+
+      const deliverableCid =
+        chainJob?.deliverableCID?.trim() ||
+        onchainJob?.deliverableCID?.trim() ||
+        '';
+      const deliverable =
+        deliverableCid && chainJob
+          ? {
+              cid: deliverableCid,
+              submitter: chainJob.freelancer,
+              submittedAt: chainJob.submittedAt ? Number(chainJob.submittedAt) : undefined,
+            }
+          : deliverableCid
+            ? {
+                cid: deliverableCid,
+                submitter: job.freelancerAddress || job.clientAddress || '0x0000000000000000000000000000000000000000',
+              }
+            : undefined;
 
       let offChain: OffChainEvidence[] = [];
       if (job.onchainJobId != null) {
         const byOnchainEv = await fetchDisputeEvidencesByOnchainJob(job.onchainJobId).catch(
           () => null,
         );
-        if (byOnchainEv?.success && byOnchainEv.evidence?.length) {
+        if (byOnchainEv?.success) {
           if (byOnchainEv.disputeId) setDisputeId(byOnchainEv.disputeId);
-          offChain = byOnchainEv.evidence.filter((ev) => Boolean(ev.ipfsHash)) as OffChainEvidence[];
+          if (byOnchainEv.evidence?.length) {
+            offChain = byOnchainEv.evidence.filter((ev) =>
+              Boolean(ev.ipfsHash || ev.onChainHash),
+            ) as OffChainEvidence[];
+          }
         }
       }
 
-      if (offChain.length === 0 && job._id) {
+      if (offChain.length === 0 && job._id && isDisputed) {
         const byJob = await fetchDisputeByJob(job._id).catch(() => null);
         if (byJob?.success && byJob.dispute) {
           setDisputeId(byJob.dispute._id);
@@ -265,35 +352,50 @@ export function DisputeEvidencePanel({ job }: DisputeEvidencePanelProps) {
           }
         }
       }
-      if (offChain.length === 0 && job.onchainJobId != null) {
-        const byOnchain = await fetchDisputeByOnchainJob(job.onchainJobId).catch(() => null);
-        if (byOnchain?.success && byOnchain.dispute) {
-          setDisputeId(byOnchain.dispute._id);
-          if (byOnchain.dispute._id) {
-            const evRes = await fetchDisputeEvidences(byOnchain.dispute._id).catch(() => null);
-            offChain =
-              evRes?.success && evRes.evidence
-                ? evRes.evidence
-                : ((byOnchain.dispute.evidence ?? []) as OffChainEvidence[]);
+
+      if (deliverableCid && offChain.length === 0) {
+        try {
+          const metaRes = await fetch(`${IPFS_GATEWAY}/${deliverableCid}`);
+          if (metaRes.ok) {
+            const meta = (await metaRes.json()) as OffChainEvidence['content'];
+            if (meta && typeof meta === 'object') {
+              offChain = [
+                {
+                  submitter: deliverable?.submitter || '',
+                  ipfsHash: deliverableCid,
+                  content: meta,
+                },
+              ];
+            }
           }
+        } catch {
+          /* deliverable may be a raw file */
         }
       }
 
-      setEvidenceItems(mergeEvidence(onChain, offChain));
+      setEvidenceItems(mergeEvidence(onChain, offChain, deliverable));
     } catch {
       setEvidenceItems([]);
     } finally {
       setListLoading(false);
     }
-  }, [job._id, job.onchainJobId]);
+  }, [isDisputed, job._id, job.clientAddress, job.freelancerAddress, job.onchainJobId, onchainJob?.deliverableCID]);
 
   useEffect(() => {
-    if (!isDisputed) return;
+    if (!showEvidenceSection) return;
     void loadEvidence();
-  }, [isDisputed, loadEvidence]);
+  }, [showEvidenceSection, loadEvidence]);
 
   useEffect(() => {
-    if (!createdAtSec) return;
+    if (!showEvidenceSection) return;
+    const hasUnresolved = evidenceItems.some((ev) => ev.onChainOnly);
+    if (!hasUnresolved) return;
+    const id = window.setInterval(() => void loadEvidence(), 12_000);
+    return () => window.clearInterval(id);
+  }, [evidenceItems, loadEvidence, showEvidenceSection]);
+
+  useEffect(() => {
+    if (!createdAtSec || !isDisputed) return;
     const tick = () => {
       const info = getDisputePhaseInfo(createdAtSec, 0, false);
       setEvidenceWindowOpen(info.phase === 'evidence');
@@ -301,13 +403,13 @@ export function DisputeEvidencePanel({ job }: DisputeEvidencePanelProps) {
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [createdAtSec]);
+  }, [createdAtSec, isDisputed]);
 
-  if (!isDisputed || !isValidOnchainJobId(job.onchainJobId)) return null;
+  if (!showEvidenceSection) return null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!job.onchainJobId || !address) return;
+    if (!job.onchainJobId || !address || !isDisputed) return;
 
     const trimmedNotes = notes.trim();
     const trimmedUrl = evidenceUrl.trim();
@@ -342,7 +444,7 @@ export function DisputeEvidencePanel({ job }: DisputeEvidencePanelProps) {
         throw new Error('IPFS did not return a CID — retry upload.');
       }
 
-      const evidenceHash = cidToEvidenceHash(upload.cid);
+      const resolvedHash = cidToEvidenceHash(upload.cid);
       await submitEvidence(job.onchainJobId, upload.cid);
 
       let resolvedDisputeId = disputeId;
@@ -355,7 +457,7 @@ export function DisputeEvidencePanel({ job }: DisputeEvidencePanelProps) {
       const evidencePayload = {
         ipfsHash: upload.cid,
         description: trimmedNotes || trimmedUrl || undefined,
-        onChainHash: evidenceHash,
+        onChainHash: resolvedHash,
       };
 
       try {
@@ -383,32 +485,43 @@ export function DisputeEvidencePanel({ job }: DisputeEvidencePanelProps) {
     }
   }
 
-  const canSubmit = isParty && evidenceWindowOpen;
+  const canSubmit = isDisputed && isParty && evidenceWindowOpen;
+  const panelTitle = isDisputed ? 'Dispute — evidence' : 'Evidence & deliverables';
 
   return (
     <section className="panel dispute-panel">
-      <h3>Dispute — evidence</h3>
-      <p className="muted">
-        Job is <strong>DISPUTED</strong>. Client/freelancer submit evidence within the first{' '}
-        <strong>{DISPUTE_PHASES.evidenceRebuttalEndMin} minutes</strong> (on-chain{' '}
-        <code>submitEvidence</code>). Arbitrators and parties can review the list below.
-      </p>
+      <h3>{panelTitle}</h3>
+      {isDisputed ? (
+        <p className="muted">
+          Job is <strong>DISPUTED</strong>. Client/freelancer submit evidence within the first{' '}
+          <strong>{DISPUTE_PHASES.evidenceRebuttalEndMin} minutes</strong> (on-chain{' '}
+          <code>submitEvidence</code>). Everyone can review evidence below — sourced from chain + IPFS.
+        </p>
+      ) : (
+        <p className="muted">
+          Public on-chain evidence for this job — deliverable CID and dispute attachments when present.
+        </p>
+      )}
 
       {listLoading && <p className="muted">Loading evidence…</p>}
 
       <div className="evidence-list-section">
-        <h4>Submitted evidence ({evidenceItems.length})</h4>
-        <EvidenceList items={evidenceItems} />
+        <h4>Evidence ({evidenceItems.length})</h4>
+        <EvidenceList items={evidenceItems} onRetry={() => void loadEvidence()} retrying={listLoading} />
       </div>
 
-      {!evidenceWindowOpen && (
+      {!isDisputed && (
         <p className="muted phase-note">
-          Evidence submission window closed — view only.
+          Dispute evidence upload unlocks when the job is <strong>DISPUTED</strong> on-chain.
         </p>
       )}
 
-      {!isParty && (
-        <p className="muted">Only client/freelancer can submit new evidence.</p>
+      {isDisputed && !evidenceWindowOpen && (
+        <p className="muted phase-note">Evidence submission window closed — view only.</p>
+      )}
+
+      {isDisputed && !isParty && (
+        <p className="muted">Only client/freelancer can submit new dispute evidence.</p>
       )}
 
       {canSubmit && (

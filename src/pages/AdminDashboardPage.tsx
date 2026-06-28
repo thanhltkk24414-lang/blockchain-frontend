@@ -15,9 +15,11 @@ import { truncateAddress } from '@/lib/utils/address';
 import {
   fetchAdminStats,
   fetchArbitratorApplications,
+  fetchQuorumFailedJobs,
   updateArbitratorApplicationStatus,
   type AdminStats,
   type ArbitratorApplication,
+  type QuorumFailedJob,
 } from '@/lib/api/client';
 import { useRoleHolders } from '@/hooks/useRoleHolders';
 import {
@@ -97,6 +99,10 @@ export function AdminDashboardPage() {
   const [applicationsLoading, setApplicationsLoading] = useState(true);
   const [applicationsError, setApplicationsError] = useState<string>();
   const [actionAppId, setActionAppId] = useState<string | null>(null);
+  const [quorumJobs, setQuorumJobs] = useState<QuorumFailedJob[]>([]);
+  const [quorumLoading, setQuorumLoading] = useState(true);
+  const [quorumError, setQuorumError] = useState<string>();
+  const [forceResolveJobId, setForceResolveJobId] = useState('');
 
   const roleHolders = useRoleHolders(roleKind, roleTarget.trim() || undefined);
 
@@ -126,17 +132,33 @@ export function AdminDashboardPage() {
       .finally(() => setApplicationsLoading(false));
   }, []);
 
+  const loadQuorumFailed = useCallback(() => {
+    setQuorumLoading(true);
+    setQuorumError(undefined);
+    fetchQuorumFailedJobs()
+      .then((res) => {
+        if (res.success) setQuorumJobs(res.jobs);
+        else setQuorumError('Quorum scan unavailable');
+      })
+      .catch((err) =>
+        setQuorumError(err instanceof Error ? err.message : 'Failed to load quorum-failed jobs'),
+      )
+      .finally(() => setQuorumLoading(false));
+  }, []);
+
   useEffect(() => {
     loadStats();
     loadApplications();
-  }, [loadStats, loadApplications]);
+    loadQuorumFailed();
+  }, [loadStats, loadApplications, loadQuorumFailed]);
 
   const afterTx = useCallback(async () => {
     admin.refresh();
     roleHolders.refresh();
     loadStats();
     loadApplications();
-  }, [admin.refresh, loadStats, loadApplications, roleHolders.refresh]);
+    loadQuorumFailed();
+  }, [admin.refresh, loadStats, loadApplications, loadQuorumFailed, roleHolders.refresh]);
 
   const handlePauseConfirm = async () => {
     setPauseConfirmOpen(false);
@@ -597,7 +619,95 @@ export function AdminDashboardPage() {
         </section>
       )}
 
-      {admin.canForceResolve && <ForceResolvePanel onComplete={() => void afterTx()} />}
+      {admin.canForceResolve && (
+        <>
+          <section className="panel admin-danger-panel">
+            <div className="panel-header-row">
+              <h3>Quorum failed — needs force resolve</h3>
+              <button
+                type="button"
+                className="btn ghost btn-compact"
+                onClick={loadQuorumFailed}
+                disabled={quorumLoading}
+              >
+                Refresh
+              </button>
+            </div>
+            <p className="muted">
+              Disputed jobs with fewer than 3 valid vote reveals after the reveal window. Evidence is
+              hydrated from chain + IPFS for review before emergency{' '}
+              <code>adminForceResolve</code>.
+            </p>
+            {quorumLoading && <p className="muted">Scanning disputed jobs on-chain…</p>}
+            {quorumError && <p className="error">{quorumError}</p>}
+            {!quorumLoading && !quorumError && quorumJobs.length === 0 && (
+              <p className="muted phase-note">No quorum-failed disputes right now.</p>
+            )}
+            {!quorumLoading && quorumJobs.length > 0 && (
+              <ul className="admin-quorum-list">
+                {quorumJobs.map((item) => (
+                  <li key={item.onchainJobId} className="admin-quorum-item">
+                    <div className="admin-quorum-header">
+                      <strong>
+                        Job #{item.onchainJobId}
+                        {item.title ? ` — ${item.title}` : ''}
+                      </strong>
+                      <span className="badge warning">
+                        {item.revealCount}/{item.quorum} reveals
+                      </span>
+                    </div>
+                    {item.evidence && item.evidence.length > 0 && (
+                      <ul className="evidence-list compact">
+                        {item.evidence.slice(0, 4).map((ev, idx) => (
+                          <li key={`${item.onchainJobId}-ev-${idx}`} className="evidence-item">
+                            <span className="mono muted">{ev.submitter?.slice(0, 10)}…</span>
+                            {ev.content?.description && <span> — {ev.content.description}</span>}
+                            {ev.ipfsHash && (
+                              <>
+                                {' '}
+                                <a
+                                  href={`https://gateway.pinata.cloud/ipfs/${ev.ipfsHash}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="etherscan-link"
+                                >
+                                  IPFS ↗
+                                </a>
+                              </>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <div className="admin-form-actions">
+                      <button
+                        type="button"
+                        className="btn ghost btn-compact"
+                        onClick={() => setForceResolveJobId(String(item.onchainJobId))}
+                      >
+                        Pre-fill force resolve →
+                      </button>
+                      {item.mongoJobId && (
+                        <a className="etherscan-link" href={`/jobs/${item.mongoJobId}`}>
+                          Open job page
+                        </a>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <ForceResolvePanel
+            initialJobId={forceResolveJobId}
+            onComplete={() => {
+              setForceResolveJobId('');
+              void afterTx();
+            }}
+          />
+        </>
+      )}
 
       <TxStatusModal
         open={txStatus !== 'idle'}
