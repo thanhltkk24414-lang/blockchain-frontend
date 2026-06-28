@@ -12,6 +12,9 @@ import { sendRevealVoteTx } from '@/lib/utils/sendRevealVoteTx';
 import { sendFinalizeDisputeTx } from '@/lib/utils/sendFinalizeDisputeTx';
 import { sendExecuteArbitrationResultTx } from '@/lib/utils/sendExecuteArbitrationResultTx';
 import { sendFileAppealTx } from '@/lib/utils/sendFileAppealTx';
+import { CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
+import { executeContractWrite } from '@/lib/utils/contractWrite';
+import { getDisputePhaseInfo } from '@/lib/utils/disputePhase';
 import {
   addVoteToTally,
   emptyVoteTally,
@@ -283,6 +286,93 @@ async function preflightSubmitEvidence(
   });
 }
 
+const APPEAL_FEE_NUM = 130n;
+const APPEAL_FEE_DEN = 100n;
+
+async function preflightFileAppeal(wallet: Address, jobId: bigint): Promise<bigint> {
+  const onchainJob = await readOnchainJob(jobId);
+  const isClient = addressesEqual(onchainJob.client, wallet);
+  const isFreelancer = addressesEqual(onchainJob.freelancer, wallet);
+  if (!isClient && !isFreelancer) {
+    throw new Error(
+      `MetaMask wallet (${wallet}) is not the on-chain client or freelancer — only a party can file an appeal.`,
+    );
+  }
+
+  if (onchainJob.status !== ONCHAIN_JOB_STATUS.DISPUTED) {
+    throw new Error(
+      `On-chain job is ${onchainStatusLabel(onchainJob.status)} — appeals apply only to DISPUTED jobs.`,
+    );
+  }
+
+  const [dispute, round, appealed, finalized] = await Promise.all([
+    readOnchainDispute(jobId),
+    readDisputeRound(jobId),
+    readAppealFiled(jobId),
+    readIsVotingFinalized(jobId),
+  ]);
+
+  if (dispute.createdAt === 0n) {
+    throw new Error('No on-chain dispute record — wait for raiseDispute / indexer sync.');
+  }
+
+  if (!finalized && !dispute.isResolved) {
+    throw new Error('VotingNotFinalized: call Finalize voting first (needs ≥3 valid reveals).');
+  }
+
+  if (round !== 1) {
+    throw new Error('AppealNotAllowed: only round 1 can be appealed — round 2 is final.');
+  }
+
+  if (appealed) {
+    throw new Error('AppealAlreadyFiled: an appeal was already submitted for this job.');
+  }
+
+  const createdAtSec = Number(dispute.createdAt);
+  const resultAtSec = Number(dispute.resultAt);
+  const phase = getDisputePhaseInfo(createdAtSec, resultAtSec, dispute.isResolved);
+  if (phase.phase !== 'appeal') {
+    if (phase.phase === 'execute') {
+      throw new Error('AppealWindowClosed: appeal window ended — call Execute result instead.');
+    }
+    throw new Error(
+      `Appeal not open yet — current phase: ${phase.label}. Wait until after finalize voting.`,
+    );
+  }
+
+  const disputeFee = (await readContract(wagmiConfig, {
+    ...contracts.escrowVault,
+    functionName: 'disputeFees',
+    args: [jobId],
+  })) as bigint;
+
+  if (disputeFee <= 0n) {
+    throw new Error('Appeal fee unavailable — dispute fee not recorded on-chain for this job.');
+  }
+
+  const appealFee = (disputeFee * APPEAL_FEE_NUM) / APPEAL_FEE_DEN;
+  const [balance, allowance] = (await Promise.all([
+    readContract(wagmiConfig, {
+      ...contracts.mockUsdc,
+      functionName: 'balanceOf',
+      args: [wallet],
+    }),
+    readContract(wagmiConfig, {
+      ...contracts.mockUsdc,
+      functionName: 'allowance',
+      args: [wallet, CONTRACT_ADDRESSES.EscrowVault],
+    }),
+  ])) as [bigint, bigint];
+
+  if (balance < appealFee) {
+    throw new Error(
+      `TransferFailed: need ${Number(appealFee) / 1e6} USDC appeal fee (1.3× dispute fee) — balance ${Number(balance) / 1e6}.`,
+    );
+  }
+
+  return allowance < appealFee ? appealFee : 0n;
+}
+
 export function useDisputeActions() {
   const { address } = useAccount();
   const tx = useContractTx();
@@ -388,10 +478,24 @@ export function useDisputeActions() {
     async (onchainJobId: number) => {
       if (!address) throw new Error('Connect your MetaMask wallet first.');
       const wallet = getAddress(address);
+      const jobId = BigInt(onchainJobId);
 
-      await tx.runTx('Filing appeal…', () =>
+      const needsApprove = await preflightFileAppeal(wallet, jobId);
+      if (needsApprove > 0n) {
+        await tx.runTx('Approving USDC appeal fee (1.3× dispute fee)…', () =>
+          executeContractWrite({
+            address: contracts.mockUsdc.address,
+            abi: contracts.mockUsdc.abi as Abi,
+            functionName: 'approve',
+            args: [CONTRACT_ADDRESSES.EscrowVault, needsApprove],
+            account: wallet,
+          }),
+        );
+      }
+
+      await tx.runTx('Filing appeal (starts round 2 panel)…', () =>
         sendFileAppealTx({
-          onchainJobId: BigInt(onchainJobId),
+          onchainJobId: jobId,
           account: wallet,
         }),
       );

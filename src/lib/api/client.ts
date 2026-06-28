@@ -571,3 +571,31 @@ export async function fetchAdminStats(): Promise<AdminStats> {
   const res = await apiFetch(`${API_URL}/api/admin/stats`);
   return parseJson<AdminStats>(res);
 }
+
+export type QuorumFailedJob = {
+  onchainJobId: number;
+  mongoJobId?: string;
+  title?: string;
+  clientAddress?: string;
+  freelancerAddress?: string;
+  deliverableCID?: string | null;
+  revealCount: number;
+  commitCount: number;
+  quorum: number;
+  createdAt?: number;
+  evidence?: Array<{
+    submitter: string;
+    ipfsHash?: string;
+    description?: string;
+    content?: {
+      description?: string;
+      evidenceUrl?: string;
+      imageCid?: string;
+    } | null;
+  }>;
+};
+
+export async function fetchQuorumFailedJobs(): Promise<{ success: boolean; jobs: QuorumFailedJob[] }> {
+  const res = await apiFetch(`${API_URL}/api/admin/quorum-failed-jobs`);
+  return parseJson<{ success: boolean; jobs: QuorumFailedJob[] }>(res);
+}

@@ -1,4 +1,5 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { ChartTooltip } from '@/components/shared/ChartTooltip';
 
 export interface EarningsPoint {
   label: string;
@@ -36,15 +37,7 @@ export function EarningsBarChart({ title, data, emptyLabel = 'No earnings yet' }
                 tickLine={false}
                 width={48}
               />
-              <Tooltip
-                formatter={(value: number) => [`${value} USDC`, 'Earned']}
-                contentStyle={{
-                  background: 'var(--panel-bg, #151a24)',
-                  border: '1px solid var(--border, #2a2f3a)',
-                  borderRadius: 8,
-                  color: 'var(--text, #e8eaed)',
-                }}
-              />
+              <Tooltip content={<ChartTooltip valueSuffix=" USDC" valueLabel="Earned" />} />
               <Bar dataKey="earned" fill="#6366f1" radius={[6, 6, 0, 0]} maxBarSize={48} />
             </BarChart>
           </ResponsiveContainer>

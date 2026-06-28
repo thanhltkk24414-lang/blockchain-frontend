@@ -167,16 +167,21 @@ export function DisputeResultPanel({ job, onActionComplete }: DisputeResultPanel
             )}
           </p>
           <p className="muted phase-note">
-            Client or freelancer can appeal within{' '}
-            <strong>{formatAppealWindow()}</strong> after finalize (fee ≈ 1.3× dispute fee). Then
-            call <strong>Execute result</strong> to settle escrow.
+            After round 1 is finalized, client or freelancer can pay an appeal fee (~1.3× the
+            dispute fee) via <strong>fileAppeal</strong> within{' '}
+            <strong>{formatAppealWindow()}</strong>. On-chain this calls{' '}
+            <code>EscrowVault.fileAppeal</code> → <code>ArbitratorPanel.startAppealRound</code>:
+            a <strong>new panel of 5 arbitrators</strong> is chosen and commit–reveal voting runs
+            again (round 2 is final — no third round). If no appeal is filed, anyone can{' '}
+            <strong>Execute result</strong> to settle escrow.
           </p>
         </div>
       )}
 
       {appealFiled && (
         <p className="badge warning">
-          Appeal filed — round 2 is open; a new arbitrator panel will vote again.
+          Appeal filed — round 2 is active. A new arbitrator panel will commit/reveal; round 2
+          result is final.
         </p>
       )}
 

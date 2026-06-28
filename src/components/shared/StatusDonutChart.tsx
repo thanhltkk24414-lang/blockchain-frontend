@@ -1,4 +1,5 @@
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
+import { ChartTooltip } from '@/components/shared/ChartTooltip';
 
 export interface StatusSlice {
   name: string;
@@ -41,15 +42,7 @@ export function StatusDonutChart({ title, data, emptyLabel = 'No data yet' }: St
                   <Cell key={entry.name} fill={entry.color} />
                 ))}
               </Pie>
-              <Tooltip
-                formatter={(value: number, name: string) => [`${value}`, name]}
-                contentStyle={{
-                  background: 'var(--panel-bg, #151a24)',
-                  border: '1px solid var(--border, #2a2f3a)',
-                  borderRadius: 8,
-                  color: 'var(--text, #e8eaed)',
-                }}
-              />
+              <Tooltip content={<ChartTooltip />} />
             </PieChart>
           </ResponsiveContainer>
           <ul className="chart-legend">

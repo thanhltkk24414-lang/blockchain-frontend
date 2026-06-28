@@ -25,6 +25,7 @@ export interface Job {
   totalDeposit?: number;
   platformFee?: number;
   deliverables?: string;
+  deliverableCID?: string;
   acceptanceCriteria?: string;
   createdAt?: string;
   skills?: string[];
