@@ -175,6 +175,13 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
         res = await createJob(apiPayload);
       }
       if (!res.success && res.code === 'ONCHAIN_JOB_ID_COLLISION') {
+        try {
+          res = await syncOnchainJob(apiPayload);
+        } catch {
+          /* keep collision response for banner */
+        }
+      }
+      if (!res.success && res.code === 'ONCHAIN_JOB_ID_COLLISION') {
         setCollisionPayload(apiPayload);
         const detail = [res.error, res.hint].filter(Boolean).join(' — ');
         throw new Error(
@@ -216,7 +223,11 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
     setSubmitError(null);
     try {
       const res = await syncOnchainJob(collisionPayload);
-      onCreated(res.job!);
+      if (!res.success || !res.job?._id) {
+        const detail = [res.error, res.hint].filter(Boolean).join(' — ');
+        throw new Error(detail || 'Failed to sync job from chain — no job record returned.');
+      }
+      onCreated(res.job);
       setValues(EMPTY_CREATE_JOB_FORM);
       setCollisionPayload(null);
       resetTx();

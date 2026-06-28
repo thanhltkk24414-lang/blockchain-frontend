@@ -102,7 +102,16 @@ export function LandingPage() {
 
   return (
     <div className="landing-hyve">
-      <section className="landing-hero">
+      <section className="landing-hero landing-hero-with-bg">
+        <img
+          src="/landing-hero-bg.png"
+          alt=""
+          className="landing-hero-bg-img"
+          loading="lazy"
+          decoding="async"
+          fetchPriority="low"
+        />
+        <div className="landing-hero-overlay" aria-hidden />
         <div className="landing-hero-glow" aria-hidden />
         <div className="landing-hero-inner">
           <div className="landing-hero-visual" aria-hidden>

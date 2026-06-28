@@ -21,6 +21,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.3",
+    "recharts": "^2.15.4",
     "siwe": "^3.0.0",
     "socket.io-client": "^4.8.3",
     "tailwind-merge": "^3.6.0",

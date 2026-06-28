@@ -27,8 +27,11 @@ export function FapexLogo({ className, href = '/', showWordmark = true, size = '
       {showWordmark && (
         <img
           src="/fapex-wordmark.png"
-          alt=""
-          className={cn(s.wordmark, 'fapex-logo-wordmark w-auto hidden sm:block object-contain object-left')}
+          alt="FAPEX"
+          className={cn(
+            s.wordmark,
+            'fapex-logo-wordmark w-auto hidden sm:block object-contain object-left',
+          )}
           draggable={false}
         />
       )}
