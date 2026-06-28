@@ -4,9 +4,12 @@ import { useAuth } from '@/context/AuthContext';
 import { fetchJobsByFreelancer, fetchMyBids, fetchUserStats, type Bid, type Job } from '@/lib/api';
 import { JobCard } from '@/components/shared/JobCard';
 import { DashboardErrorBoundary } from '@/components/shared/DashboardErrorBoundary';
+import { StatusDonutChart } from '@/components/shared/StatusDonutChart';
+import { EarningsBarChart } from '@/components/shared/EarningsBarChart';
 import { useJobCounter } from '@/hooks/contracts/useContracts';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { sortByDateDesc } from '@/lib/utils/dates';
+import { buildBidStatusSlices, buildEarningsByMonth } from '@/lib/utils/jobStatusChart';
 
 export function FreelancerDashboardPage() {
   const { user, isAuthenticated } = useAuth();
@@ -28,10 +31,10 @@ export function FreelancerDashboardPage() {
         fetchUserStats(freelancerWallet),
         fetchMyBids(freelancerWallet),
       ]);
-      if (jobsRes.success) setJobs(jobsRes.jobs || []);
+      if (jobsRes.success) setJobs((jobsRes.jobs || []).filter(Boolean));
       else setError(jobsRes.error || 'Failed to load freelancer jobs');
       if (statsRes.success) setStats(statsRes.stats || null);
-      if (bidsRes.success) setBids(bidsRes.bids || []);
+      if (bidsRes.success) setBids((bidsRes.bids || []).filter(Boolean));
       else setError(bidsRes.error || 'Failed to load your proposals');
       if (jobsRes.success && bidsRes.success) setError(null);
     } catch (err) {
@@ -47,15 +50,21 @@ export function FreelancerDashboardPage() {
 
   useAutoRefresh(loadData);
 
+  const safeJobs = useMemo(() => jobs.filter(Boolean), [jobs]);
+  const safeBids = useMemo(() => bids.filter(Boolean), [bids]);
+
   const recentBids = useMemo(
-    () => sortByDateDesc(bids, (bid) => bid.createdAt).slice(0, 5),
-    [bids],
+    () => sortByDateDesc(safeBids, (bid) => bid.createdAt).slice(0, 5),
+    [safeBids],
   );
 
   const assignedJobs = useMemo(
-    () => sortByDateDesc(jobs, (job) => job.createdAt),
-    [jobs],
+    () => sortByDateDesc(safeJobs, (job) => job.createdAt),
+    [safeJobs],
   );
+
+  const bidSlices = useMemo(() => buildBidStatusSlices(safeBids), [safeBids]);
+  const earningsPoints = useMemo(() => buildEarningsByMonth(safeJobs), [safeJobs]);
 
   return (
     <main className="page">
@@ -81,9 +90,17 @@ export function FreelancerDashboardPage() {
         </div>
         <div className="stat-card">
           <span className="stat-label">My bids</span>
-          <strong>{bids.length}</strong>
+          <strong>{safeBids.length}</strong>
         </div>
       </div>
+
+      {isAuthenticated && (safeBids.length > 0 || safeJobs.some((j) => j.status === 'COMPLETED')) && (
+        <div className="dashboard-charts-grid">
+          <StatusDonutChart title="Proposals by status" data={bidSlices} emptyLabel="No proposals yet" />
+          <EarningsBarChart title="Earnings over time" data={earningsPoints} />
+        </div>
+      )}
+
       {!isAuthenticated && <p className="muted">Connect wallet and sign in to see your assignments.</p>}
       {loading && <p className="muted">Loading…</p>}
       {error && <p className="error">{error}</p>}
@@ -125,7 +142,7 @@ export function FreelancerDashboardPage() {
       <DashboardErrorBoundary section="assigned jobs">
         <ul className="jobs-list">
           {assignedJobs.map((job) => (
-            <JobCard key={job._id} job={job} />
+            <JobCard key={job._id ?? String(job.onchainJobId)} job={job} />
           ))}
         </ul>
       </DashboardErrorBoundary>

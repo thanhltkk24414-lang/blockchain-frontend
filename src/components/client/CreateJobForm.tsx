@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useAccount, useChainId } from 'wagmi';
 import { isAddress } from 'viem';
-import { createJob, uploadIpfsMetadata } from '@/lib/api';
+import { createJob, syncOnchainJob, uploadIpfsMetadata } from '@/lib/api';
 import { USE_RELAYED_CREATE_JOB } from '@/config/env';
 import { useAuth } from '@/context/AuthContext';
 import { useCreateJob } from '@/hooks/useCreateJob';
@@ -17,6 +17,7 @@ import {
   validateCreateJobForm,
   type CreateJobFormValues,
 } from '@/lib/validation/jobForm';
+import type { CreateJobPayload } from '@/lib/validation/jobForm';
 import type { Job } from '@/lib/api';
 
 interface CreateJobFormProps {
@@ -53,6 +54,10 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [step, setStep] = useState<'idle' | 'ipfs' | 'onchain' | 'api'>('idle');
+  const [collisionPayload, setCollisionPayload] = useState<
+    (CreateJobPayload & { onchainJobId: number }) | null
+  >(null);
+  const [syncing, setSyncing] = useState(false);
 
   function updateField<K extends keyof CreateJobFormValues>(key: K, value: CreateJobFormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -66,6 +71,7 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSubmitError(null);
+    setCollisionPayload(null);
 
     const errors = validateCreateJobForm(values);
     if (Object.keys(errors).length > 0) {
@@ -121,15 +127,16 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
         clientAddress: txWallet,
         createdAt: new Date().toISOString(),
       });
-      if (!metadataRes.success || !metadataRes.cid) {
+      if (!metadataRes.success || !metadataRes.cid?.trim()) {
         throw new Error('IPFS metadata upload failed — verify SIWE login and Pinata backend.');
       }
+      const metadataCID = metadataRes.cid.trim();
 
       if (USE_RELAYED_CREATE_JOB) {
         setStep('api');
         const res = await createJob({
           ...payload,
-          metadataCID: metadataRes.cid,
+          metadataCID,
           relayCreateJob: true,
         });
         if (!res.success || !res.job) {
@@ -151,21 +158,43 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
 
       setStep('onchain');
       const { onchainJobId, createTxHash } = await createOnChain({
-        metadataCID: metadataRes.cid,
+        metadataCID,
         contractValue: payload.contractValue,
         durationSeconds: payload.duration,
       });
 
       setStep('api');
-      const res = await createJob({
+      const apiPayload = {
         ...payload,
         onchainJobId,
-        metadataCID: metadataRes.cid,
+        metadataCID,
         createTxHash,
-      });
+      };
+      let res = await createJob(apiPayload);
+      if (!res.success && res.code === 'ONCHAIN_JOB_ID_COLLISION') {
+        res = await createJob(apiPayload);
+      }
+      if (!res.success && res.code === 'ONCHAIN_JOB_ID_COLLISION') {
+        try {
+          res = await syncOnchainJob(apiPayload);
+        } catch {
+          /* keep collision response for banner */
+        }
+      }
+      if (!res.success && res.code === 'ONCHAIN_JOB_ID_COLLISION') {
+        setCollisionPayload(apiPayload);
+        const detail = [res.error, res.hint].filter(Boolean).join(' — ');
+        throw new Error(
+          detail ||
+            `On-chain job id ${onchainJobId} exists in the database — use Sync on-chain job below.`,
+        );
+      }
       if (!res.success || !res.job) {
         const detail = [res.error, res.hint].filter(Boolean).join(' — ');
-        throw new Error(detail || 'Failed to register job in API');
+        throw new Error(
+          detail ||
+            'Failed to register job in API. Your on-chain job was created — open Client dashboard and use "Retry API sync" or submit the form again (same wallet).',
+        );
       }
 
       onCreated(res.job);
@@ -179,6 +208,33 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
     } finally {
       setSubmitting(false);
       setStep('idle');
+    }
+  }
+
+  async function handleSyncOnchain() {
+    if (!collisionPayload) return;
+    if (!collisionPayload.metadataCID?.trim()) {
+      setSubmitError(
+        'Missing IPFS metadata for this job — submit the create form again to re-upload before syncing.',
+      );
+      return;
+    }
+    setSyncing(true);
+    setSubmitError(null);
+    try {
+      const res = await syncOnchainJob(collisionPayload);
+      if (!res.success || !res.job?._id) {
+        const detail = [res.error, res.hint].filter(Boolean).join(' — ');
+        throw new Error(detail || 'Failed to sync job from chain — no job record returned.');
+      }
+      onCreated(res.job);
+      setValues(EMPTY_CREATE_JOB_FORM);
+      setCollisionPayload(null);
+      resetTx();
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Failed to sync job from chain');
+    } finally {
+      setSyncing(false);
     }
   }
 
@@ -360,6 +416,23 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
       )}
 
       {submitError && <p className="error">{submitError}</p>}
+      {collisionPayload && (
+        <div className="panel wallet-mismatch-banner" role="alert" style={{ marginTop: '0.75rem' }}>
+          <p className="muted" style={{ margin: 0 }}>
+            Your wallet owns on-chain job id <strong>{collisionPayload.onchainJobId}</strong>, but MongoDB has a
+            conflicting row. Sync links the API record to your on-chain job.
+          </p>
+          <button
+            type="button"
+            className="btn primary"
+            style={{ marginTop: '0.75rem' }}
+            disabled={syncing || submitting}
+            onClick={() => void handleSyncOnchain()}
+          >
+            {syncing ? 'Syncing…' : 'Sync on-chain job'}
+          </button>
+        </div>
+      )}
       {stepLabel && submitting && <p className="muted phase-note">{stepLabel}</p>}
 
       <div className="form-actions">

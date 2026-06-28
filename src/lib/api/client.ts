@@ -14,6 +14,8 @@ import type { CreateJobPayload } from '@/lib/validation/jobForm';
 import { normalizeBids, normalizeJob, normalizeJobs } from './normalize';
 import { parseApiDate } from '@/lib/utils/dates';
 
+const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
+
 function authHeaders(): HeadersInit {
   const token = getStoredToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -30,10 +32,22 @@ function formatFetchError(err: unknown, url: string): Error {
 }
 
 async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
+  const timeoutMs = DEFAULT_FETCH_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
   try {
-    return await fetch(url, init);
+    return await fetch(url, {
+      ...init,
+      signal: init?.signal ?? controller.signal,
+    });
   } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error(`Request timed out after ${timeoutMs / 1000}s — API may be slow or unreachable at ${url}`);
+    }
     throw formatFetchError(err, url);
+  } finally {
+    window.clearTimeout(timeoutId);
   }
 }
 
@@ -217,13 +231,71 @@ export async function fetchJobById(id: string) {
   return data;
 }
 
-export async function createJob(payload: CreateJobPayload) {
+function formatApiError(data: { error?: string; hint?: string }, res: Response): string {
+  const detail = [data.error, data.hint].filter(Boolean).join(' — ');
+  return detail || data.error || `${res.status} ${res.statusText}`;
+}
+
+function finalizeCreateJobResponse(res: Response, data: CreateJobResponse): CreateJobResponse {
+  if (!res.ok) {
+    if (res.status === 409 && data.code === 'ONCHAIN_JOB_ID_COLLISION') {
+      return { ...data, success: false };
+    }
+    throw new Error(formatApiError(data, res));
+  }
+  if (!data.success) {
+    throw new Error(formatApiError(data, res));
+  }
+  if (!data.job) {
+    throw new Error(
+      formatApiError(
+        {
+          error: 'API did not return a job record after registration.',
+          hint: 'Your on-chain job may exist — use Sync on-chain job or retry.',
+        },
+        res,
+      ),
+    );
+  }
+  data.job = normalizeJob(data.job);
+  return data;
+}
+
+export async function createJob(payload: CreateJobPayload): Promise<CreateJobResponse> {
   const res = await apiFetch(`${API_URL}/api/jobs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(payload),
   });
-  return parseJson<CreateJobResponse>(res);
+  let data: CreateJobResponse;
+  try {
+    data = (await res.json()) as CreateJobResponse;
+  } catch {
+    throw new Error(res.ok ? 'Invalid JSON from API' : `${res.status} ${res.statusText}`);
+  }
+  return finalizeCreateJobResponse(res, data);
+}
+
+export async function syncOnchainJob(
+  payload: CreateJobPayload & { onchainJobId: number },
+): Promise<CreateJobResponse> {
+  if (!payload.metadataCID?.trim()) {
+    throw new Error(
+      'Missing IPFS metadata — submit the create form again to re-upload metadata before syncing.',
+    );
+  }
+  const res = await apiFetch(`${API_URL}/api/jobs/sync-onchain`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  let data: CreateJobResponse;
+  try {
+    data = (await res.json()) as CreateJobResponse;
+  } catch {
+    throw new Error(res.ok ? 'Invalid JSON from API' : `${res.status} ${res.statusText}`);
+  }
+  return finalizeCreateJobResponse(res, data);
 }
 
 export async function fetchJobsByClient(address: string, status?: string) {

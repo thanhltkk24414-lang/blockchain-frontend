@@ -2,24 +2,29 @@ import { useEffect } from 'react';
 
 const DEFAULT_INTERVAL_MS = 30_000;
 
-/** Refetch when the tab regains focus and on a fixed interval. */
-export function useAutoRefresh(refetch: () => void, intervalMs = DEFAULT_INTERVAL_MS) {
+export type RefreshOptions = { silent?: boolean };
+
+/** Refetch when the tab regains focus and on a fixed interval (silent — no loading flash). */
+export function useAutoRefresh(
+  refetch: (opts?: RefreshOptions) => void | Promise<void>,
+  intervalMs = DEFAULT_INTERVAL_MS,
+) {
   useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') refetch();
+    const silentRefresh = () => {
+      if (document.visibilityState === 'visible') {
+        void refetch({ silent: true });
+      }
     };
 
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === 'visible') refetch();
-    }, intervalMs);
+    const interval = window.setInterval(silentRefresh, intervalMs);
 
-    document.addEventListener('visibilitychange', onVisible);
-    window.addEventListener('focus', onVisible);
+    document.addEventListener('visibilitychange', silentRefresh);
+    window.addEventListener('focus', silentRefresh);
 
     return () => {
       window.clearInterval(interval);
-      document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener('focus', onVisible);
+      document.removeEventListener('visibilitychange', silentRefresh);
+      window.removeEventListener('focus', silentRefresh);
     };
   }, [refetch, intervalMs]);
 }

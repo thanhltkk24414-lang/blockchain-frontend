@@ -4,7 +4,9 @@ import { useAuth } from '@/context/AuthContext';
 import { fetchJobsByClient, type Job } from '@/lib/api';
 import { JobCard } from '@/components/shared/JobCard';
 import { CreateJobForm } from '@/components/client/CreateJobForm';
+import { StatusDonutChart } from '@/components/shared/StatusDonutChart';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
+import { buildClientJobStatusSlices } from '@/lib/utils/jobStatusChart';
 
 function isUnfundedAssigned(job: Job): boolean {
   const status = job.status?.toUpperCase() ?? '';
@@ -27,7 +29,7 @@ export function ClientDashboardPage() {
     setError(null);
     try {
       const res = await fetchJobsByClient(clientWallet);
-      if (res.success) setJobs(res.jobs || []);
+      if (res.success) setJobs((res.jobs || []).filter(Boolean));
       else setError('Failed to load client jobs');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load jobs');
@@ -42,24 +44,33 @@ export function ClientDashboardPage() {
 
   useAutoRefresh(loadJobs);
 
+  const safeJobs = useMemo(() => jobs.filter(Boolean), [jobs]);
+
   const escrowTotal = useMemo(
     () =>
-      jobs
+      safeJobs
         .filter((j) =>
           ['ASSIGNED', 'IN_PROGRESS', 'SUBMITTED', 'DISPUTED'].includes(j.status?.toUpperCase() ?? ''),
         )
         .reduce((sum, j) => sum + (j.totalDeposit ?? j.contractValue ?? 0), 0),
-    [jobs],
+    [safeJobs],
   );
 
-  const unfundedJobs = useMemo(() => jobs.filter(isUnfundedAssigned), [jobs]);
+  const unfundedJobs = useMemo(() => safeJobs.filter(isUnfundedAssigned), [safeJobs]);
+  const statusSlices = useMemo(() => buildClientJobStatusSlices(safeJobs), [safeJobs]);
 
   function handleJobCreated(job: Job) {
     setShowCreate(false);
-    setJobs((prev) => [job, ...prev.filter((j) => j._id !== job._id)]);
-    loadJobs();
+    if (!job?._id) {
+      void loadJobs();
+      return;
+    }
+    setJobs((prev) => [job, ...prev.filter((j) => j?._id && j._id !== job._id)]);
+    void loadJobs();
     navigate(`/client/jobs/${job._id}`);
   }
+
+  const firstUnfunded = unfundedJobs.find((j) => j?._id);
 
   return (
     <main className="page">
@@ -84,32 +95,36 @@ export function ClientDashboardPage() {
           <p className="muted">Connect wallet and sign in to see your posted jobs.</p>
         )}
 
-        {isAuthenticated && jobs.length > 0 && (
-          <div className="stats-row client-stats">
-            <div className="stat-card stat-card-escrow">
-              <span className="stat-label">Escrow in flight</span>
-              <strong className="stat-escrow-value">${escrowTotal.toLocaleString()} USDC</strong>
+        {isAuthenticated && safeJobs.length > 0 && (
+          <>
+            <div className="stats-row client-stats">
+              <div className="stat-card stat-card-escrow">
+                <span className="stat-label">Escrow in flight</span>
+                <strong className="stat-escrow-value">${escrowTotal.toLocaleString()} USDC</strong>
+              </div>
+              <div className="stat-card">
+                <span className="stat-label">Total jobs</span>
+                <strong>{safeJobs.length}</strong>
+              </div>
+              <div className="stat-card">
+                <span className="stat-label">Open</span>
+                <strong>{safeJobs.filter((j) => j.status === 'OPEN').length}</strong>
+              </div>
+              <div className="stat-card">
+                <span className="stat-label">In progress</span>
+                <strong>
+                  {safeJobs.filter((j) =>
+                    ['ASSIGNED', 'IN_PROGRESS', 'SUBMITTED'].includes(j.status?.toUpperCase() ?? ''),
+                  ).length}
+                </strong>
+              </div>
             </div>
-            <div className="stat-card">
-              <span className="stat-label">Total jobs</span>
-              <strong>{jobs.length}</strong>
-            </div>
-            <div className="stat-card">
-              <span className="stat-label">Open</span>
-              <strong>{jobs.filter((j) => j.status === 'OPEN').length}</strong>
-            </div>
-            <div className="stat-card">
-              <span className="stat-label">In progress</span>
-              <strong>
-                {jobs.filter((j) =>
-                  ['ASSIGNED', 'IN_PROGRESS', 'SUBMITTED'].includes(j.status?.toUpperCase() ?? ''),
-                ).length}
-              </strong>
-            </div>
-          </div>
+
+            <StatusDonutChart title="Jobs by status" data={statusSlices} />
+          </>
         )}
 
-        {unfundedJobs.length > 0 && (
+        {firstUnfunded && (
           <div className="fund-escrow-banner" role="status">
             <div>
               <strong>Fund escrow required</strong>
@@ -118,7 +133,7 @@ export function ClientDashboardPage() {
                 on-chain USDC deposit.
               </p>
             </div>
-            <Link to={`/client/jobs/${unfundedJobs[0]._id}`} className="btn primary">
+            <Link to={`/client/jobs/${firstUnfunded._id}`} className="btn primary">
               Fund escrow →
             </Link>
           </div>
@@ -132,12 +147,16 @@ export function ClientDashboardPage() {
 
         {loading && <p className="muted">Loading…</p>}
         {error && <p className="error">{error}</p>}
-        {isAuthenticated && !loading && jobs.length === 0 && !showCreate && (
+        {isAuthenticated && !loading && safeJobs.length === 0 && !showCreate && (
           <p className="muted">No posted jobs yet. Create your first job above.</p>
         )}
         <ul className="jobs-list">
-          {jobs.map((job) => (
-            <JobCard key={job._id} job={job} detailPath={`/client/jobs/${job._id}`} />
+          {safeJobs.map((job) => (
+            <JobCard
+              key={job._id ?? String(job.onchainJobId)}
+              job={job}
+              detailPath={job._id ? `/client/jobs/${job._id}` : undefined}
+            />
           ))}
         </ul>
       </section>
