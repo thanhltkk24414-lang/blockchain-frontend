@@ -5,14 +5,16 @@ import { getAddress, isAddress, type Abi } from 'viem';
 import { useAdminAccess } from '@/hooks/useAdminAccess';
 import { useContractTx } from '@/hooks/useContractTx';
 import { TxStatusModal } from '@/components/shared/TxStatusModal';
+import { ConfirmModal } from '@/components/admin/ConfirmModal';
+import { GovernanceTransparencyCard } from '@/components/admin/GovernanceTransparencyCard';
+import { ForceResolvePanel } from '@/components/admin/ForceResolvePanel';
 import { CONTRACT_ADDRESSES, DEPLOYER_ADDRESS } from '@/lib/contracts/addresses';
 import { contracts } from '@/lib/contracts/config';
 import { wagmiConfig } from '@/config/wagmi';
 import { truncateAddress } from '@/lib/utils/address';
-import { VOTE_CHOICES, formatDisputeChoice } from '@/lib/utils/disputeChoice';
 import { fetchAdminStats, type AdminStats } from '@/lib/api/client';
+import { useRoleHolders } from '@/hooks/useRoleHolders';
 import {
-  sendAdminForceResolveTx,
   sendGrantEscrowRoleTx,
   sendGrantPanelRoleTx,
   sendJoinPoolAdminTx,
@@ -42,7 +44,7 @@ const ROLE_OPTIONS = [
     label: 'ArbitratorPanel — Arbitrator manager (joinPool for others)',
     contract: 'panel' as const,
   },
-];
+] as const;
 
 function CopyButton({ text, label }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
@@ -82,10 +84,11 @@ export function AdminDashboardPage() {
   const [statsLoading, setStatsLoading] = useState(true);
 
   const [roleTarget, setRoleTarget] = useState('');
-  const [roleKind, setRoleKind] = useState(ROLE_OPTIONS[0].value);
+  const [roleKind, setRoleKind] = useState<string>(ROLE_OPTIONS[0].value);
   const [joinPoolTarget, setJoinPoolTarget] = useState('');
-  const [forceJobId, setForceJobId] = useState('');
-  const [forceDecision, setForceDecision] = useState(String(VOTE_CHOICES.FREELANCER_WIN));
+  const [pauseConfirmOpen, setPauseConfirmOpen] = useState(false);
+
+  const roleHolders = useRoleHolders(roleKind, roleTarget.trim() || undefined);
 
   const loadStats = useCallback(() => {
     setStatsLoading(true);
@@ -105,15 +108,18 @@ export function AdminDashboardPage() {
 
   const afterTx = useCallback(async () => {
     admin.refresh();
+    roleHolders.refresh();
     loadStats();
-  }, [admin, loadStats]);
+  }, [admin.refresh, loadStats, roleHolders.refresh]);
 
-  const handlePauseToggle = async () => {
-    const nextPaused = !admin.escrowPaused;
-    await runTx(
-      nextPaused ? 'Pausing EscrowVault…' : 'Unpausing EscrowVault…',
-      () => sendSetPausedTx(nextPaused),
-    );
+  const handlePauseConfirm = async () => {
+    setPauseConfirmOpen(false);
+    await runTx('Pausing EscrowVault…', () => sendSetPausedTx(true));
+    await afterTx();
+  };
+
+  const handleUnpause = async () => {
+    await runTx('Unpausing EscrowVault…', () => sendSetPausedTx(false));
     await afterTx();
   };
 
@@ -184,27 +190,12 @@ export function AdminDashboardPage() {
     await afterTx();
   };
 
-  const handleForceResolve = async (e: FormEvent) => {
-    e.preventDefault();
-    const jobId = BigInt(forceJobId);
-    const decision = Number(forceDecision);
-    if (!forceJobId || jobId <= 0n) {
-      alert('Enter a valid on-chain job ID');
-      return;
-    }
-    const confirmed = window.confirm(
-      `Force-resolve job #${jobId} as "${formatDisputeChoice(decision)}"? This is an emergency action when quorum fails.`,
-    );
-    if (!confirmed) return;
-
-    await runTx(`Force-resolving job #${jobId}…`, () => sendAdminForceResolveTx(jobId, decision));
-    await afterTx();
-  };
-
   const canGrantSelectedRole =
     ROLE_OPTIONS.find((o) => o.value === roleKind)?.contract === 'escrow'
       ? admin.canGrantVaultRoles
       : admin.canGrantPanelRoles;
+
+  const isForceResolverRole = roleKind === 'escrow_force_resolver';
 
   return (
     <main className="page admin-page">
@@ -217,6 +208,8 @@ export function AdminDashboardPage() {
       </div>
 
       {admin.error && <p className="error">{admin.error}</p>}
+
+      <GovernanceTransparencyCard />
 
       <section className="panel">
         <h3>Your access</h3>
@@ -331,11 +324,32 @@ export function AdminDashboardPage() {
           <button
             type="button"
             className={`btn${admin.escrowPaused ? ' primary' : ' ghost'}`}
-            onClick={handlePauseToggle}
+            onClick={() => {
+              if (admin.escrowPaused) {
+                void handleUnpause();
+              } else {
+                setPauseConfirmOpen(true);
+              }
+            }}
             disabled={txStatus === 'pending'}
           >
             {admin.escrowPaused ? 'Unpause escrow' : 'Pause escrow'}
           </button>
+
+          <ConfirmModal
+            open={pauseConfirmOpen}
+            title="Pause EscrowVault?"
+            danger
+            confirmLabel="Pause escrow"
+            onConfirm={() => void handlePauseConfirm()}
+            onCancel={() => setPauseConfirmOpen(false)}
+          >
+            <p>
+              This blocks new deposits, dispute raises, and other escrow writes until unpaused. Funds
+              already in escrow remain locked — no one can withdraw them while paused.
+            </p>
+            <p className="muted phase-note">Use only for incidents or demo rehearsal — not routine ops.</p>
+          </ConfirmModal>
         </section>
       )}
 
@@ -343,6 +357,15 @@ export function AdminDashboardPage() {
         <section className="panel">
           <h3>Grant / revoke delegated roles</h3>
           <p className="muted">Only contract admin can grant or revoke. Does not transfer admin ownership.</p>
+
+          {isForceResolverRole && (
+            <div className="admin-warning-banner admin-warning-banner-strong" role="alert">
+              <strong>Emergency role.</strong> Grant <code>ROLE_FORCE_RESOLVER</code> only to a production
+              multisig — never to an individual hot wallet. Holders can call{' '}
+              <code>adminForceResolve</code> when quorum fails.
+            </div>
+          )}
+
           {!canGrantSelectedRole && (
             <p className="muted phase-note">
               You cannot modify the selected role — switch role or connect the contract admin wallet.
@@ -388,6 +411,26 @@ export function AdminDashboardPage() {
               </button>
             </div>
           </form>
+
+          <h4 className="admin-subheading">Current role holders (known addresses)</h4>
+          {roleHolders.loading && <p className="muted">Checking hasRole on-chain…</p>}
+          {!roleHolders.loading && roleHolders.rows.length === 0 && (
+            <p className="muted phase-note">
+              No holders among deployer / contract admins / entered address — verify other wallets on
+              Etherscan via <code>hasRole(addr, roleId)</code>.
+            </p>
+          )}
+          {!roleHolders.loading && roleHolders.rows.length > 0 && (
+            <ul className="admin-role-holder-list">
+              {roleHolders.rows.map((row) => (
+                <li key={row.address}>
+                  <span className="badge success">{row.label}</span>{' '}
+                  <code className="mono">{row.address}</code>
+                </li>
+              ))}
+            </ul>
+          )}
+
           <p className="muted phase-note">
             CLI alternative:{' '}
             <code>npx hardhat run scripts/grant-platform-roles.js --network sepolia</code> with{' '}
@@ -422,49 +465,7 @@ export function AdminDashboardPage() {
         </section>
       )}
 
-      {admin.canForceResolve && (
-        <section className="panel admin-danger-panel">
-          <h3>Force resolve dispute</h3>
-          <div className="admin-warning-banner" role="alert">
-            Emergency only — use when arbitrator quorum fails (&lt;3 reveals). Bypasses commit-reveal
-            voting and settles escrow per your decision on-chain.
-          </div>
-          <form className="admin-form" onSubmit={handleForceResolve}>
-            <label className="form-field">
-              On-chain job ID
-              <input
-                type="number"
-                className="input"
-                min={1}
-                value={forceJobId}
-                onChange={(e) => setForceJobId(e.target.value)}
-                required
-              />
-            </label>
-            <label className="form-field">
-              Decision
-              <select
-                className="input"
-                value={forceDecision}
-                onChange={(e) => setForceDecision(e.target.value)}
-              >
-                <option value={String(VOTE_CHOICES.FREELANCER_WIN)}>
-                  {formatDisputeChoice(VOTE_CHOICES.FREELANCER_WIN)}
-                </option>
-                <option value={String(VOTE_CHOICES.CLIENT_WIN)}>
-                  {formatDisputeChoice(VOTE_CHOICES.CLIENT_WIN)}
-                </option>
-                <option value={String(VOTE_CHOICES.SPLIT)}>
-                  {formatDisputeChoice(VOTE_CHOICES.SPLIT)}
-                </option>
-              </select>
-            </label>
-            <button type="submit" className="btn ghost admin-danger-btn" disabled={txStatus === 'pending'}>
-              adminForceResolve
-            </button>
-          </form>
-        </section>
-      )}
+      {admin.canForceResolve && <ForceResolvePanel onComplete={() => void afterTx()} />}
 
       <TxStatusModal
         open={txStatus !== 'idle'}

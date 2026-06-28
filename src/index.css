@@ -2200,6 +2200,121 @@ body {
   border-color: rgba(220, 80, 80, 0.5) !important;
 }
 
+.admin-warning-banner-strong {
+  border-color: rgba(220, 80, 80, 0.45);
+  background: rgba(220, 80, 80, 0.1);
+}
+
+.admin-governance-panel .admin-mermaid-hint {
+  font-size: 0.72rem;
+  line-height: 1.35;
+  padding: 0.75rem 1rem;
+  margin: 0.5rem 0 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--fapex-border);
+  background: rgba(0, 0, 0, 0.15);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.admin-role-table-wrap {
+  overflow-x: auto;
+  margin: 0.5rem 0 1rem;
+}
+
+.admin-role-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.admin-role-table th,
+.admin-role-table td {
+  border: 1px solid var(--fapex-border);
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.admin-role-table th {
+  background: rgba(255, 255, 255, 0.04);
+  font-weight: 600;
+}
+
+.admin-roadmap-note {
+  padding: 0.65rem 0.85rem;
+  margin: 0.75rem 0;
+  border-radius: 8px;
+  border: 1px dashed var(--fapex-border);
+  font-size: 0.88rem;
+}
+
+.admin-dispute-preview {
+  padding: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--fapex-border);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.admin-dispute-grid {
+  margin: 0.25rem 0 0.75rem;
+}
+
+.admin-arb-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+}
+
+.admin-eligibility-ok {
+  color: #6bbf6b;
+}
+
+.admin-eligibility-block {
+  color: #e0a040;
+}
+
+.admin-confirm-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.admin-confirm-checkbox input {
+  margin-top: 0.2rem;
+}
+
+.admin-role-holder-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0.75rem;
+}
+
+.admin-role-holder-list li {
+  padding: 0.25rem 0;
+}
+
+.confirm-modal {
+  max-width: 28rem;
+}
+
+.confirm-modal-body {
+  margin: 0.75rem 0 1rem;
+  font-size: 0.92rem;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .protocol-info-tip {
   cursor: help;
   font-size: 0.85rem;

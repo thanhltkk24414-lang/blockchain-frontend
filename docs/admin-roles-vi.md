@@ -1,39 +1,37 @@
 # Fapex — Admin & on-chain roles (Sepolia)
 
-Tài liệu ngắn về quyền admin / grant role trên smart contracts Fapex. **Không có trang Admin trong frontend canonical** (`frontend/src`) — thao tác qua Hardhat / cast / Etherscan.
+Tài liệu ngắn về quyền admin / grant role trên smart contracts Fapex. **Trang Admin** tại route **`/admin`** (`frontend/src/pages/AdminDashboardPage.tsx`) — thao tác on-chain qua MetaMask; MongoDB không có RBAC admin.
 
 ## Deployer / INDEXER (production Sepolia)
 
 | Vai trò | Địa chỉ |
 |--------|---------|
 | INDEXER / deployer | `0x523eBd853a1638065f148A05c0Ca423E490D92f7` |
-| JobRegistry | `0xE5425cFE21BAe73d54138Bb290B671bF4c55FBC9` |
+| JobRegistry | `0x302629f82d51b0972ffc3A99cbE355F4acEf908d` |
 
-Sau `scripts/deploy.js`, **deployer là admin** trên tất cả core contracts. Backend `INDEXER_PRIVATE_KEY` dùng ví deployer để **đọc events** và relay admin — **không** gọi `createJob` thay client (client ký từ MetaMask).
+Sau `scripts/deploy.js`, **deployer là admin** trên tất cả core contracts. Backend `INDEXER_PRIVATE_KEY` dùng ví deployer để **đọc events** — **không** gọi `createJob` thay client (client ký từ MetaMask).
 
 ## Contracts & roles
 
 ### MockUSDC
 
-- **`mint(to, amount)`** — **permissionless** trên testnet (ai cũng mint được cho ví mình).
+- **`mint(to, amount)`** — **permissionless** trên testnet.
 - Không có `grantRole` / AccessControl.
-- UI: nút **Mint test USDC** trên trang client job (`EscrowDepositPanel`).
 
 ### JobRegistry, ReputationStore, PlatformTreasury, ArbitratorPanel, EscrowVault
 
-- Mô hình **single admin** + `transferAdmin(newAdmin)` (không phải OpenZeppelin AccessControl đầy đủ trên mọi contract).
-- **`setAuthorizedContract(addr, true)`** — chỉ admin; đã wire lúc deploy giữa registry / escrow / treasury / reputation / panel.
+- Mô hình **single admin** + `transferAdmin(newAdmin)` + delegated `grantRole` trên EscrowVault / ArbitratorPanel.
+- **`setAuthorizedContract(addr, true)`** — chỉ admin; wire lúc deploy.
 
 ### EscrowVault (delegated roles)
-
-Admin có thể gọi:
 
 ```text
 grantRole(addr, ROLE_PAUSER)
 grantRole(addr, ROLE_FORCE_RESOLVER)
 ```
 
-Dùng khi cần pause hoặc force-resolve escrow (vận hành / demo).
+- **Pauser:** `setPaused` — khẩn cấp, UI có modal xác nhận trước khi pause.
+- **Force resolver:** `adminForceResolve` — **chỉ khi quorum fail**; UI đọc on-chain trước khi bật nút (xem bên dưới).
 
 ### ArbitratorPanel
 
@@ -41,41 +39,52 @@ Dùng khi cần pause hoặc force-resolve escrow (vận hành / demo).
 grantRole(addr, ROLE_ARBITRATOR_MANAGER)
 ```
 
-Quản lý pool arbitrator (ngoài stake 50 USDC qua PlatformTreasury).
+Quản lý pool arbitrator (`joinPool` cho ví khác).
 
-### PlatformTreasury
+## Trang `/admin` — demo talking points
 
-- Admin: cấu hình / rút phí nền tảng (tùy implementation).
-- Arbitrator **stake** ≥ 50 MockUSDC — permissionless cho từng ví (`stake`), không cần admin.
+### One-liner
 
-### ReputationStore
+> *Governance là wallet-gated on-chain; dashboard chỉ là lớp UI mỏng trên hàm admin có sẵn — không phải backdoor off-chain.*
 
-- Admin + `setAuthorizedContract` cho JobRegistry / EscrowVault / ArbitratorPanel.
-- Không có UI grant reputation — cập nhật qua on-chain job lifecycle.
+### Force resolve vs “admin chọn người thắng”
 
-## Backend
+1. **Luồng bình thường:** 5 arbitrator sortition → commit–reveal → quorum ≥3 → `finalizeDisputeVoting` → `executeArbitrationResult`. Admin **không** tham gia chọn kết quả.
+2. **Force resolve:** Chỉ khi sau cửa reveal vẫn **&lt;3** vote hợp lệ. UI **tắt nút** nếu job chưa DISPUTED, reveal chưa hết, hoặc đã đủ quorum.
+3. **On-chain thật:** Contract vẫn cho phép admin gọi sớm (MVP) — UI + docs là lớp minh bạch; production roadmap: multisig + timelock + chỉ grant `ROLE_FORCE_RESOLVER` cho multisig.
+4. **Audit:** Mọi force resolve emit `AdminForceResolved` trên Etherscan — không thể giấu.
 
-- **Không có** `/api/admin/*` routes.
-- User `role: 'admin'` trong Mongo **chưa** được dùng cho grant on-chain.
+### Các panel trên dashboard
+
+| Panel | Mục đích demo |
+|-------|----------------|
+| How governance works | So sánh normal vs emergency; bảng ai làm gì |
+| Your access | Badge role ví đang connect |
+| Emergency pause | Modal confirm trước pause |
+| Grant / revoke roles | Cảnh báo đỏ khi chọn force_resolver; liệt kê holder (deployer/admin/địa chỉ nhập) |
+| Force resolve | Snapshot phase, reveal count, arbitrators; gõ `FORCE` + checkbox |
+
+### Backend
+
+- `GET /api/admin/stats` — job counts, indexer block (read-only cache).
+- **Không** có off-chain quyền grant role.
 
 ## Scripts (repo root)
 
 | Script | Mục đích |
 |--------|----------|
-| `scripts/deploy.js` | Deploy + wire `setAuthorizedContract` |
-| `scripts/grant-platform-roles.js` | Grant `ROLE_ARBITRATOR_MANAGER` / pauser (xem file) |
+| `scripts/deploy.js` | Deploy + wire |
+| `scripts/grant-platform-roles.js` | Grant delegated roles |
 | `scripts/seed-arbitrator-pool.js` | Seed arbitrator demo |
 
-## Gợi ý thao tác admin (Hardhat console)
+## Production roadmap (nói khi bị hỏi)
 
-```javascript
-const panel = await ethers.getContractAt("ArbitratorPanel", "0x...");
-const ROLE_ARBITRATOR_MANAGER = await panel.ROLE_ARBITRATOR_MANAGER();
-await panel.grantRole("0xYourManager...", ROLE_ARBITRATOR_MANAGER);
-```
+- `transferAdmin` → Gnosis Safe multisig
+- Timelock cho pause / force resolve
+- Force resolver chỉ trên multisig; lý do khẩn cấp ghi công khai trước tx
 
-## Thiếu / không build thêm
+## Tài liệu liên quan
 
-- Trang Admin React trong `frontend/src` — **chưa có** (cố ý minimal).
-- Mint USDC production — không áp dụng; Sepolia dùng MockUSDC public mint.
-- Rotate admin — gọi `transferAdmin` trên từng contract khi đổi ví deployer.
+- [admin-cheatsheet-vi.md](../../docs/guides/admin-cheatsheet-vi.md) (monorepo docs)
+- [demo-qa-defense-vi.md](../../docs/guides/demo-qa-defense-vi.md) — mục Force resolve vs thao túng
+- [contract-interaction.md](../../docs/guides/contract-interaction.md)
