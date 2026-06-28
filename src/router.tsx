@@ -2,6 +2,7 @@ import { lazy, Suspense, type ReactNode } from 'react';
 import { createBrowserRouter } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { RoleGuard } from '@/components/auth/RoleGuard';
+import { AdminGuard } from '@/components/admin/AdminGuard';
 
 const LandingPage = lazy(() =>
   import('@/pages/LandingPage').then((m) => ({ default: m.LandingPage })),
@@ -17,6 +18,9 @@ const FreelancerDashboardPage = lazy(() =>
 );
 const ArbitratorDashboardPage = lazy(() =>
   import('@/pages/ArbitratorDashboardPage').then((m) => ({ default: m.ArbitratorDashboardPage })),
+);
+const AdminDashboardPage = lazy(() =>
+  import('@/pages/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })),
 );
 const ProfilePage = lazy(() =>
   import('@/pages/ProfilePage').then((m) => ({ default: m.ProfilePage })),
@@ -102,6 +106,16 @@ export const router = createBrowserRouter([
             <RoleGuard requireArbitrator>
               <ArbitratorDashboardPage />
             </RoleGuard>
+          </LazyPage>
+        ),
+      },
+      {
+        path: '/admin',
+        element: (
+          <LazyPage>
+            <AdminGuard>
+              <AdminDashboardPage />
+            </AdminGuard>
           </LazyPage>
         ),
       },

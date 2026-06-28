@@ -2111,3 +2111,103 @@ body {
   color: #ffd86c;
 }
 
+/* Admin dashboard */
+.landing-footer {
+  margin-top: 2rem;
+  padding: 1.5rem 0 2.5rem;
+  text-align: center;
+  border-top: 1px solid var(--fapex-border);
+}
+
+.admin-page .admin-subheading {
+  margin: 1.25rem 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.admin-contract-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.admin-contract-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--fapex-border);
+}
+
+.admin-contract-name {
+  min-width: 8rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.admin-address-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.admin-role-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+
+.admin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 32rem;
+  margin-top: 0.75rem;
+}
+
+.admin-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.admin-status-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin: 0.75rem 0;
+}
+
+.admin-warning-banner {
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+  border-radius: 8px;
+  border: 1px solid #8b4513;
+  background: rgba(255, 140, 0, 0.12);
+  color: var(--fapex-text);
+  font-size: 0.9rem;
+}
+
+.admin-danger-panel {
+  border-color: rgba(220, 80, 80, 0.35);
+}
+
+.admin-danger-btn {
+  border-color: rgba(220, 80, 80, 0.5) !important;
+}
+
+.protocol-info-tip {
+  cursor: help;
+  font-size: 0.85rem;
+  color: var(--fapex-text-dim);
+  margin-left: 0.25rem;
+}
+
+.copy-btn {
+  flex-shrink: 0;
+}
+

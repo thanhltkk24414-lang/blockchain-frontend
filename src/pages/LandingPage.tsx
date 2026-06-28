@@ -258,6 +258,16 @@ export function LandingPage() {
           Launch FAPEX
         </Link>
       </section>
+
+      <footer className="landing-footer">
+        <p className="muted">
+          FAPEX — on-chain escrow on Sepolia.{' '}
+          <Link to="/admin" className="etherscan-link">
+            Governance
+          </Link>{' '}
+          (deployer / delegated roles)
+        </p>
+      </footer>
     </div>
   );
 }
