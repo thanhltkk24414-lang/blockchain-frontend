@@ -1,9 +1,17 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
+import { useAuth } from '@/context/AuthContext';
 import { useArbitratorAccess, clearArbitratorAccessCache } from '@/hooks/useArbitratorAccess';
 import { useArbitratorStake, MIN_ARBITRATOR_STAKE_USDC } from '@/hooks/useArbitratorStake';
 import { useMockUsdcMint, DEMO_MINT_USDC } from '@/hooks/useMockUsdcMint';
 import { TxStatusModal } from '@/components/shared/TxStatusModal';
+import {
+  fetchMyArbitratorApplication,
+  submitArbitratorApplication,
+  type ArbitratorApplication,
+} from '@/lib/api/client';
+
+const MIN_REASON_LENGTH = 20;
 
 interface ArbitratorOnboardingPanelProps {
   onComplete?: () => void;
@@ -11,13 +19,13 @@ interface ArbitratorOnboardingPanelProps {
 
 export function ArbitratorOnboardingPanel({ onComplete }: ArbitratorOnboardingPanelProps) {
   const { address, isConnected } = useAccount();
+  const { isAuthenticated, signIn, loading: authLoading } = useAuth();
   const [refreshKey, setRefreshKey] = useState(0);
   const arbitrator = useArbitratorAccess(refreshKey);
   const { mint, minting, txStatus: mintTxStatus, txHash: mintTxHash, txError: mintTxError, resetTx: resetMintTx } =
     useMockUsdcMint();
   const {
     stake,
-    joinPool,
     busy: stakeBusy,
     txStatus: stakeTxStatus,
     txHash: stakeTxHash,
@@ -26,6 +34,10 @@ export function ArbitratorOnboardingPanel({ onComplete }: ArbitratorOnboardingPa
     resetTx: resetStakeTx,
   } = useArbitratorStake();
 
+  const [application, setApplication] = useState<ArbitratorApplication | null>(null);
+  const [applicationLoading, setApplicationLoading] = useState(false);
+  const [reason, setReason] = useState('');
+  const [applyBusy, setApplyBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,6 +46,26 @@ export function ArbitratorOnboardingPanel({ onComplete }: ArbitratorOnboardingPa
     setRefreshKey((k) => k + 1);
     onComplete?.();
   }, [onComplete]);
+
+  const loadApplication = useCallback(async () => {
+    if (!isAuthenticated) {
+      setApplication(null);
+      return;
+    }
+    setApplicationLoading(true);
+    try {
+      const res = await fetchMyArbitratorApplication();
+      if (res.success) setApplication(res.application);
+    } catch {
+      setApplication(null);
+    } finally {
+      setApplicationLoading(false);
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    void loadApplication();
+  }, [loadApplication, refreshKey]);
 
   const handleMint = async () => {
     setError(null);
@@ -58,15 +90,26 @@ export function ArbitratorOnboardingPanel({ onComplete }: ArbitratorOnboardingPa
     }
   };
 
-  const handleJoinPool = async () => {
+  const handleApply = async () => {
+    const trimmed = reason.trim();
+    if (trimmed.length < MIN_REASON_LENGTH) {
+      setError(`Reason must be at least ${MIN_REASON_LENGTH} characters.`);
+      return;
+    }
+    setApplyBusy(true);
     setError(null);
     setMessage(null);
     try {
-      await joinPool();
-      setMessage('Joined the arbitrator pool — you are eligible for sortition.');
-      refreshAccess();
+      const res = await submitArbitratorApplication(trimmed);
+      if (res.success && res.application) {
+        setApplication(res.application);
+        setMessage('Application submitted — an admin will review and add you to the pool on-chain.');
+        setReason('');
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Join pool failed');
+      setError(err instanceof Error ? err.message : 'Application failed');
+    } finally {
+      setApplyBusy(false);
     }
   };
 
@@ -74,7 +117,7 @@ export function ArbitratorOnboardingPanel({ onComplete }: ArbitratorOnboardingPa
     return (
       <section className="panel form-panel arbitrator-onboarding">
         <h3>Become an arbitrator</h3>
-        <p className="muted">Connect your wallet to mint test USDC, stake, and join the pool on Sepolia.</p>
+        <p className="muted">Connect your wallet to mint test USDC, stake, and apply to the pool on Sepolia.</p>
       </section>
     );
   }
@@ -102,16 +145,34 @@ export function ArbitratorOnboardingPanel({ onComplete }: ArbitratorOnboardingPa
 
   const staked = arbitrator.stakedAmount ?? 0;
   const needsStake = staked < MIN_ARBITRATOR_STAKE_USDC;
-  const needsPool = !arbitrator.inPool;
+  const canApply = !needsStake && isAuthenticated && application?.status !== 'pending';
 
   return (
     <section className="panel form-panel arbitrator-onboarding">
       <h3>Become an arbitrator</h3>
       <p className="muted">
-        Arbitrators resolve disputes with commit-reveal voting. Minimum stake:{' '}
-        <strong>{MIN_ARBITRATOR_STAKE_USDC} USDC</strong> on PlatformTreasury, then join the pool.
-        Requires sufficient on-chain reputation (ReputationStore score).
+        Arbitrators resolve disputes with commit-reveal voting. Stake{' '}
+        <strong>{MIN_ARBITRATOR_STAKE_USDC} USDC</strong> on PlatformTreasury, then submit an application
+        with your motivation. An admin approves applications by calling <code>joinPool</code> on-chain.
       </p>
+
+      {application?.status === 'pending' && (
+        <p className="badge warning">
+          Application pending review — submitted{' '}
+          {application.createdAt ? new Date(application.createdAt).toLocaleString() : 'recently'}.
+        </p>
+      )}
+      {application?.status === 'rejected' && (
+        <p className="error banner">
+          Previous application was rejected. You may submit a new application after updating your stake or
+          motivation.
+        </p>
+      )}
+      {application?.status === 'approved' && !arbitrator.inPool && (
+        <p className="badge success">
+          Application approved — waiting for on-chain pool join. Refresh if you were just added.
+        </p>
+      )}
 
       <ol className="onboarding-steps">
         <li className={needsStake ? 'step-active' : 'step-done'}>
@@ -144,23 +205,48 @@ export function ArbitratorOnboardingPanel({ onComplete }: ArbitratorOnboardingPa
             {stakeBusy ? 'Staking…' : `Stake ${MIN_ARBITRATOR_STAKE_USDC} USDC`}
           </button>
         </li>
-        <li className={needsPool ? 'step-active' : 'step-done'}>
+        <li className={canApply ? 'step-active' : application?.status === 'pending' ? 'step-done' : ''}>
           <span className="step-num" aria-hidden>
             <span>3</span>
           </span>
-          <strong>Step 3 — Join arbitrator pool</strong>
+          <strong>Step 3 — Apply to arbitrator pool</strong>
           <p className="muted">
-            Self-join after stake is confirmed. Pool must have ≥5 members for new disputes (run{' '}
-            <code>npm run seed:arbitrators</code> if needed).
+            Explain why you want to join (min {MIN_REASON_LENGTH} characters). Self-join is disabled — an
+            admin reviews applications and calls <code>joinPool</code> for approved wallets.
           </p>
-          <button
-            className="btn primary"
-            type="button"
-            onClick={handleJoinPool}
-            disabled={stakeBusy || needsStake || !needsPool}
-          >
-            {stakeBusy ? 'Joining…' : 'Join pool'}
-          </button>
+          {!isAuthenticated ? (
+            <button className="btn primary" type="button" onClick={signIn} disabled={authLoading}>
+              {authLoading ? 'Signing…' : 'Sign in (SIWE) to apply'}
+            </button>
+          ) : (
+            <>
+              <label className="field">
+                Reason / motivation
+                <textarea
+                  className="input textarea"
+                  rows={4}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="Describe your background, dispute-resolution experience, and why you want to arbitrate on FAPEX…"
+                  disabled={application?.status === 'pending' || applyBusy}
+                />
+              </label>
+              <button
+                className="btn primary"
+                type="button"
+                onClick={handleApply}
+                disabled={
+                  applyBusy ||
+                  needsStake ||
+                  application?.status === 'pending' ||
+                  reason.trim().length < MIN_REASON_LENGTH
+                }
+              >
+                {applyBusy ? 'Submitting…' : 'Apply to arbitrator pool'}
+              </button>
+            </>
+          )}
+          {applicationLoading && <p className="muted phase-note">Loading application status…</p>}
         </li>
       </ol>
 

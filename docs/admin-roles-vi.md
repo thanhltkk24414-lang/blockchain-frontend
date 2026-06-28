@@ -41,6 +41,20 @@ grantRole(addr, ROLE_ARBITRATOR_MANAGER)
 
 Quản lý pool arbitrator (`joinPool` cho ví khác).
 
+### Luồng đăng ký arbitrator (off-chain + on-chain)
+
+1. **Profile** — User stake ≥50 USDC qua PlatformTreasury, điền **Reason / motivation** (≥20 ký tự), bấm **Apply to arbitrator pool**.
+2. **API** — `POST /api/arbitrator/applications` (SIWE) lưu MongoDB: wallet, reason, reputation, stakeVerified, status `pending`.
+3. **Admin `/admin`** — Bảng pending applications: wallet (copy), reason, stake, reputation. **Approve** → admin ký `joinPool` on-chain + cập nhật status `approved`. **Reject** → chỉ cập nhật DB.
+4. Self-join trực tiếp trên Profile **đã tắt** — bắt buộc apply → admin approve (phù hợp demo “tại sao muốn làm arbitrator”).
+
+| Endpoint | Mô tả |
+|----------|--------|
+| `POST /api/arbitrator/applications` | Nộp đơn (auth) |
+| `GET /api/arbitrator/applications/me` | Đơn của user hiện tại |
+| `GET /api/arbitrator/applications?status=pending` | Danh sách cho admin UI |
+| `PATCH /api/arbitrator/applications/:id` | `{ status: approved \| rejected }` |
+
 ## Trang `/admin` — demo talking points
 
 ### One-liner
@@ -62,11 +76,13 @@ Quản lý pool arbitrator (`joinPool` cho ví khác).
 | Your access | Badge role ví đang connect |
 | Emergency pause | Modal confirm trước pause |
 | Grant / revoke roles | Cảnh báo đỏ khi chọn force_resolver; liệt kê holder (deployer/admin/địa chỉ nhập) |
+| Arbitrator applications | Bảng pending + Approve (joinPool) / Reject |
 | Force resolve | Snapshot phase, reveal count, arbitrators; gõ `FORCE` + checkbox |
 
 ### Backend
 
 - `GET /api/admin/stats` — job counts, indexer block (read-only cache).
+- `GET/POST/PATCH /api/arbitrator/applications` — đơn đăng ký arbitrator (MongoDB).
 - **Không** có off-chain quyền grant role.
 
 ## Scripts (repo root)

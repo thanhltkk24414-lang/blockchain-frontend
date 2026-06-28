@@ -12,7 +12,13 @@ import { CONTRACT_ADDRESSES, DEPLOYER_ADDRESS } from '@/lib/contracts/addresses'
 import { contracts } from '@/lib/contracts/config';
 import { wagmiConfig } from '@/config/wagmi';
 import { truncateAddress } from '@/lib/utils/address';
-import { fetchAdminStats, type AdminStats } from '@/lib/api/client';
+import {
+  fetchAdminStats,
+  fetchArbitratorApplications,
+  updateArbitratorApplicationStatus,
+  type AdminStats,
+  type ArbitratorApplication,
+} from '@/lib/api/client';
 import { useRoleHolders } from '@/hooks/useRoleHolders';
 import {
   sendGrantEscrowRoleTx,
@@ -87,6 +93,10 @@ export function AdminDashboardPage() {
   const [roleKind, setRoleKind] = useState<string>(ROLE_OPTIONS[0].value);
   const [joinPoolTarget, setJoinPoolTarget] = useState('');
   const [pauseConfirmOpen, setPauseConfirmOpen] = useState(false);
+  const [applications, setApplications] = useState<ArbitratorApplication[]>([]);
+  const [applicationsLoading, setApplicationsLoading] = useState(true);
+  const [applicationsError, setApplicationsError] = useState<string>();
+  const [actionAppId, setActionAppId] = useState<string | null>(null);
 
   const roleHolders = useRoleHolders(roleKind, roleTarget.trim() || undefined);
 
@@ -102,15 +112,31 @@ export function AdminDashboardPage() {
       .finally(() => setStatsLoading(false));
   }, []);
 
+  const loadApplications = useCallback(() => {
+    setApplicationsLoading(true);
+    setApplicationsError(undefined);
+    fetchArbitratorApplications('pending')
+      .then((res) => {
+        if (res.success) setApplications(res.applications);
+        else setApplicationsError('Applications unavailable');
+      })
+      .catch((err) =>
+        setApplicationsError(err instanceof Error ? err.message : 'Failed to load applications'),
+      )
+      .finally(() => setApplicationsLoading(false));
+  }, []);
+
   useEffect(() => {
     loadStats();
-  }, [loadStats]);
+    loadApplications();
+  }, [loadStats, loadApplications]);
 
   const afterTx = useCallback(async () => {
     admin.refresh();
     roleHolders.refresh();
     loadStats();
-  }, [admin.refresh, loadStats, roleHolders.refresh]);
+    loadApplications();
+  }, [admin.refresh, loadStats, loadApplications, roleHolders.refresh]);
 
   const handlePauseConfirm = async () => {
     setPauseConfirmOpen(false);
@@ -188,6 +214,35 @@ export function AdminDashboardPage() {
     const arb = getAddress(target);
     await runTx(`Joining arbitrator pool for ${truncateAddress(arb)}…`, () => sendJoinPoolAdminTx(arb));
     await afterTx();
+  };
+
+  const handleApproveApplication = async (app: ArbitratorApplication) => {
+    if (!isAddress(app.walletAddress)) {
+      alert('Invalid applicant wallet');
+      return;
+    }
+    const arb = getAddress(app.walletAddress);
+    setActionAppId(app._id);
+    try {
+      await runTx(`Approving & joinPool for ${truncateAddress(arb)}…`, () => sendJoinPoolAdminTx(arb));
+      await updateArbitratorApplicationStatus(app._id, 'approved');
+      await afterTx();
+    } finally {
+      setActionAppId(null);
+    }
+  };
+
+  const handleRejectApplication = async (app: ArbitratorApplication) => {
+    if (!window.confirm(`Reject application from ${truncateAddress(app.walletAddress)}?`)) return;
+    setActionAppId(app._id);
+    try {
+      await updateArbitratorApplicationStatus(app._id, 'rejected');
+      await loadApplications();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Reject failed');
+    } finally {
+      setActionAppId(null);
+    }
   };
 
   const canGrantSelectedRole =
@@ -443,9 +498,86 @@ export function AdminDashboardPage() {
         <section className="panel">
           <h3>Arbitrator pool</h3>
           <p className="muted">
-            Pool size: <strong>{admin.poolSize ?? '—'}</strong>. Disputes require ≥5 members. Seed script:{' '}
-            <code>npm run seed:arbitrators</code> (root monorepo).
+            Pool size: <strong>{admin.poolSize ?? '—'}</strong>. Disputes require ≥5 members. Applicants
+            submit motivation on Profile; approve here to call <code>joinPool</code> on-chain.
           </p>
+
+          <div className="panel-header-row">
+            <h4 className="admin-subheading">Pending applications</h4>
+            <button
+              type="button"
+              className="btn ghost btn-compact"
+              onClick={loadApplications}
+              disabled={applicationsLoading}
+            >
+              Refresh
+            </button>
+          </div>
+          {applicationsLoading && <p className="muted">Loading applications…</p>}
+          {applicationsError && <p className="error">{applicationsError}</p>}
+          {!applicationsLoading && !applicationsError && applications.length === 0 && (
+            <p className="muted phase-note">No pending arbitrator applications.</p>
+          )}
+          {!applicationsLoading && applications.length > 0 && (
+            <div className="admin-role-table-wrap">
+              <table className="admin-role-table admin-applications-table">
+                <thead>
+                  <tr>
+                    <th>Wallet</th>
+                    <th>Reason</th>
+                    <th>Stake</th>
+                    <th>Reputation</th>
+                    <th>Submitted</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {applications.map((app) => (
+                    <tr key={app._id}>
+                      <td>
+                        <code className="mono">{truncateAddress(app.walletAddress, 6, 4)}</code>
+                        <CopyButton text={app.walletAddress} />
+                      </td>
+                      <td className="admin-app-reason">{app.reason}</td>
+                      <td>
+                        {app.stakeVerified ? (
+                          <span className="badge success">{app.stakedAmount ?? '≥50'} USDC</span>
+                        ) : (
+                          <span className="badge error">Unverified</span>
+                        )}
+                      </td>
+                      <td>{app.reputationScore ?? '—'}</td>
+                      <td>
+                        {app.createdAt ? new Date(app.createdAt).toLocaleDateString() : '—'}
+                      </td>
+                      <td>
+                        <div className="admin-form-actions">
+                          <button
+                            type="button"
+                            className="btn primary btn-compact"
+                            disabled={txStatus === 'pending' || actionAppId === app._id}
+                            onClick={() => void handleApproveApplication(app)}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            className="btn ghost btn-compact"
+                            disabled={actionAppId === app._id}
+                            onClick={() => void handleRejectApplication(app)}
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <h4 className="admin-subheading">Manual joinPool</h4>
           <form className="admin-form" onSubmit={handleJoinPool}>
             <label className="form-field">
               Arbitrator address (leave empty for connected wallet)

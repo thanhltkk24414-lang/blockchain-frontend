@@ -90,19 +90,19 @@
 }
 
 [data-theme='light'] {
-  --fapex-primary: #4f46e5;
-  --fapex-primary-light: rgba(79, 70, 229, 0.1);
-  --fapex-accent: #2563eb;
-  --fapex-glow: rgba(79, 70, 229, 0.2);
-  --fapex-bg: #f4f6fb;
+  --fapex-primary: #4338ca;
+  --fapex-primary-light: rgba(67, 56, 202, 0.12);
+  --fapex-accent: #1d4ed8;
+  --fapex-glow: rgba(67, 56, 202, 0.18);
+  --fapex-bg: #eef1f8;
   --fapex-surface: #ffffff;
-  --fapex-surface-2: #f8fafc;
-  --fapex-text: #111827;
-  --fapex-text-muted: #4b5563;
-  --fapex-text-dim: #6b7280;
-  --fapex-border: #e2e8f0;
-  --fapex-glass: rgba(255, 255, 255, 0.92);
-  --fapex-glass-border: rgba(15, 23, 42, 0.08);
+  --fapex-surface-2: #f1f5f9;
+  --fapex-text: #0f172a;
+  --fapex-text-muted: #334155;
+  --fapex-text-dim: #475569;
+  --fapex-border: #cbd5e1;
+  --fapex-glass: rgba(255, 255, 255, 0.94);
+  --fapex-glass-border: rgba(15, 23, 42, 0.1);
 }
 
 h1, h2, h3, h4 {
@@ -1613,6 +1613,11 @@ body {
   image-rendering: auto;
 }
 
+.fapex-logo-wordmark {
+  background: transparent;
+  image-rendering: auto;
+}
+
 [data-theme='light'] .fapex-logo-img {
   filter: none;
 }
@@ -2111,6 +2116,11 @@ body {
   color: #ffd86c;
 }
 
+.badge.error {
+  background: #3d1a1a;
+  color: #ff8a8a;
+}
+
 /* Admin dashboard */
 .landing-footer {
   margin-top: 2rem;
@@ -2324,5 +2334,165 @@ body {
 
 .copy-btn {
   flex-shrink: 0;
+}
+
+.admin-applications-table .admin-app-reason {
+  max-width: 22rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.85rem;
+  color: var(--fapex-text-muted);
+}
+
+/* Light theme — override hardcoded dark palette for WCAG contrast */
+[data-theme='light'] h1,
+[data-theme='light'] h2,
+[data-theme='light'] h3,
+[data-theme='light'] h4,
+[data-theme='light'] .page-header h2,
+[data-theme='light'] .landing-section h2,
+[data-theme='light'] .landing-footer-cta h2 {
+  color: var(--fapex-text);
+}
+
+[data-theme='light'] .muted,
+[data-theme='light'] .lead,
+[data-theme='light'] .job-desc,
+[data-theme='light'] .feature-card p,
+[data-theme='light'] .role-card p,
+[data-theme='light'] .landing-section-lead,
+[data-theme='light'] .landing-feature-card p,
+[data-theme='light'] .landing-role-card p,
+[data-theme='light'] .landing-footer-cta p,
+[data-theme='light'] .landing-subtitle,
+[data-theme='light'] .how-it-works-card p,
+[data-theme='light'] .stat-label,
+[data-theme='light'] .api-badge,
+[data-theme='light'] .wallet,
+[data-theme='light'] .detail-grid dt,
+[data-theme='light'] .job-meta {
+  color: var(--fapex-text-dim);
+}
+
+[data-theme='light'] .nav-link {
+  color: var(--fapex-text-muted);
+}
+
+[data-theme='light'] .nav-link.active,
+[data-theme='light'] .nav-link:hover {
+  color: var(--fapex-text);
+  background: var(--fapex-primary-light);
+}
+
+[data-theme='light'] .btn.ghost {
+  color: var(--fapex-text-muted);
+  border-color: var(--fapex-border);
+}
+
+[data-theme='light'] .btn.ghost:hover:not(:disabled) {
+  color: var(--fapex-text);
+  background: var(--fapex-primary-light);
+}
+
+[data-theme='light'] .landing-hyve {
+  color: var(--fapex-text);
+}
+
+[data-theme='light'] .landing-hero {
+  border-bottom-color: var(--fapex-border);
+}
+
+[data-theme='light'] .landing-hero-glow {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -20%, rgba(99, 102, 241, 0.18), transparent),
+    radial-gradient(ellipse 50% 40% at 80% 60%, rgba(37, 99, 235, 0.08), transparent),
+    linear-gradient(to bottom, #eef1f8, #f8fafc);
+}
+
+[data-theme='light'] .landing-feature-card,
+[data-theme='light'] .landing-role-card,
+[data-theme='light'] .feature-card,
+[data-theme='light'] .role-card,
+[data-theme='light'] .how-it-works-card {
+  background: var(--fapex-surface);
+  border-color: var(--fapex-border);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme='light'] .landing-stats dt,
+[data-theme='light'] .landing-tags-label {
+  color: var(--fapex-text-dim);
+}
+
+[data-theme='light'] .landing-stats dd {
+  color: var(--fapex-text);
+}
+
+[data-theme='light'] .landing-tag {
+  color: var(--fapex-text-muted);
+  background: var(--fapex-surface-2);
+  border-color: var(--fapex-border);
+}
+
+[data-theme='light'] .landing-tag:hover {
+  color: var(--fapex-text);
+  border-color: var(--fapex-accent);
+}
+
+[data-theme='light'] .landing-title-accent {
+  color: var(--fapex-accent);
+}
+
+[data-theme='light'] .skill-tag {
+  background: var(--fapex-surface);
+  color: var(--fapex-text-muted);
+  border: 1px solid var(--fapex-border);
+}
+
+[data-theme='light'] .detail-grid dd {
+  color: var(--fapex-text);
+}
+
+[data-theme='light'] .admin-role-table th {
+  background: var(--fapex-surface-2);
+  color: var(--fapex-text);
+}
+
+[data-theme='light'] .arbitrator-onboarding {
+  background: linear-gradient(160deg, rgba(99, 102, 241, 0.05) 0%, var(--fapex-surface) 40%);
+}
+
+[data-theme='light'] .onboarding-steps li {
+  border-color: var(--fapex-border);
+  background: var(--fapex-surface-2);
+}
+
+[data-theme='light'] .onboarding-steps .step-num {
+  background: var(--fapex-surface);
+  border-color: var(--fapex-border);
+  color: var(--fapex-text-dim);
+}
+
+[data-theme='light'] .badge.success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+[data-theme='light'] .badge.warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+[data-theme='light'] .badge.muted {
+  background: var(--fapex-surface-2);
+  color: var(--fapex-text-dim);
+}
+
+[data-theme='light'] .success {
+  color: #15803d;
+}
+
+[data-theme='light'] .error {
+  color: #b91c1c;
 }
 
