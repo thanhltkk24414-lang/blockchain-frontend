@@ -21,7 +21,7 @@ import { OnchainEscrowStatus } from '@/components/shared/OnchainEscrowStatus';
 import { WalletMismatchBanner } from '@/components/shared/WalletMismatchBanner';
 import { formatApiDate } from '@/lib/utils/dates';
 import { useOnChainJob } from '@/hooks/useOnChainJob';
-import { effectiveJobStatus } from '@/lib/utils/onchainJob';
+import { effectiveJobStatus, isNonZeroAddress } from '@/lib/utils/onchainJob';
 
 function formatDuration(seconds?: number): string {
   if (!seconds) return '—';
@@ -50,6 +50,7 @@ export function JobDetailPage() {
   const {
     onchainStatus,
     onchainStatusLabel,
+    onchainFreelancer,
     loading: chainLoading,
     refetch: refetchOnChain,
   } = useOnChainJob(job?.onchainJobId, job?.status);
@@ -144,9 +145,10 @@ export function JobDetailPage() {
   const canManageJob = isJobOwner && isAuthenticated;
   const isOnPublicJobRoute = /^\/jobs\/[^/]+$/.test(location.pathname);
   const showBidForm =
-    job.status === 'OPEN' &&
+    displayStatus === 'OPEN' &&
     user?.role === 'freelancer' &&
-    !job.freelancerAddress &&
+    !isJobOwner &&
+    !isNonZeroAddress(onchainFreelancer) &&
     !bids.some((b) => b.status?.toLowerCase() === 'accepted');
 
   const hasAcceptedBid = bids.some((b) => b.status?.toLowerCase() === 'accepted');
@@ -187,7 +189,11 @@ export function JobDetailPage() {
         </section>
       )}
 
-      <WalletMismatchBanner job={job} isJobOwner={isJobOwner && isAuthenticated} />
+      <WalletMismatchBanner
+        job={job}
+        isJobOwner={isJobOwner && isAuthenticated}
+        audience={isJobOwner ? 'client' : user?.role === 'freelancer' ? 'freelancer' : undefined}
+      />
 
       <div className="job-detail-grid">
         <section className="panel">
