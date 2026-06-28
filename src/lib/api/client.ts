@@ -231,6 +231,36 @@ export async function fetchJobById(id: string) {
   return data;
 }
 
+function formatApiError(data: { error?: string; hint?: string }, res: Response): string {
+  const detail = [data.error, data.hint].filter(Boolean).join(' — ');
+  return detail || data.error || `${res.status} ${res.statusText}`;
+}
+
+function finalizeCreateJobResponse(res: Response, data: CreateJobResponse): CreateJobResponse {
+  if (!res.ok) {
+    if (res.status === 409 && data.code === 'ONCHAIN_JOB_ID_COLLISION') {
+      return { ...data, success: false };
+    }
+    throw new Error(formatApiError(data, res));
+  }
+  if (!data.success) {
+    throw new Error(formatApiError(data, res));
+  }
+  if (!data.job) {
+    throw new Error(
+      formatApiError(
+        {
+          error: 'API did not return a job record after registration.',
+          hint: 'Your on-chain job may exist — use Sync on-chain job or retry.',
+        },
+        res,
+      ),
+    );
+  }
+  data.job = normalizeJob(data.job);
+  return data;
+}
+
 export async function createJob(payload: CreateJobPayload): Promise<CreateJobResponse> {
   const res = await apiFetch(`${API_URL}/api/jobs`, {
     method: 'POST',
@@ -243,16 +273,17 @@ export async function createJob(payload: CreateJobPayload): Promise<CreateJobRes
   } catch {
     throw new Error(res.ok ? 'Invalid JSON from API' : `${res.status} ${res.statusText}`);
   }
-  if (res.ok) return data;
-  if (res.status === 409 && data.code === 'ONCHAIN_JOB_ID_COLLISION') {
-    return { ...data, success: false };
-  }
-  throw new Error(data.error || `${res.status} ${res.statusText}`);
+  return finalizeCreateJobResponse(res, data);
 }
 
 export async function syncOnchainJob(
   payload: CreateJobPayload & { onchainJobId: number },
 ): Promise<CreateJobResponse> {
+  if (!payload.metadataCID?.trim()) {
+    throw new Error(
+      'Missing IPFS metadata — submit the create form again to re-upload metadata before syncing.',
+    );
+  }
   const res = await apiFetch(`${API_URL}/api/jobs/sync-onchain`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
@@ -264,8 +295,7 @@ export async function syncOnchainJob(
   } catch {
     throw new Error(res.ok ? 'Invalid JSON from API' : `${res.status} ${res.statusText}`);
   }
-  if (res.ok) return data;
-  throw new Error(data.error || `${res.status} ${res.statusText}`);
+  return finalizeCreateJobResponse(res, data);
 }
 
 export async function fetchJobsByClient(address: string, status?: string) {

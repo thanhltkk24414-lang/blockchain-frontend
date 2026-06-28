@@ -127,15 +127,16 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
         clientAddress: txWallet,
         createdAt: new Date().toISOString(),
       });
-      if (!metadataRes.success || !metadataRes.cid) {
+      if (!metadataRes.success || !metadataRes.cid?.trim()) {
         throw new Error('IPFS metadata upload failed — verify SIWE login and Pinata backend.');
       }
+      const metadataCID = metadataRes.cid.trim();
 
       if (USE_RELAYED_CREATE_JOB) {
         setStep('api');
         const res = await createJob({
           ...payload,
-          metadataCID: metadataRes.cid,
+          metadataCID,
           relayCreateJob: true,
         });
         if (!res.success || !res.job) {
@@ -157,7 +158,7 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
 
       setStep('onchain');
       const { onchainJobId, createTxHash } = await createOnChain({
-        metadataCID: metadataRes.cid,
+        metadataCID,
         contractValue: payload.contractValue,
         durationSeconds: payload.duration,
       });
@@ -166,7 +167,7 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
       const apiPayload = {
         ...payload,
         onchainJobId,
-        metadataCID: metadataRes.cid,
+        metadataCID,
         createTxHash,
       };
       let res = await createJob(apiPayload);
@@ -205,15 +206,17 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
 
   async function handleSyncOnchain() {
     if (!collisionPayload) return;
+    if (!collisionPayload.metadataCID?.trim()) {
+      setSubmitError(
+        'Missing IPFS metadata for this job — submit the create form again to re-upload before syncing.',
+      );
+      return;
+    }
     setSyncing(true);
     setSubmitError(null);
     try {
       const res = await syncOnchainJob(collisionPayload);
-      if (!res.success || !res.job) {
-        const detail = [res.error, res.hint].filter(Boolean).join(' — ');
-        throw new Error(detail || 'Failed to sync job from chain');
-      }
-      onCreated(res.job);
+      onCreated(res.job!);
       setValues(EMPTY_CREATE_JOB_FORM);
       setCollisionPayload(null);
       resetTx();
