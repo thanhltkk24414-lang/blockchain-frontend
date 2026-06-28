@@ -31,7 +31,7 @@ function formatFetchError(err: unknown, url: string): Error {
 
 async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
   try {
-    return await apiFetch(url, init);
+    return await fetch(url, init);
   } catch (err) {
     throw formatFetchError(err, url);
   }

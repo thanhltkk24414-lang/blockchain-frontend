@@ -20,3 +20,10 @@ export function tryChecksumAddress(addr?: string | null): Address | null {
   if (!addr || !isAddress(addr)) return null;
   return getAddress(addr);
 }
+
+/** Short display form: 0x523e…92f7 */
+export function truncateAddress(addr?: string | null, head = 6, tail = 4): string {
+  if (!addr) return '—';
+  if (addr.length <= head + tail + 3) return addr;
+  return `${addr.slice(0, head)}…${addr.slice(-tail)}`;
+}

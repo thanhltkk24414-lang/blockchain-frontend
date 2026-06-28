@@ -80,3 +80,9 @@ export async function withGasLimit(params: GasEstimateInput): Promise<{ gas: big
     return { gas: cap };
   }
 }
+
+/** Format estimated gas in human-readable units (ETH cost line omitted). */
+export function formatGasEstimate(gas: bigint): string {
+  const gwei = Number(gas) / 1e9;
+  return `~${gas.toLocaleString()} gas (${gwei.toFixed(1)} gwei est.)`;
+}

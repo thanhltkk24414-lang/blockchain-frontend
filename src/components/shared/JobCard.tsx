@@ -16,12 +16,24 @@ function resolveClientAddress(job: Job): string | null {
   return null;
 }
 
+function escrowBadge(job: Job): { label: string; variant: 'success' | 'warning' | 'muted' } | null {
+  const status = job.status?.toUpperCase() ?? '';
+  const funded =
+    (job.totalDeposit != null && job.totalDeposit > 0) ||
+    ['IN_PROGRESS', 'SUBMITTED', 'COMPLETED', 'DISPUTED'].includes(status);
+
+  if (funded) return { label: 'Escrow funded', variant: 'success' };
+  if (status === 'ASSIGNED') return { label: 'Awaiting escrow', variant: 'warning' };
+  return null;
+}
+
 export function JobCard({ job, detailPath }: JobCardProps) {
   const clientAddr = resolveClientAddress(job);
   const href = detailPath ?? `/jobs/${job._id}`;
   const posted = formatApiDateShort(job.createdAt);
   const isDisputed =
     job.status?.toUpperCase() === 'DISPUTED' || Boolean(job.isDisputed);
+  const escrow = escrowBadge(job);
 
   return (
     <li className={`job-card job-card-interactive${isDisputed ? ' job-card-disputed' : ''}`}>
@@ -32,6 +44,9 @@ export function JobCard({ job, detailPath }: JobCardProps) {
           </Link>
         </h3>
         <div className="job-badges">
+          {escrow && (
+            <span className={`badge escrow-badge escrow-badge-${escrow.variant}`}>{escrow.label}</span>
+          )}
           {isDisputed && <span className="badge warning dispute-badge">Disputed</span>}
           <StatusBadge status={job.status} />
         </div>
@@ -60,8 +75,8 @@ export function JobCard({ job, detailPath }: JobCardProps) {
           </span>
         )}
       </div>
-      <Link to={href} className="btn ghost job-card-cta">
-        View details →
+      <Link to={href} className="btn primary job-card-cta">
+        View job →
       </Link>
     </li>
   );

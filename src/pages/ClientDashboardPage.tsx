@@ -1,15 +1,20 @@
-import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { fetchJobsByClient, type Job } from '@/lib/api';
 import { JobCard } from '@/components/shared/JobCard';
-import { LiveFeed } from '@/components/LiveFeed';
 import { CreateJobForm } from '@/components/client/CreateJobForm';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 
+function isUnfundedAssigned(job: Job): boolean {
+  const status = job.status?.toUpperCase() ?? '';
+  if (status !== 'ASSIGNED') return false;
+  return !job.totalDeposit || job.totalDeposit <= 0;
+}
+
 export function ClientDashboardPage() {
   const navigate = useNavigate();
-  const { user, isAuthenticated, token } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const clientWallet = user?.walletAddress;
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(false);
@@ -37,6 +42,18 @@ export function ClientDashboardPage() {
 
   useAutoRefresh(loadJobs);
 
+  const escrowTotal = useMemo(
+    () =>
+      jobs
+        .filter((j) =>
+          ['ASSIGNED', 'IN_PROGRESS', 'SUBMITTED', 'DISPUTED'].includes(j.status?.toUpperCase() ?? ''),
+        )
+        .reduce((sum, j) => sum + (j.totalDeposit ?? j.contractValue ?? 0), 0),
+    [jobs],
+  );
+
+  const unfundedJobs = useMemo(() => jobs.filter(isUnfundedAssigned), [jobs]);
+
   function handleJobCreated(job: Job) {
     setShowCreate(false);
     setJobs((prev) => [job, ...prev.filter((j) => j._id !== job._id)]);
@@ -45,7 +62,7 @@ export function ClientDashboardPage() {
   }
 
   return (
-    <main className="page two-col">
+    <main className="page">
       <section className="panel">
         <div className="page-header panel-header-row">
           <div>
@@ -68,7 +85,11 @@ export function ClientDashboardPage() {
         )}
 
         {isAuthenticated && jobs.length > 0 && (
-          <div className="stats-row">
+          <div className="stats-row client-stats">
+            <div className="stat-card stat-card-escrow">
+              <span className="stat-label">Escrow in flight</span>
+              <strong className="stat-escrow-value">${escrowTotal.toLocaleString()} USDC</strong>
+            </div>
             <div className="stat-card">
               <span className="stat-label">Total jobs</span>
               <strong>{jobs.length}</strong>
@@ -85,10 +106,21 @@ export function ClientDashboardPage() {
                 ).length}
               </strong>
             </div>
-            <div className="stat-card">
-              <span className="stat-label">Disputed</span>
-              <strong>{jobs.filter((j) => j.status?.toUpperCase() === 'DISPUTED').length}</strong>
+          </div>
+        )}
+
+        {unfundedJobs.length > 0 && (
+          <div className="fund-escrow-banner" role="status">
+            <div>
+              <strong>Fund escrow required</strong>
+              <p className="muted">
+                {unfundedJobs.length} assigned job{unfundedJobs.length === 1 ? '' : 's'} waiting for
+                on-chain USDC deposit.
+              </p>
             </div>
+            <Link to={`/client/jobs/${unfundedJobs[0]._id}`} className="btn primary">
+              Fund escrow →
+            </Link>
           </div>
         )}
 
@@ -109,7 +141,6 @@ export function ClientDashboardPage() {
           ))}
         </ul>
       </section>
-      <LiveFeed token={token} />
     </main>
   );
 }

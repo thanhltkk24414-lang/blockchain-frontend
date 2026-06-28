@@ -1,6 +1,7 @@
+import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import { useAuth } from '@/context/AuthContext';
-import { addressesEqual, tryChecksumAddress } from '@/lib/utils/address';
+import { addressesEqual, tryChecksumAddress, truncateAddress } from '@/lib/utils/address';
 import { isValidOnchainJobId } from '@/lib/utils/etherscan';
 import { useOnChainJob } from '@/hooks/useOnChainJob';
 import { isNonZeroAddress, ONCHAIN_JOB_STATUS } from '@/lib/utils/onchainJob';
@@ -15,6 +16,7 @@ interface WalletMismatchBannerProps {
 export function WalletMismatchBanner({ job, isJobOwner = false }: WalletMismatchBannerProps) {
   const { address, isConnected } = useAccount();
   const { user } = useAuth();
+  const { openConnectModal } = useConnectModal();
   const { onchainFreelancer, onchainClient, onchainStatus, onchainStatusLabel, loading } =
     useOnChainJob(job.onchainJobId, job.status);
 
@@ -38,28 +40,24 @@ export function WalletMismatchBanner({ job, isJobOwner = false }: WalletMismatch
 
   const isFreelancerViewer = user?.role === 'freelancer' && !isJobOwner;
 
+  const SwitchWalletButton = () =>
+    openConnectModal ? (
+      <button type="button" className="btn primary btn-compact" onClick={openConnectModal}>
+        Switch wallet
+      </button>
+    ) : null;
+
   if (isFreelancerViewer) {
     const isOpen = onchainStatus === ONCHAIN_JOB_STATUS.OPEN || job.status === 'OPEN';
 
     if (isOpen && !onchainFreelancerCs) {
       return (
-        <section className="panel wallet-mismatch-banner info" role="status">
-          <h3>Escrow not funded yet</h3>
-          <p className="muted">
-            On-chain freelancer is <code className="mono">0x000…000</code> — this is{' '}
-            <strong>normal</strong> while the job is OPEN. The client assigns the freelancer when
-            calling <code>depositEscrow</code>.
+        <div className="wallet-strip wallet-strip-info" role="status">
+          <p>
+            <strong>Escrow not funded yet</strong> — normal while job is OPEN. Client assigns freelancer
+            on <code>depositEscrow</code>.
           </p>
-          <p className="muted">
-            After the client funds escrow, switch MetaMask to the wallet used when submitting your
-            proposal to call <code>startWork</code> / <code>submitWork</code>.
-          </p>
-          {onchainStatusLabel && (
-            <p className="muted phase-note">
-              On-chain status: <strong>{onchainStatusLabel}</strong>
-            </p>
-          )}
-        </section>
+        </div>
       );
     }
 
@@ -77,24 +75,19 @@ export function WalletMismatchBanner({ job, isJobOwner = false }: WalletMismatch
       }
 
       return (
-        <section className="panel wallet-mismatch-banner" role="alert">
-          <h3>MetaMask wallet does not match on-chain freelancer</h3>
-          <p className="error">
-            On-chain freelancer: <code className="mono">{onchainFreelancerCs}</code>
-          </p>
-          <p className="error">
-            Your MetaMask wallet: <code className="mono">{walletCs}</code>
-          </p>
-          <p className="muted">
-            Only the on-chain freelancer wallet can call <code>startWork</code> /{' '}
-            <code>submitWork</code>. Switch MetaMask to the wallet that submitted the accepted bid.
-          </p>
-          {onchainStatusLabel && (
-            <p className="muted phase-note">
-              On-chain status: <strong>{onchainStatusLabel}</strong>
-            </p>
-          )}
-        </section>
+        <div className="wallet-strip wallet-strip-error" role="alert">
+          <div className="wallet-strip-text">
+            <strong>Wallet mismatch</strong>
+            <span className="muted">
+              On-chain: <code className="mono">{truncateAddress(onchainFreelancerCs, 8, 6)}</code> · Yours:{' '}
+              <code className="mono">{truncateAddress(walletCs, 8, 6)}</code>
+            </span>
+            {onchainStatusLabel && (
+              <span className="muted phase-note">Status: {onchainStatusLabel}</span>
+            )}
+          </div>
+          <SwitchWalletButton />
+        </div>
       );
     }
 
@@ -103,29 +96,19 @@ export function WalletMismatchBanner({ job, isJobOwner = false }: WalletMismatch
 
   if (isJobOwner && expectedClient && !addressesEqual(expectedClient, walletCs)) {
     return (
-      <section className="panel wallet-mismatch-banner" role="alert">
-        <h3>MetaMask wallet does not match on-chain client (escrow)</h3>
-        <p className="error">
-          On-chain client: <code className="mono">{expectedClient}</code>
-        </p>
-        <p className="error">
-          Your MetaMask wallet: <code className="mono">{walletCs}</code>
-        </p>
-        <p className="muted">
-          Only the on-chain client can call <code>depositEscrow</code>. This must be the same
-          MetaMask wallet that signed <code>createJob</code> and signed in with SIWE — switch
-          MetaMask to that wallet before funding escrow.
-        </p>
-        <p className="muted phase-note">
-          <strong>Mint MockUSDC</strong> to the on-chain client wallet (permissionless on Sepolia)
-          before approve &amp; deposit.
-        </p>
-        {onchainStatusLabel && (
-          <p className="muted phase-note">
-            On-chain status: <strong>{onchainStatusLabel}</strong>
-          </p>
-        )}
-      </section>
+      <div className="wallet-strip wallet-strip-error" role="alert">
+        <div className="wallet-strip-text">
+          <strong>Client wallet mismatch</strong>
+          <span className="muted">
+            On-chain client: <code className="mono">{truncateAddress(expectedClient, 8, 6)}</code> · Yours:{' '}
+            <code className="mono">{truncateAddress(walletCs, 8, 6)}</code>
+          </span>
+          <span className="muted phase-note">
+            Switch to the wallet that created this job before funding escrow.
+          </span>
+        </div>
+        <SwitchWalletButton />
+      </div>
     );
   }
 

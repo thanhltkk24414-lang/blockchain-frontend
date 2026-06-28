@@ -1,7 +1,6 @@
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FapexLogo } from '@/components/shared/FapexLogo';
-import { useEthUsdPrice } from '@/hooks/useEthUsdPrice';
+import { fetchJobs } from '@/lib/api';
 import { cn } from '@/lib/utils/cn';
 
 const POPULAR_TAGS = [
@@ -44,6 +43,29 @@ const FEATURES = [
   },
 ];
 
+const HOW_IT_WORKS = [
+  {
+    step: '1',
+    title: 'Post a job',
+    desc: 'Clients publish work with IPFS metadata and a USDC budget on Sepolia.',
+  },
+  {
+    step: '2',
+    title: 'Fund escrow',
+    desc: 'Accept a proposal and deposit USDC into the on-chain EscrowVault.',
+  },
+  {
+    step: '3',
+    title: 'Deliver work',
+    desc: 'Freelancers submit deliverables; milestones track progress on-chain.',
+  },
+  {
+    step: '4',
+    title: 'Release or dispute',
+    desc: 'Approve to release payment, or open a dispute with staked arbitrators.',
+  },
+];
+
 const LANDING_TICKER = [
   { value: 'Sepolia', label: 'Live testnet' },
   { value: '3%', label: 'Platform fee' },
@@ -56,7 +78,17 @@ const LANDING_TICKER = [
 export function LandingPage() {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
-  const { price, loading: priceLoading } = useEthUsdPrice();
+  const [jobCount, setJobCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetchJobs({ limit: 1 })
+      .then((res) => {
+        if (res.success) {
+          setJobCount(res.pagination?.total ?? res.jobs?.length ?? 0);
+        }
+      })
+      .catch(() => setJobCount(null));
+  }, []);
 
   const onSearch = (e: FormEvent) => {
     e.preventDefault();
@@ -73,13 +105,13 @@ export function LandingPage() {
       <section className="landing-hero">
         <div className="landing-hero-glow" aria-hidden />
         <div className="landing-hero-inner">
-          <div className="landing-hero-top">
-            <FapexLogo size="lg" />
-            {price && !priceLoading && (
-              <span className="landing-eth-price" title="Chainlink ETH/USD Sepolia">
-                ETH ${price.usd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-              </span>
-            )}
+          <div className="landing-hero-visual" aria-hidden>
+            <div className="hero-orb hero-orb-a" />
+            <div className="hero-orb hero-orb-b" />
+            <div className="hero-grid-card">
+              <span className="hero-grid-label">Escrow secured</span>
+              <strong className="hero-grid-value">USDC · Sepolia</strong>
+            </div>
           </div>
 
           <div className="landing-live-badge">
@@ -121,10 +153,10 @@ export function LandingPage() {
 
           <div className="landing-ctas">
             <Link to="/client" className="btn primary landing-cta-hire">
-              Hire a freelancer →
+              Hire a freelancer
             </Link>
-            <Link to="/browse" className="btn ghost landing-cta-sell">
-              Find work / Browse jobs
+            <Link to="/browse" className="btn outline landing-cta-sell">
+              Find work
             </Link>
           </div>
 
@@ -148,6 +180,15 @@ export function LandingPage() {
           </dl>
         </div>
       </section>
+
+      {jobCount != null && (
+        <section className="landing-social-proof" aria-label="Platform activity">
+          <p>
+            <strong>{jobCount.toLocaleString()}</strong> jobs posted on FAPEX ·{' '}
+            <strong>Sepolia testnet</strong> · escrow settled in USDC
+          </p>
+        </section>
+      )}
 
       <div className="landing-ticker" aria-hidden>
         <div className="ticker-track">
@@ -176,23 +217,20 @@ export function LandingPage() {
         </div>
       </section>
 
-      <section className="landing-section landing-steps">
+      <section id="how-it-works" className="landing-section landing-steps">
         <h2>How it works</h2>
-        <ol className="landing-step-list">
-          <li>
-            <strong>Post &amp; fund</strong> — Client creates a job with IPFS metadata and deposits USDC
-            escrow.
-          </li>
-          <li>
-            <strong>Hire</strong> — Freelancers bid; the client accepts and assigns on-chain.
-          </li>
-          <li>
-            <strong>Deliver &amp; approve</strong> — Deliverable CID on-chain; client approves release.
-          </li>
-          <li>
-            <strong>Dispute (if needed)</strong> — IPFS evidence + arbitrator commit-reveal voting.
-          </li>
-        </ol>
+        <p className="landing-section-lead">
+          From job post to payout — every critical step is enforced by smart contracts.
+        </p>
+        <div className="how-it-works-grid">
+          {HOW_IT_WORKS.map((step) => (
+            <article key={step.step} className="how-it-works-card">
+              <span className="how-it-works-num">{step.step}</span>
+              <h3>{step.title}</h3>
+              <p>{step.desc}</p>
+            </article>
+          ))}
+        </div>
       </section>
 
       <section className="landing-section landing-roles">

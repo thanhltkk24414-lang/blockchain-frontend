@@ -198,7 +198,7 @@ export function JobDetailPage() {
             <dt>Status</dt>
             <dd>
               <StatusBadge status={displayStatus} />
-              {onchainStatusLabel && displayStatus !== job.status?.toUpperCase() && (
+              {import.meta.env.DEV && onchainStatusLabel && displayStatus !== job.status?.toUpperCase() && (
                 <p className="muted phase-note">
                   DB: {job.status?.toUpperCase()} → on-chain: <strong>{onchainStatusLabel}</strong>
                 </p>
@@ -237,7 +237,7 @@ export function JobDetailPage() {
           </dl>
         </section>
 
-        <section className="panel">
+        <section className="panel panel-onchain">
           <h3>On-chain</h3>
           <dl className="detail-grid">
             <dt>On-chain job ID</dt>
