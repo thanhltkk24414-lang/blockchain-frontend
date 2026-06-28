@@ -4,6 +4,9 @@ const env = import.meta.env;
 
 export const CHAIN_ID = Number(env.VITE_CHAIN_ID || deployments.chainId || 11155111);
 
+export const DEPLOYER_ADDRESS = (env.VITE_DEPLOYER_ADDRESS ||
+  deployments.deployer) as `0x${string}`;
+
 export const CONTRACT_ADDRESSES = {
   MockUSDC: (env.VITE_MOCK_USDC_ADDRESS || deployments.addresses.MockUSDC) as `0x${string}`,
   ReputationStore: (env.VITE_REPUTATION_STORE_ADDRESS || deployments.addresses.ReputationStore) as `0x${string}`,

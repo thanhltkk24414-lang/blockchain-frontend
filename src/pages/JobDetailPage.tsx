@@ -238,7 +238,16 @@ export function JobDetailPage() {
         </section>
 
         <section className="panel panel-onchain">
-          <h3>On-chain</h3>
+          <h3>
+            On-chain{' '}
+            <span
+              className="protocol-info-tip"
+              title="On-chain: EscrowVault + JobRegistry hold funds and job state (source of truth). Off-chain: MongoDB + API cache job listings, bids, and IPFS metadata for faster UX — synced by the event indexer."
+              aria-label="Protocol info"
+            >
+              ⓘ
+            </span>
+          </h3>
           <dl className="detail-grid">
             <dt>On-chain job ID</dt>
             <dd>

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAuth } from '@/context/AuthContext';
 import { useArbitratorAccess } from '@/hooks/useArbitratorAccess';
+import { useAdminAccess } from '@/hooks/useAdminAccess';
 import { API_URL } from '@/config/env';
 import { fetchHealth } from '@/lib/api';
 import { CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
@@ -21,6 +22,7 @@ type NavItem = {
   label: string;
   roles?: RegistrationRole[];
   arbitrator?: boolean;
+  admin?: boolean;
   landingOnly?: boolean;
   appOnly?: boolean;
 };
@@ -33,6 +35,7 @@ const NAV: NavItem[] = [
   { to: '/client', label: 'Client', roles: ['client'], appOnly: true },
   { to: '/freelancer', label: 'Freelancer', roles: ['freelancer'], appOnly: true },
   { to: '/arbitrator', label: 'Arbitrator', arbitrator: true, appOnly: true },
+  { to: '/admin', label: 'Admin', admin: true, appOnly: true },
   { to: '/profile', label: 'Profile' },
 ];
 
@@ -43,6 +46,7 @@ export function AppShell() {
   const isLanding = location.pathname === '/';
   const { isConnected, isAuthenticated, user, loading, error, signIn, signOut } = useAuth();
   const arbitrator = useArbitratorAccess();
+  const platformAdmin = useAdminAccess();
   const { reputation, loading: reputationLoading } = useReputation(user?.walletAddress);
   const [contractMismatch, setContractMismatch] = useState<string | null>(null);
   const [walletMenuOpen, setWalletMenuOpen] = useState(false);
@@ -67,6 +71,7 @@ export function AppShell() {
     if (isLanding && item.appOnly) return false;
     if (!isLanding && item.landingOnly) return false;
     if (item.arbitrator) return isAuthenticated && arbitrator.isValid;
+    if (item.admin) return platformAdmin.isAdmin;
     if (!item.roles) return true;
     if (!isAuthenticated || !hasChosenRegistrationRole(user)) return false;
     return item.roles.includes(user?.role as RegistrationRole);

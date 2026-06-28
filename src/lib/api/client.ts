@@ -425,3 +425,25 @@ export async function fetchHealth() {
     websocket: { enabled: boolean; path: string };
   }>(res);
 }
+
+export type AdminStats = {
+  success: boolean;
+  timestamp: string;
+  mongodb: string;
+  chainId: number;
+  contracts: Record<string, string | null>;
+  jobs: {
+    total: number;
+    disputed: number;
+    byStatus: Record<string, number>;
+  };
+  indexer: {
+    enabled: boolean;
+    lastBlock: number | null;
+  };
+};
+
+export async function fetchAdminStats(): Promise<AdminStats> {
+  const res = await apiFetch(`${API_URL}/api/admin/stats`);
+  return parseJson<AdminStats>(res);
+}
