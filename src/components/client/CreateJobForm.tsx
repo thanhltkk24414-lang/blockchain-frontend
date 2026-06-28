@@ -157,15 +157,22 @@ export function CreateJobForm({ onCreated, onCancel }: CreateJobFormProps) {
       });
 
       setStep('api');
-      const res = await createJob({
+      const apiPayload = {
         ...payload,
         onchainJobId,
         metadataCID: metadataRes.cid,
         createTxHash,
-      });
+      };
+      let res = await createJob(apiPayload);
+      if (!res.success && res.code === 'ONCHAIN_JOB_ID_COLLISION') {
+        res = await createJob(apiPayload);
+      }
       if (!res.success || !res.job) {
         const detail = [res.error, res.hint].filter(Boolean).join(' — ');
-        throw new Error(detail || 'Failed to register job in API');
+        throw new Error(
+          detail ||
+            'Failed to register job in API. Your on-chain job was created — open Client dashboard and use "Retry API sync" or submit the form again (same wallet).',
+        );
       }
 
       onCreated(res.job);

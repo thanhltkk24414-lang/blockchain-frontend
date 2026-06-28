@@ -217,13 +217,23 @@ export async function fetchJobById(id: string) {
   return data;
 }
 
-export async function createJob(payload: CreateJobPayload) {
+export async function createJob(payload: CreateJobPayload): Promise<CreateJobResponse> {
   const res = await apiFetch(`${API_URL}/api/jobs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(payload),
   });
-  return parseJson<CreateJobResponse>(res);
+  let data: CreateJobResponse;
+  try {
+    data = (await res.json()) as CreateJobResponse;
+  } catch {
+    throw new Error(res.ok ? 'Invalid JSON from API' : `${res.status} ${res.statusText}`);
+  }
+  if (res.ok) return data;
+  if (res.status === 409 && data.code === 'ONCHAIN_JOB_ID_COLLISION') {
+    return { ...data, success: false };
+  }
+  throw new Error(data.error || `${res.status} ${res.statusText}`);
 }
 
 export async function fetchJobsByClient(address: string, status?: string) {
