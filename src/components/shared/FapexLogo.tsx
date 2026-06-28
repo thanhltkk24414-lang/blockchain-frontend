@@ -14,6 +14,30 @@ const sizes = {
   lg: { icon: 'h-10 w-10', wordmark: 'h-7' },
 };
 
+function FapexWordmark({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 108 32"
+      fill="none"
+      aria-hidden
+      className={className}
+    >
+      <text
+        x="0"
+        y="24"
+        fontFamily="'Space Grotesk', system-ui, sans-serif"
+        fontSize="24"
+        fontWeight="700"
+        fill="currentColor"
+        letterSpacing="0.05em"
+      >
+        FAPEX
+      </text>
+    </svg>
+  );
+}
+
 export function FapexLogo({ className, href = '/', showWordmark = true, size = 'md' }: FapexLogoProps) {
   const s = sizes[size];
   const content = (
@@ -25,11 +49,11 @@ export function FapexLogo({ className, href = '/', showWordmark = true, size = '
         draggable={false}
       />
       {showWordmark && (
-        <img
-          src="/fapex-wordmark.png"
-          alt="FAPEX"
-          className={cn(s.wordmark, 'fapex-logo-img w-auto hidden sm:block object-contain')}
-          draggable={false}
+        <FapexWordmark
+          className={cn(
+            s.wordmark,
+            'fapex-logo-wordmark w-auto hidden sm:block text-foreground',
+          )}
         />
       )}
       {!showWordmark && <span className="text-lg font-bold tracking-wide text-foreground">FAPEX</span>}

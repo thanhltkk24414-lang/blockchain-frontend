@@ -303,6 +303,58 @@ export async function fetchArbitratorStatus(address: string) {
   }>(res);
 }
 
+export type ArbitratorApplicationStatus = 'pending' | 'approved' | 'rejected';
+
+export interface ArbitratorApplication {
+  _id: string;
+  walletAddress: string;
+  reason: string;
+  reputationScore?: number | null;
+  stakeVerified?: boolean;
+  stakedAmount?: number | null;
+  status: ArbitratorApplicationStatus;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export async function submitArbitratorApplication(reason: string) {
+  const res = await apiFetch(`${API_URL}/api/arbitrator/applications`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ reason }),
+  });
+  return parseJson<{ success: boolean; application?: ArbitratorApplication; error?: string }>(res);
+}
+
+export async function fetchMyArbitratorApplication() {
+  const res = await apiFetch(`${API_URL}/api/arbitrator/applications/me`, {
+    headers: authHeaders(),
+  });
+  return parseJson<{ success: boolean; application: ArbitratorApplication | null }>(res);
+}
+
+export async function fetchArbitratorApplications(status = 'pending') {
+  const qs = new URLSearchParams({ status });
+  const res = await apiFetch(`${API_URL}/api/arbitrator/applications?${qs}`);
+  return parseJson<{
+    success: boolean;
+    applications: ArbitratorApplication[];
+    count: number;
+  }>(res);
+}
+
+export async function updateArbitratorApplicationStatus(
+  id: string,
+  status: 'approved' | 'rejected',
+) {
+  const res = await apiFetch(`${API_URL}/api/arbitrator/applications/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+  return parseJson<{ success: boolean; application?: ArbitratorApplication; error?: string }>(res);
+}
+
 export interface DisputeRecord {
   _id: string;
   jobId: string;
