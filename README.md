@@ -4,7 +4,7 @@
 
 Submodule của monorepo [`Blockchain`](../README.md). Deploy: **Vercel** (`*.vercel.app`).
 
-**Cập nhật:** 2026-06-28
+**Cập nhật:** 2026-06-30
 
 ---
 
@@ -49,4 +49,5 @@ Production API: `https://fapex-backend-production.up.railway.app`
 ## Docs
 
 - [Manual (VI)](../docs/guides/manual-vi.md)
-- [Demo script](../docs/guides/demo-script-vi.md)
+- [Platform mechanisms](../docs/guides/platform-mechanisms-vi.md)
+- [Demo Q&A](../docs/guides/demo-qa-defense-vi.md)
