@@ -1,5 +1,7 @@
 import type { StatusSlice } from '@/components/shared/StatusDonutChart';
 import type { Bid, Job } from '@/lib/api';
+import { normalizeBidStatus } from '@/lib/api/normalize';
+import { sortByDateDesc } from '@/lib/utils/dates';
 
 const CLIENT_STATUS_COLORS: Record<string, string> = {
   OPEN: '#22c55e',
@@ -44,10 +46,8 @@ export function buildBidStatusSlices(bids: Bid[]): StatusSlice[] {
   const counts = { pending: 0, accepted: 0, rejected: 0 };
   for (const bid of bids) {
     if (!bid) continue;
-    const status = bid.status ?? 'pending';
-    if (status in counts) {
-      counts[status as keyof typeof counts] += 1;
-    }
+    const status = normalizeBidStatus(bid.status);
+    counts[status] += 1;
   }
 
   return (['pending', 'accepted', 'rejected'] as const).map((status) => ({
@@ -55,6 +55,51 @@ export function buildBidStatusSlices(bids: Bid[]): StatusSlice[] {
     value: counts[status],
     color: BID_STATUS_COLORS[status],
   }));
+}
+
+/** Recent bids with a mix of statuses when possible (not only the latest rejections). */
+export function pickRecentBids(bids: Bid[], limit = 5): Bid[] {
+  const sorted = sortByDateDesc(
+    bids.filter(Boolean),
+    (bid) => bid.createdAt,
+  );
+  if (sorted.length <= limit) return sorted;
+
+  const buckets: Record<Bid['status'], Bid[]> = {
+    accepted: [],
+    pending: [],
+    rejected: [],
+  };
+
+  for (const bid of sorted) {
+    buckets[normalizeBidStatus(bid.status)].push(bid);
+  }
+
+  const picked: Bid[] = [];
+  const seen = new Set<string>();
+
+  const takeFrom = (pool: Bid[], max: number) => {
+    for (const bid of pool) {
+      if (picked.length >= limit || max <= 0) return;
+      if (seen.has(bid._id)) continue;
+      picked.push(bid);
+      seen.add(bid._id);
+      max -= 1;
+    }
+  };
+
+  takeFrom(buckets.accepted, 2);
+  takeFrom(buckets.pending, 2);
+  takeFrom(buckets.rejected, 1);
+
+  for (const bid of sorted) {
+    if (picked.length >= limit) break;
+    if (seen.has(bid._id)) continue;
+    picked.push(bid);
+    seen.add(bid._id);
+  }
+
+  return sortByDateDesc(picked, (bid) => bid.createdAt);
 }
 
 export function buildEarningsByMonth(jobs: Job[]): { label: string; earned: number }[] {

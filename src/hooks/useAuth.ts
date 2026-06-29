@@ -78,11 +78,16 @@ export function useAuth() {
         throw new Error(nonceRes.error || 'Failed to fetch nonce');
       }
 
+      const domain =
+        typeof window !== 'undefined' ? window.location.host : nonceRes.domain;
+      const uri =
+        typeof window !== 'undefined' ? window.location.origin : nonceRes.appUrl;
+
       const message = new SiweMessage({
-        domain: nonceRes.domain,
+        domain,
         address: nonceRes.walletAddress,
         statement: SIWE_STATEMENT,
-        uri: nonceRes.appUrl,
+        uri,
         version: '1',
         chainId: nonceRes.chainId,
         nonce: nonceRes.nonce,

@@ -5,6 +5,16 @@ const DATE_FIELDS = ['createdAt', 'updatedAt'] as const;
 
 type DateField = (typeof DATE_FIELDS)[number];
 
+export type BidStatus = Bid['status'];
+
+export function normalizeBidStatus(value: unknown): BidStatus {
+  const status = String(value ?? '').toLowerCase();
+  if (status === 'accepted' || status === 'rejected' || status === 'pending') {
+    return status;
+  }
+  return 'pending';
+}
+
 function normalizeDateFields<T extends Record<string, unknown>>(item: T): T {
   const next = { ...item } as T & Partial<Record<DateField, string | undefined>>;
   for (const field of DATE_FIELDS) {
@@ -45,7 +55,10 @@ export function normalizeJobs(jobs: Job[]): Job[] {
 
 export function normalizeBid(bid: Bid): Bid {
   return safeNormalize(bid, (raw) => {
-    const normalized = normalizeJobDates(raw);
+    const normalized = normalizeJobDates({
+      ...raw,
+      status: normalizeBidStatus(raw.status),
+    });
     const withJobId =
       normalized.jobId && typeof normalized.jobId === 'object' && !Array.isArray(normalized.jobId)
         ? {

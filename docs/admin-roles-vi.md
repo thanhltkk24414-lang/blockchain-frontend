@@ -55,6 +55,23 @@ Quản lý pool arbitrator (`joinPool` cho ví khác).
 | `GET /api/arbitrator/applications?status=pending` | Danh sách cho admin UI |
 | `PATCH /api/arbitrator/applications/:id` | `{ status: approved \| rejected }` |
 
+## Luồng đăng ký delegated role (pauser / force resolver / arbitrator manager)
+
+Tách biệt với arbitrator pool (`ArbitratorApplication`).
+
+1. **Profile** — form **Apply for delegated role**: chọn `pauser`, `force_resolver`, hoặc `arbitrator_manager` + lý do (≥20 ký tự).
+2. **API** — `POST /api/admin/role-applications` (SIWE) lưu MongoDB `RoleApplication`.
+3. **Admin `/admin`** — bảng **Role applications**: **Approve** → `grantRole` on-chain + status `approved`; **Reject** → chỉ DB.
+
+| Endpoint | Mô tả |
+|----------|--------|
+| `POST /api/admin/role-applications` | Nộp đơn (auth) — body `{ desiredRole, reason }` |
+| `GET /api/admin/role-applications/me` | Đơn của user hiện tại |
+| `GET /api/admin/role-applications?status=pending` | Danh sách cho admin UI |
+| `PATCH /api/admin/role-applications/:id` | `{ status: approved \| rejected }` |
+
+**Phần thưởng:** Pauser và Force resolver **không** nhận USDC từ contract — chỉ arbitrator vote đúng nhận từ dispute fee pool (xem `demo-qa-defense-vi.md` Q14c).
+
 ## Trang `/admin` — demo talking points
 
 ### One-liner
@@ -77,6 +94,7 @@ Quản lý pool arbitrator (`joinPool` cho ví khác).
 | Emergency pause | Modal confirm trước pause |
 | Grant / revoke roles | Cảnh báo đỏ khi chọn force_resolver; liệt kê holder (deployer/admin/địa chỉ nhập) |
 | Arbitrator applications | Bảng pending + Approve (joinPool) / Reject |
+| Role applications | Delegated roles (pauser / force_resolver / arbitrator_manager) + grantRole |
 | Force resolve | Snapshot phase, reveal count, arbitrators; gõ `FORCE` + checkbox |
 
 ### Backend

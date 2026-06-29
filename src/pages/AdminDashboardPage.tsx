@@ -16,10 +16,13 @@ import {
   fetchAdminStats,
   fetchArbitratorApplications,
   fetchQuorumFailedJobs,
+  fetchRoleApplications,
   updateArbitratorApplicationStatus,
+  updateRoleApplicationStatus,
   type AdminStats,
   type ArbitratorApplication,
   type QuorumFailedJob,
+  type RoleApplication,
 } from '@/lib/api/client';
 import { useRoleHolders } from '@/hooks/useRoleHolders';
 import {
@@ -98,7 +101,11 @@ export function AdminDashboardPage() {
   const [applications, setApplications] = useState<ArbitratorApplication[]>([]);
   const [applicationsLoading, setApplicationsLoading] = useState(true);
   const [applicationsError, setApplicationsError] = useState<string>();
+  const [roleApplications, setRoleApplications] = useState<RoleApplication[]>([]);
+  const [roleApplicationsLoading, setRoleApplicationsLoading] = useState(true);
+  const [roleApplicationsError, setRoleApplicationsError] = useState<string>();
   const [actionAppId, setActionAppId] = useState<string | null>(null);
+  const [actionRoleAppId, setActionRoleAppId] = useState<string | null>(null);
   const [quorumJobs, setQuorumJobs] = useState<QuorumFailedJob[]>([]);
   const [quorumLoading, setQuorumLoading] = useState(true);
   const [quorumError, setQuorumError] = useState<string>();
@@ -132,6 +139,22 @@ export function AdminDashboardPage() {
       .finally(() => setApplicationsLoading(false));
   }, []);
 
+  const loadRoleApplications = useCallback(() => {
+    setRoleApplicationsLoading(true);
+    setRoleApplicationsError(undefined);
+    fetchRoleApplications('pending')
+      .then((res) => {
+        if (res.success) setRoleApplications(res.applications);
+        else setRoleApplicationsError('Role applications unavailable');
+      })
+      .catch((err) =>
+        setRoleApplicationsError(
+          err instanceof Error ? err.message : 'Failed to load role applications',
+        ),
+      )
+      .finally(() => setRoleApplicationsLoading(false));
+  }, []);
+
   const loadQuorumFailed = useCallback(() => {
     setQuorumLoading(true);
     setQuorumError(undefined);
@@ -149,16 +172,18 @@ export function AdminDashboardPage() {
   useEffect(() => {
     loadStats();
     loadApplications();
+    loadRoleApplications();
     loadQuorumFailed();
-  }, [loadStats, loadApplications, loadQuorumFailed]);
+  }, [loadStats, loadApplications, loadRoleApplications, loadQuorumFailed]);
 
   const afterTx = useCallback(async () => {
     admin.refresh();
     roleHolders.refresh();
     loadStats();
     loadApplications();
+    loadRoleApplications();
     loadQuorumFailed();
-  }, [admin.refresh, loadStats, loadApplications, loadQuorumFailed, roleHolders.refresh]);
+  }, [admin.refresh, loadStats, loadApplications, loadRoleApplications, loadQuorumFailed, roleHolders.refresh]);
 
   const handlePauseConfirm = async () => {
     setPauseConfirmOpen(false);
@@ -264,6 +289,45 @@ export function AdminDashboardPage() {
       alert(err instanceof Error ? err.message : 'Reject failed');
     } finally {
       setActionAppId(null);
+    }
+  };
+
+  const handleApproveRoleApplication = async (app: RoleApplication) => {
+    if (!isAddress(app.walletAddress)) {
+      alert('Invalid applicant wallet');
+      return;
+    }
+    const grantee = getAddress(app.walletAddress);
+    setActionRoleAppId(app._id);
+    try {
+      const kind =
+        app.desiredRole === 'pauser'
+          ? 'escrow_pauser'
+          : app.desiredRole === 'force_resolver'
+            ? 'escrow_force_resolver'
+            : 'panel_arbitrator_manager';
+      const { contract, role } = await resolveRoleId(kind);
+      await runTx(`Granting ${app.desiredRole} to ${truncateAddress(grantee)}…`, async () => {
+        if (contract === 'escrow') return sendGrantEscrowRoleTx(grantee, role);
+        return sendGrantPanelRoleTx(grantee, role);
+      });
+      await updateRoleApplicationStatus(app._id, 'approved');
+      await afterTx();
+    } finally {
+      setActionRoleAppId(null);
+    }
+  };
+
+  const handleRejectRoleApplication = async (app: RoleApplication) => {
+    if (!window.confirm(`Reject role application from ${truncateAddress(app.walletAddress)}?`)) return;
+    setActionRoleAppId(app._id);
+    try {
+      await updateRoleApplicationStatus(app._id, 'rejected');
+      await loadRoleApplications();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Reject failed');
+    } finally {
+      setActionRoleAppId(null);
     }
   };
 
@@ -516,6 +580,89 @@ export function AdminDashboardPage() {
         </section>
       )}
 
+      {(admin.canGrantVaultRoles || admin.canGrantPanelRoles) && (
+        <section className="panel">
+          <div className="panel-header-row">
+            <h3>Role applications</h3>
+            <button
+              type="button"
+              className="btn ghost btn-compact"
+              onClick={loadRoleApplications}
+              disabled={roleApplicationsLoading}
+            >
+              Refresh
+            </button>
+          </div>
+          <p className="muted">
+            Users request delegated roles on Profile. Approve grants the matching on-chain role via{' '}
+            <code>grantRole</code>.
+          </p>
+          {roleApplicationsLoading && <p className="muted">Loading role applications…</p>}
+          {roleApplicationsError && <p className="error">{roleApplicationsError}</p>}
+          {!roleApplicationsLoading && !roleApplicationsError && roleApplications.length === 0 && (
+            <p className="muted phase-note">No pending role applications.</p>
+          )}
+          {!roleApplicationsLoading && roleApplications.length > 0 && (
+            <div className="admin-role-table-wrap">
+              <table className="admin-role-table admin-applications-table">
+                <thead>
+                  <tr>
+                    <th>Wallet</th>
+                    <th>Role</th>
+                    <th>Reason</th>
+                    <th>Submitted</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {roleApplications.map((app) => (
+                    <tr key={app._id}>
+                      <td>
+                        <code className="mono">{truncateAddress(app.walletAddress, 6, 4)}</code>
+                        <CopyButton text={app.walletAddress} />
+                      </td>
+                      <td>
+                        <span className="badge">{app.desiredRole.replace(/_/g, ' ')}</span>
+                      </td>
+                      <td className="admin-app-reason">{app.reason}</td>
+                      <td>
+                        {app.createdAt ? new Date(app.createdAt).toLocaleDateString() : '—'}
+                      </td>
+                      <td>
+                        <div className="admin-form-actions">
+                          <button
+                            type="button"
+                            className="btn primary btn-compact"
+                            disabled={
+                              txStatus === 'pending' ||
+                              actionRoleAppId === app._id ||
+                              (app.desiredRole === 'arbitrator_manager'
+                                ? !admin.canGrantPanelRoles
+                                : !admin.canGrantVaultRoles)
+                            }
+                            onClick={() => void handleApproveRoleApplication(app)}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            className="btn ghost btn-compact"
+                            disabled={txStatus === 'pending' || actionRoleAppId === app._id}
+                            onClick={() => void handleRejectRoleApplication(app)}
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
       {admin.canManageArbitrators && (
         <section className="panel">
           <h3>Arbitrator pool</h3>
@@ -621,7 +768,7 @@ export function AdminDashboardPage() {
 
       {admin.canForceResolve && (
         <>
-          <section className="panel admin-danger-panel">
+          <section id="quorum-failed" className="panel admin-danger-panel">
             <div className="panel-header-row">
               <h3>Quorum failed — needs force resolve</h3>
               <button

@@ -19,6 +19,7 @@ import { ReputationBadge } from '@/components/shared/ReputationBadge';
 import { BlockiesAvatar } from '@/components/shared/BlockiesAvatar';
 import { truncateAddress } from '@/lib/utils/address';
 import { ArbitratorOnboardingPanel } from '@/components/profile/ArbitratorOnboardingPanel';
+import { RoleApplicationPanel } from '@/components/profile/RoleApplicationPanel';
 
 export function ProfilePage() {
   const { address, user, isAuthenticated, walletSessionNotice, signIn, loading: authLoading, refreshSession } = useAuth();
@@ -229,6 +230,8 @@ export function ProfilePage() {
       )}
 
       {address && <ArbitratorOnboardingPanel />}
+
+      {address && <RoleApplicationPanel />}
 
       {!address && <p className="muted">Connect your wallet to manage your profile.</p>}
       {address && !isAuthenticated && (
