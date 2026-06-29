@@ -395,6 +395,9 @@ export function AdminDashboardPage() {
             {admin.poolSize != null && admin.poolSize < 5 && (
               <span className="muted phase-note"> — need ≥5 for raiseDispute</span>
             )}
+            {admin.poolSize != null && admin.poolSize >= 5 && admin.poolSize < 10 && (
+              <span className="muted phase-note"> — appeals need ≥10 (round 2 panel)</span>
+            )}
           </dd>
         </dl>
 
@@ -667,7 +670,8 @@ export function AdminDashboardPage() {
         <section className="panel">
           <h3>Arbitrator pool</h3>
           <p className="muted">
-            Pool size: <strong>{admin.poolSize ?? '—'}</strong>. Disputes require ≥5 members. Applicants
+            Pool size: <strong>{admin.poolSize ?? '—'}</strong>. Disputes require ≥5 members;
+            appeals require ≥10 (round 1 panel + 5 new for round 2). Applicants
             submit motivation on Profile; approve here to call <code>joinPool</code> on-chain.
           </p>
 

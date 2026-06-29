@@ -117,9 +117,43 @@ const REVERT_HINTS_BY_FN: Record<string, Record<string, string>> = {
     AppealWindowClosed: 'Appeal window closed (demo: 30 minutes after finalize).',
     VotingNotFinalized: 'Voting not finalized yet — wait for Finalize voting.',
     NotAParty: 'Only client or freelancer can file an appeal.',
-    TransferFailed: 'Appeal fee USDC transfer failed — check balance and allowance.',
+    TransferFailed:
+      'Appeal fee USDC transfer failed — mint MockUSDC if needed, then approve EscrowVault as spender.',
+    NotEnoughArbitrators:
+      'Not enough arbitrators for round 2 — pool must have ≥10 members (5 for round 1 + 5 new for appeal). Seed arbitrators at /admin.',
   },
 };
+
+const PANIC_LABELS: Record<number, string> = {
+  0x01: 'assertion failed',
+  0x11: 'arithmetic overflow/underflow',
+  0x12: 'division by zero',
+  0x21: 'invalid enum value',
+  0x31: 'pop on empty array',
+  0x32: 'array index out of bounds',
+  0x51: 'uninitialized function',
+};
+
+function panicFromRevertData(data: string | undefined): string | null {
+  if (!data || !/^0x4e487b71/i.test(data)) return null;
+  const hex = data.slice(10);
+  if (!hex) return 'unknown panic';
+  const code = Number(BigInt(`0x${hex}`));
+  return PANIC_LABELS[code] ?? `panic code ${code}`;
+}
+
+function panicHintForFunction(functionName: string | undefined, code: number): string | null {
+  if (code !== 0x11) return null;
+  if (functionName === 'fileAppeal' || functionName === 'raiseDispute') {
+    return (
+      'USDC allowance too low — approve MockUSDC for EscrowVault before paying the appeal/dispute fee.'
+    );
+  }
+  if (functionName === 'stakeAsArbitrator') {
+    return 'USDC allowance too low — approve PlatformTreasury before staking.';
+  }
+  return 'Arithmetic overflow/underflow — often insufficient ERC-20 allowance for transferFrom.';
+}
 
 function formatDecodedMessage(msg: string, functionName?: string): string {
   if (/0x50884582/i.test(msg)) {
@@ -162,6 +196,14 @@ function formatDecodedMessage(msg: string, functionName?: string): string {
       'MetaMask account not found — select the same account in the extension as connected on FAPEX.'
     );
   }
+  const panicMatch = msg.match(/0x4e487b71[0-9a-f]*/i);
+  if (panicMatch) {
+    const label = panicFromRevertData(panicMatch[0]);
+    const code = panicMatch[0].length >= 74 ? Number(BigInt(`0x${panicMatch[0].slice(10)}`)) : 0;
+    const hint = panicHintForFunction(functionName, code);
+    if (label && hint) return `Panic (${label}): ${hint}`;
+    if (label) return `Contract reverted: Panic — ${label}`;
+  }
   if (/reverted.*unknown|out of gas|intrinsic gas too low|missing revert data/i.test(msg)) {
     const gasHint =
       functionName === 'approveAndRelease'
@@ -195,10 +237,29 @@ export function decodeContractError(
 
     if (revert instanceof ContractFunctionRevertedError) {
       const name = revert.data?.errorName;
+      if (name === 'Panic') {
+        const rawCode = revert.data?.args?.[0];
+        const code =
+          typeof rawCode === 'bigint'
+            ? Number(rawCode)
+            : typeof rawCode === 'number'
+              ? rawCode
+              : 0;
+        const label = PANIC_LABELS[code] ?? `code ${code}`;
+        const hint = panicHintForFunction(functionName, code);
+        return hint ? `Panic (${label}): ${hint}` : `Contract reverted: Panic — ${label}`;
+      }
       if (name) {
         const fnHint = functionName ? REVERT_HINTS_BY_FN[functionName]?.[name] : undefined;
         const hint = fnHint ?? REVERT_HINTS[name];
         return hint ? `${name}: ${hint}` : `Contract reverted: ${name}`;
+      }
+      const raw = revert.data as string | undefined;
+      const panicLabel = panicFromRevertData(typeof raw === 'string' ? raw : undefined);
+      if (panicLabel) {
+        const code = typeof raw === 'string' && raw.length >= 74 ? Number(BigInt(`0x${raw.slice(10)}`)) : 0;
+        const hint = panicHintForFunction(functionName, code);
+        return hint ? `Panic (${panicLabel}): ${hint}` : `Contract reverted: Panic — ${panicLabel}`;
       }
       if (revert.reason) {
         return revert.reason;
