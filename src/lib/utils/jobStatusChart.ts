@@ -62,15 +62,28 @@ export function buildEarningsByMonth(jobs: Job[]): { label: string; earned: numb
 
   for (const job of jobs) {
     if (!job || (job.status ?? '').toUpperCase() !== 'COMPLETED') continue;
-    const raw = job.createdAt;
+
+    const raw =
+      job.completedAt != null
+        ? job.completedAt * 1000
+        : job.updatedAt ?? job.createdAt;
     if (!raw) continue;
+
     const date = new Date(raw);
     if (Number.isNaN(date.getTime())) continue;
+
+    const gross = job.contractValue ?? 0;
+    const serviceFee = job.serviceFee;
+    const earned =
+      serviceFee != null && job.contractValue != null
+        ? Math.max(0, job.contractValue - serviceFee)
+        : gross * 0.98;
+
     const label = date.toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
-    buckets.set(label, (buckets.get(label) ?? 0) + (job.contractValue ?? 0));
+    buckets.set(label, (buckets.get(label) ?? 0) + earned);
   }
 
   return [...buckets.entries()]
-    .map(([label, earned]) => ({ label, earned }))
+    .map(([label, earned]) => ({ label, earned: Math.round(earned * 100) / 100 }))
     .slice(-6);
 }

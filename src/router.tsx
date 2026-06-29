@@ -82,6 +82,14 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: '/jobs/onchain/:onchainJobId',
+        element: (
+          <LazyPage>
+            <JobDetailPage />
+          </LazyPage>
+        ),
+      },
+      {
         path: '/jobs/:id',
         element: (
           <LazyPage>
