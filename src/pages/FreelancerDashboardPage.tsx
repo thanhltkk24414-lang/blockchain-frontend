@@ -16,7 +16,11 @@ export function FreelancerDashboardPage() {
   const freelancerWallet = user?.walletAddress;
   const [jobs, setJobs] = useState<Job[]>([]);
   const [bids, setBids] = useState<Bid[]>([]);
-  const [stats, setStats] = useState<{ jobsCompleted?: number; totalEarned?: number } | null>(null);
+  const [stats, setStats] = useState<{
+    jobsCompleted?: number;
+    totalEarned?: number;
+    earningsByMonth?: Array<{ label: string; earned: number }>;
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { data: jobCounter } = useJobCounter();
@@ -64,7 +68,12 @@ export function FreelancerDashboardPage() {
   );
 
   const bidSlices = useMemo(() => buildBidStatusSlices(safeBids), [safeBids]);
-  const earningsPoints = useMemo(() => buildEarningsByMonth(safeJobs), [safeJobs]);
+  const earningsPoints = useMemo(() => {
+    if (stats?.earningsByMonth?.some((point) => point.earned > 0)) {
+      return stats.earningsByMonth;
+    }
+    return buildEarningsByMonth(safeJobs);
+  }, [stats?.earningsByMonth, safeJobs]);
 
   return (
     <main className="page">
@@ -94,7 +103,10 @@ export function FreelancerDashboardPage() {
         </div>
       </div>
 
-      {isAuthenticated && (safeBids.length > 0 || safeJobs.some((j) => j.status === 'COMPLETED')) && (
+      {isAuthenticated &&
+        (safeBids.length > 0 ||
+          (stats?.jobsCompleted ?? 0) > 0 ||
+          safeJobs.some((j) => j.status === 'COMPLETED')) && (
         <div className="dashboard-charts-grid">
           <StatusDonutChart title="Proposals by status" data={bidSlices} emptyLabel="No proposals yet" />
           <EarningsBarChart title="Earnings over time" data={earningsPoints} />

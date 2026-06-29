@@ -28,6 +28,9 @@ export interface Job {
   deliverableCID?: string;
   acceptanceCriteria?: string;
   createdAt?: string;
+  updatedAt?: string;
+  completedAt?: number;
+  serviceFee?: number;
   skills?: string[];
   client?: JobClient | string;
   freelancer?: JobClient | string;
@@ -106,6 +109,7 @@ export interface UserProfile {
     jobsPosted?: number;
     jobsCompleted?: number;
     totalEarned?: number;
+    earningsByMonth?: Array<{ label: string; earned: number }>;
   };
 }
 

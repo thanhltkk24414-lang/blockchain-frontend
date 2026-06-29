@@ -7,6 +7,7 @@ import {
   readOnchainJob,
 } from '@/hooks/useDisputeActions';
 import { isValidOnchainJobId } from '@/lib/utils/etherscan';
+import { resolveMongoJobId } from '@/lib/utils/jobId';
 import { ONCHAIN_JOB_STATUS } from '@/lib/utils/onchainJob';
 
 export type ArbitratorDisputeItem = {
@@ -49,7 +50,7 @@ async function loadArbitratorDisputes(
     if (isValidOnchainJobId(job.onchainJobId)) {
       candidates.set(job.onchainJobId!, {
         onchainJobId: job.onchainJobId!,
-        jobId: job._id,
+        jobId: resolveMongoJobId(job._id),
         title: job.title,
       });
     }
@@ -58,10 +59,19 @@ async function loadArbitratorDisputes(
   for (const d of disputesRes.disputes ?? []) {
     if (!isValidOnchainJobId(d.onchainJobId)) continue;
     const existing = candidates.get(d.onchainJobId);
+    const disputeJobId = resolveMongoJobId(d.jobId);
+    const disputeTitle =
+      typeof d.jobId === 'object' &&
+      d.jobId &&
+      !Array.isArray(d.jobId) &&
+      'title' in d.jobId &&
+      typeof (d.jobId as { title?: unknown }).title === 'string'
+        ? (d.jobId as { title: string }).title
+        : undefined;
     candidates.set(d.onchainJobId, {
       onchainJobId: d.onchainJobId,
-      jobId: d.jobId ?? existing?.jobId,
-      title: existing?.title,
+      jobId: disputeJobId ?? existing?.jobId,
+      title: existing?.title ?? disputeTitle,
     });
   }
 

@@ -207,6 +207,30 @@ export async function uploadIpfsFile(file: File) {
   return parseJson<{ success: boolean; cid: string }>(res);
 }
 
+export async function fetchJobByOnchainId(onchainJobId: number) {
+  const res = await apiFetch(`${API_URL}/api/jobs/onchain/${onchainJobId}`);
+  const data = await parseJson<JobDetailResponse>(res);
+  if (data.success && data.job) {
+    data.job = normalizeJob(data.job);
+    if (data.onchain) {
+      if (data.onchain.onchainStatus) data.job.onchainStatus = data.onchain.onchainStatus;
+      if (data.onchain.onchainFreelancerAddress) {
+        data.job.onchainFreelancerAddress = data.onchain.onchainFreelancerAddress;
+      }
+      if (data.onchain.onchainClientAddress) {
+        data.job.onchainClientAddress = data.onchain.onchainClientAddress;
+      }
+    }
+    if (data.metadata) {
+      data.metadata = {
+        ...data.metadata,
+        createdAt: parseApiDate(data.metadata.createdAt),
+      };
+    }
+  }
+  return data;
+}
+
 export async function fetchJobById(id: string) {
   const res = await apiFetch(`${API_URL}/api/jobs/${id}`);
   const data = await parseJson<JobDetailResponse>(res);

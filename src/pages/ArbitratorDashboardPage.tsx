@@ -9,6 +9,7 @@ import {
 import { isAssignedArbitrator } from '@/hooks/useDisputeActions';
 import { DISPUTE_PHASES, formatAppealWindow } from '@/lib/contracts/disputeTimings';
 import { formatCountdown } from '@/lib/utils/disputePhase';
+import { jobDetailPath } from '@/lib/utils/jobId';
 
 const DISPUTE_STEPS = [
   { key: 'evidence', label: 'Evidence', endMin: DISPUTE_PHASES.evidenceRebuttalEndMin },
@@ -52,13 +53,16 @@ function DisputeList({
               {d.title ? ` — ${d.title}` : ''}
             </strong>
             <span className="muted"> · {d.disputeStatus}</span>
-            {d.jobId ? (
-              <Link to={`/jobs/${d.jobId}`} className="btn primary">
-                Open details & vote →
-              </Link>
-            ) : (
-              <span className="muted">Off-chain jobId not synced yet</span>
-            )}
+            {(() => {
+              const href = jobDetailPath(d.jobId, d.onchainJobId);
+              return href ? (
+                <Link to={href} className="btn primary">
+                  Open details & vote →
+                </Link>
+              ) : (
+                <span className="muted">Off-chain jobId not synced yet</span>
+              );
+            })()}
           </li>
         ))}
       </ul>

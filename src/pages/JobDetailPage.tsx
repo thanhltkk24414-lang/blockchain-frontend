@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
-import { fetchBidsByJob, fetchJobById, type Bid, type Job, type JobMetadata } from '@/lib/api';
+import { fetchBidsByJob, fetchJobById, fetchJobByOnchainId, type Bid, type Job, type JobMetadata } from '@/lib/api';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { MilestoneProgress } from '@/components/shared/MilestoneProgress';
 import { EscrowDepositPanel } from '@/components/client/EscrowDepositPanel';
@@ -38,7 +38,12 @@ function resolveClientAddress(job: Job): string | null {
 }
 
 export function JobDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const { id, onchainJobId: onchainJobIdParam } = useParams<{
+    id?: string;
+    onchainJobId?: string;
+  }>();
+  const onchainJobIdRoute = onchainJobIdParam ? Number(onchainJobIdParam) : undefined;
+  const isOnchainRoute = onchainJobIdRoute != null && Number.isFinite(onchainJobIdRoute);
   const location = useLocation();
   const { user, isAuthenticated } = useAuth();
   const [job, setJob] = useState<Job | null>(null);
@@ -58,41 +63,53 @@ export function JobDetailPage() {
   const displayStatus =
     job != null ? effectiveJobStatus(job.status, onchainStatus) : 'OPEN';
 
-  const loadBids = useCallback(() => {
-    if (!id) return;
-    fetchBidsByJob(id)
-      .then((res) => {
-        if (res.success) setBids(res.bids || []);
-      })
-      .catch(() => {});
-  }, [id]);
+  const loadBids = useCallback(
+    (jobMongoId: string) => {
+      fetchBidsByJob(jobMongoId)
+        .then((res) => {
+          if (res.success) setBids(res.bids || []);
+        })
+        .catch(() => {});
+    },
+    [],
+  );
 
   const reloadJob = useCallback(() => {
-    if (!id) return;
-    fetchJobById(id)
+    const fetchJob = isOnchainRoute
+      ? fetchJobByOnchainId(onchainJobIdRoute!)
+      : id
+        ? fetchJobById(id)
+        : Promise.resolve({ success: false as const, job: undefined });
+
+    fetchJob
       .then((res) => {
         if (res.success && res.job) {
           setJob(res.job);
           setMetadata(res.metadata ?? null);
+          loadBids(res.job._id);
         }
       })
       .catch(() => {});
-    loadBids();
     void refetchOnChain();
-  }, [id, loadBids, refetchOnChain]);
+  }, [id, isOnchainRoute, onchainJobIdRoute, loadBids, refetchOnChain]);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id && !isOnchainRoute) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
 
-    fetchJobById(id)
+    const fetchJob = isOnchainRoute
+      ? fetchJobByOnchainId(onchainJobIdRoute!)
+      : fetchJobById(id!);
+
+    fetchJob
       .then((res) => {
         if (cancelled) return;
         if (res.success && res.job) {
           setJob(res.job);
           setMetadata(res.metadata ?? null);
+          loadBids(res.job._id);
         } else {
           setError('Job not found');
         }
@@ -106,12 +123,10 @@ export function JobDetailPage() {
         if (!cancelled) setLoading(false);
       });
 
-    loadBids();
-
     return () => {
       cancelled = true;
     };
-  }, [id, loadBids]);
+  }, [id, isOnchainRoute, onchainJobIdRoute, loadBids]);
 
   if (loading) {
     return (
@@ -306,7 +321,7 @@ export function JobDetailPage() {
           onchainJobId={job.onchainJobId}
           jobTitle={job.title}
           suggestedBudget={job.contractValue}
-          onSubmitted={loadBids}
+          onSubmitted={() => loadBids(job._id)}
         />
       )}
 
