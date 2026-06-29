@@ -65,21 +65,16 @@ export function secondsUntilFinalizeAllowed(
   return nowSec > revealEndSec ? 0 : revealEndSec - nowSec + 1;
 }
 
+/**
+ * @param isResolved On-chain `disputes(jobId).isResolved` — voting finalized with a pending
+ *   result, **not** the dispute fully settled. After finalize, appeal / execute phases still apply.
+ */
 export function getDisputePhaseInfo(
   createdAtSec: number,
   resultAtSec: number,
   isResolved: boolean,
   nowSec = Math.floor(Date.now() / 1000),
 ): DisputePhaseInfo {
-  if (isResolved) {
-    return {
-      phase: 'resolved',
-      label: PHASE_LABELS.resolved,
-      secondsRemaining: 0,
-      phaseEndSec: nowSec,
-    };
-  }
-
   const evidenceEnd = createdAtSec + minToSec(DISPUTE_PHASES.evidenceRebuttalEndMin);
   const commitEnd = createdAtSec + minToSec(DISPUTE_PHASES.commitEndMin);
   const revealEnd = createdAtSec + minToSec(DISPUTE_PHASES.revealEndMin);
@@ -100,7 +95,7 @@ export function getDisputePhaseInfo(
   } else if (nowSec < revealEnd) {
     phase = 'reveal';
     phaseEndSec = revealEnd;
-  } else if (resultAtSec === 0) {
+  } else if (resultAtSec === 0 && !isResolved) {
     phase = 'finalize';
     phaseEndSec = revealEnd;
   } else if (appealEnd > 0 && nowSec < appealEnd) {

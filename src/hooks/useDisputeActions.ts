@@ -393,6 +393,18 @@ async function preflightFileAppeal(wallet: Address, jobId: bigint): Promise<bigi
     );
   }
 
+  try {
+    await simulateContract(wagmiConfig, {
+      address: contracts.escrowVault.address,
+      abi: contracts.escrowVault.abi as Abi,
+      functionName: 'fileAppeal',
+      args: [jobId],
+      account: wallet,
+    });
+  } catch (simErr) {
+    throw new Error(decodeContractError(simErr, contracts.escrowVault.abi as Abi, 'fileAppeal'));
+  }
+
   return allowance < appealFee ? appealFee : 0n;
 }
 

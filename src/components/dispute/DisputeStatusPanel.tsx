@@ -21,6 +21,7 @@ export function DisputeStatusPanel({ job }: DisputeStatusPanelProps) {
   const { onchainStatus, onchainStatusLabel, loading } = useOnChainJob(job.onchainJobId, job.status);
   const [createdAtSec, setCreatedAtSec] = useState(0);
   const [resultAtSec, setResultAtSec] = useState(0);
+  const [isVotingDone, setIsVotingDone] = useState(false);
   const [commitCount, setCommitCount] = useState(0);
   const [revealCount, setRevealCount] = useState(0);
   const [voteTally, setVoteTally] = useState<VoteTally | null>(null);
@@ -39,6 +40,7 @@ export function DisputeStatusPanel({ job }: DisputeStatusPanelProps) {
       ]);
       setCreatedAtSec(Number(dispute.createdAt));
       setResultAtSec(Number(dispute.resultAt));
+      setIsVotingDone(dispute.isResolved);
       setCommitCount(dispute.commitCount);
       setRevealCount(dispute.revealCount);
       const tally = await readVoteTally(jobId, arbs);
@@ -56,13 +58,13 @@ export function DisputeStatusPanel({ job }: DisputeStatusPanelProps) {
   useEffect(() => {
     if (!createdAtSec) return;
     const tick = () => {
-      const info = getDisputePhaseInfo(createdAtSec, resultAtSec, false);
+      const info = getDisputePhaseInfo(createdAtSec, resultAtSec, isVotingDone);
       setCurrentPhase(info.phase);
     };
     tick();
     const id = window.setInterval(tick, 15_000);
     return () => window.clearInterval(id);
-  }, [createdAtSec, resultAtSec]);
+  }, [createdAtSec, resultAtSec, isVotingDone]);
 
   if (!isDisputed || !isValidOnchainJobId(job.onchainJobId)) return null;
 
