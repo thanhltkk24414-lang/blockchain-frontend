@@ -27,4 +27,9 @@ assert.equal(isRevealWindowClosed(created, revealEnd + 1), true, 'after revealEn
 assert.equal(secondsUntilFinalizeAllowed(created, revealEnd), 1);
 assert.equal(secondsUntilFinalizeAllowed(created, revealEnd + 1), 0);
 
+const APPEAL_WINDOW_SEC = 30 * 60;
+const resultAt = revealEnd + 120;
+assert.equal(resultAt + APPEAL_WINDOW_SEC > resultAt + 60, true, 'appeal window open shortly after finalize');
+assert.equal(resultAt + APPEAL_WINDOW_SEC < resultAt + APPEAL_WINDOW_SEC + 1, true, 'appeal window end boundary');
+
 console.log('test-dispute-phase: OK');

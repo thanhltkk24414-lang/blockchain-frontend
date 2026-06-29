@@ -29,6 +29,15 @@ function appealWindowSec(): number {
   return 30 * 60;
 }
 
+/** True when finalize voting completed and the on-chain appeal window is still open. */
+export function isInAppealWindow(
+  resultAtSec: number,
+  nowSec = Math.floor(Date.now() / 1000),
+): boolean {
+  if (resultAtSec <= 0) return false;
+  return nowSec < resultAtSec + appealWindowSec();
+}
+
 const PHASE_LABELS: Record<DisputePhase, string> = {
   evidence: 'Submit evidence',
   commit: 'Commit vote (arbitrator)',
