@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { fetchBidsByJob, fetchJobById, fetchJobByOnchainId, type Bid, type Job, type JobMetadata } from '@/lib/api';
+import { normalizeBidStatus } from '@/lib/api/normalize';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { MilestoneProgress } from '@/components/shared/MilestoneProgress';
 import { EscrowDepositPanel } from '@/components/client/EscrowDepositPanel';
@@ -349,7 +350,10 @@ export function JobDetailPage() {
               <li key={bid._id} className="bid-item">
                 <strong>{bid.title || 'Proposal'}</strong>
                 <span className="muted">
-                  {bid.bidAmount} USDC · {bid.timeline} days · {bid.status}
+                  {bid.bidAmount} USDC · {bid.timeline} days ·{' '}
+                  <span className={`badge bid-status-${normalizeBidStatus(bid.status)}`}>
+                    {normalizeBidStatus(bid.status)}
+                  </span>
                 </span>
                 <p>{bid.description}</p>
                 <span className="muted mono">{bid.freelancerAddress}</span>

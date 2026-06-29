@@ -43,6 +43,28 @@ function minToSec(min: number): number {
   return min * 60;
 }
 
+/** Unix second when the on-chain reveal window ends (inclusive for revealVote). */
+export function getRevealEndSec(createdAtSec: number): number {
+  return createdAtSec + minToSec(DISPUTE_PHASES.revealEndMin);
+}
+
+/**
+ * Contract finalizeDispute reverts VotingStillActive while block.timestamp <= revealEnd.
+ * Finalize is only valid strictly after this second.
+ */
+export function isRevealWindowClosed(createdAtSec: number, nowSec = Math.floor(Date.now() / 1000)): boolean {
+  return nowSec > getRevealEndSec(createdAtSec);
+}
+
+/** Seconds until finalizeDisputeVoting can succeed on-chain (0 when already allowed). */
+export function secondsUntilFinalizeAllowed(
+  createdAtSec: number,
+  nowSec = Math.floor(Date.now() / 1000),
+): number {
+  const revealEndSec = getRevealEndSec(createdAtSec);
+  return nowSec > revealEndSec ? 0 : revealEndSec - nowSec + 1;
+}
+
 export function getDisputePhaseInfo(
   createdAtSec: number,
   resultAtSec: number,

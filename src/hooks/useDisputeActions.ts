@@ -241,6 +241,29 @@ async function preflightRevealVote(
   });
 }
 
+async function preflightFinalizeDisputeVoting(wallet: Address, jobId: bigint): Promise<void> {
+  const dispute = await readOnchainDispute(jobId);
+  if (dispute.createdAt === 0n) {
+    throw new Error('No on-chain dispute for this job yet — verify raiseDispute completed.');
+  }
+
+  const nowSec = BigInt(Math.floor(Date.now() / 1000));
+  const revealEnd = dispute.createdAt + BigInt(DISPUTE_PHASES.revealEndMin * 60);
+  if (nowSec <= revealEnd) {
+    throw new Error(
+      `VotingStillActive: reveal phase still open — wait until block.timestamp is strictly after minute ${DISPUTE_PHASES.revealEndMin} from dispute start.`,
+    );
+  }
+
+  await simulateContract(wagmiConfig, {
+    address: contracts.escrowVault.address,
+    abi: contracts.escrowVault.abi as Abi,
+    functionName: 'finalizeDisputeVoting',
+    args: [jobId],
+    account: wallet,
+  });
+}
+
 async function preflightSubmitEvidence(
   wallet: Address,
   jobId: bigint,
@@ -448,10 +471,19 @@ export function useDisputeActions() {
     async (onchainJobId: number) => {
       if (!address) throw new Error('Connect your MetaMask wallet first.');
       const wallet = getAddress(address);
+      const jobId = BigInt(onchainJobId);
+
+      try {
+        await preflightFinalizeDisputeVoting(wallet, jobId);
+      } catch (simErr) {
+        throw new Error(
+          decodeContractError(simErr, contracts.escrowVault.abi as Abi, 'finalizeDisputeVoting'),
+        );
+      }
 
       await tx.runTx('Finalizing dispute voting…', () =>
         sendFinalizeDisputeTx({
-          onchainJobId: BigInt(onchainJobId),
+          onchainJobId: jobId,
           account: wallet,
         }),
       );

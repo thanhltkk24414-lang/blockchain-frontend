@@ -21,6 +21,8 @@ const REVERT_HINTS: Record<string, string> = {
     'Invalid on-chain job status. depositEscrow requires OPEN; if already ASSIGNED (often from assignFreelancer), create a new job.',
   InsufficientQuorum:
     'Fewer than 3 valid reveal votes (quorum not met). An admin must use Force resolve on /admin — see quorum-failed section.',
+  VotingStillActive:
+    'Reveal phase still open — finalize requires block.timestamp strictly after the reveal window ends.',
   OnlyClient: 'Only the on-chain client (JobRegistry creator) can call this function.',
   OnlyFreelancer:
     'Only the freelancer assigned at escrow deposit can call this — check MetaMask wallet.',
@@ -124,6 +126,12 @@ function formatDecodedMessage(msg: string, functionName?: string): string {
     return (
       'InsufficientQuorum: fewer than 3 valid reveal votes — quorum failed. ' +
       'Use Admin force resolve at /admin#quorum-failed.'
+    );
+  }
+  if (/0x3483eb63/i.test(msg)) {
+    return (
+      'VotingStillActive: reveal phase still open on-chain — wait until block.timestamp is ' +
+      'strictly after the reveal window ends (demo: after minute 16), then try Finalize again.'
     );
   }
   if (/invalid address/i.test(msg)) {

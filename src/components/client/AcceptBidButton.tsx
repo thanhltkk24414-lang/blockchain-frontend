@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Bid } from '@/lib/api';
+import { normalizeBidStatus } from '@/lib/api/normalize';
 import { useAcceptBid } from '@/hooks/useAcceptBid';
 import { TxStatusModal } from '@/components/shared/TxStatusModal';
 import { isValidOnchainJobId } from '@/lib/utils/etherscan';
@@ -25,7 +26,14 @@ export function AcceptBidButton({
   const [error, setError] = useState<string | null>(null);
 
   if (bid.status !== 'pending') {
-    return <p className="muted phase-note">Proposal {bid.status}.</p>;
+    const status = normalizeBidStatus(bid.status);
+    if (status === 'accepted') {
+      return <p className="badge success bid-status-accepted">Proposal accepted</p>;
+    }
+    if (status === 'rejected') {
+      return <p className="muted phase-note">Proposal rejected.</p>;
+    }
+    return <p className="muted phase-note">Proposal {status}.</p>;
   }
 
   if (hasAcceptedBid) {
