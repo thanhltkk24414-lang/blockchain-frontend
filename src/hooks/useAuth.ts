@@ -14,6 +14,14 @@ import {
 
 const SIWE_STATEMENT = 'Sign in to Fapex';
 
+/** SIWE domain field — hostname, with port only when non-default (e.g. localhost:3000). */
+function getSiweDomain(): string {
+  if (typeof window === 'undefined') return '';
+  const { host, hostname, port } = window.location;
+  if (!port || port === '80' || port === '443') return hostname;
+  return host;
+}
+
 function shortWallet(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
@@ -79,7 +87,7 @@ export function useAuth() {
       }
 
       const domain =
-        typeof window !== 'undefined' ? window.location.host : nonceRes.domain;
+        typeof window !== 'undefined' ? getSiweDomain() : nonceRes.domain;
       const uri =
         typeof window !== 'undefined' ? window.location.origin : nonceRes.appUrl;
 
