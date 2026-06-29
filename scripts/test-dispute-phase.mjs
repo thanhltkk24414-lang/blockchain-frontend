@@ -32,4 +32,12 @@ const resultAt = revealEnd + 120;
 assert.equal(resultAt + APPEAL_WINDOW_SEC > resultAt + 60, true, 'appeal window open shortly after finalize');
 assert.equal(resultAt + APPEAL_WINDOW_SEC < resultAt + APPEAL_WINDOW_SEC + 1, true, 'appeal window end boundary');
 
+const PANEL = 5;
+function appealPoolShortfall(poolSize, round1PanelSize) {
+  const available = poolSize - round1PanelSize;
+  return available >= PANEL ? null : PANEL - available;
+}
+assert.equal(appealPoolShortfall(6, 5), 4, 'pool 6 after round1 panel 5 cannot appeal');
+assert.equal(appealPoolShortfall(10, 5), null, 'pool 10 supports appeal round 2');
+
 console.log('test-dispute-phase: OK');

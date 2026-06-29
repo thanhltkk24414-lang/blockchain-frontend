@@ -311,6 +311,36 @@ async function preflightSubmitEvidence(
 
 const APPEAL_FEE_NUM = 130n;
 const APPEAL_FEE_DEN = 100n;
+const APPEAL_PANEL_SIZE = 5;
+
+export async function readArbitratorPoolSize(): Promise<number> {
+  const size = (await readContract(wagmiConfig, {
+    ...contracts.arbitratorPanel,
+    functionName: 'poolSize',
+  })) as bigint;
+  return Number(size);
+}
+
+/** Round 2 needs PANEL_SIZE arbitrators not on the round-1 panel — requires pool ≥ 2×PANEL_SIZE. */
+export function appealPoolShortfall(poolSize: number, round1PanelSize: number): number | null {
+  const available = poolSize - round1PanelSize;
+  if (available >= APPEAL_PANEL_SIZE) return null;
+  return APPEAL_PANEL_SIZE - available;
+}
+
+async function simulateFileAppeal(wallet: Address, jobId: bigint): Promise<void> {
+  try {
+    await simulateContract(wagmiConfig, {
+      address: contracts.escrowVault.address,
+      abi: contracts.escrowVault.abi as Abi,
+      functionName: 'fileAppeal',
+      args: [jobId],
+      account: wallet,
+    });
+  } catch (simErr) {
+    throw new Error(decodeContractError(simErr, contracts.escrowVault.abi as Abi, 'fileAppeal'));
+  }
+}
 
 async function preflightFileAppeal(wallet: Address, jobId: bigint): Promise<bigint> {
   const onchainJob = await readOnchainJob(jobId);
@@ -328,11 +358,13 @@ async function preflightFileAppeal(wallet: Address, jobId: bigint): Promise<bigi
     );
   }
 
-  const [dispute, round, appealed, finalized] = await Promise.all([
+  const [dispute, round, appealed, finalized, chosenArbs, poolSize] = await Promise.all([
     readOnchainDispute(jobId),
     readDisputeRound(jobId),
     readAppealFiled(jobId),
     readIsVotingFinalized(jobId),
+    readChosenArbitrators(Number(jobId)),
+    readArbitratorPoolSize(),
   ]);
 
   if (dispute.createdAt === 0n) {
@@ -362,6 +394,15 @@ async function preflightFileAppeal(wallet: Address, jobId: bigint): Promise<bigi
     }
     throw new Error(
       `Appeal not open yet — current phase: ${phase.label}. Wait until after finalize voting.`,
+    );
+  }
+
+  const shortfall = appealPoolShortfall(poolSize, chosenArbs.length);
+  if (shortfall != null) {
+    throw new Error(
+      `NotEnoughArbitrators: appeal round 2 needs ${APPEAL_PANEL_SIZE} new panel members, but only ` +
+        `${poolSize - chosenArbs.length} remain outside round 1 (pool ${poolSize}). ` +
+        `Seed arbitrators until pool ≥ ${APPEAL_PANEL_SIZE * 2} at /admin (Arbitrator pool section).`,
     );
   }
 
@@ -395,19 +436,12 @@ async function preflightFileAppeal(wallet: Address, jobId: bigint): Promise<bigi
     );
   }
 
-  try {
-    await simulateContract(wagmiConfig, {
-      address: contracts.escrowVault.address,
-      abi: contracts.escrowVault.abi as Abi,
-      functionName: 'fileAppeal',
-      args: [jobId],
-      account: wallet,
-    });
-  } catch (simErr) {
-    throw new Error(decodeContractError(simErr, contracts.escrowVault.abi as Abi, 'fileAppeal'));
+  if (allowance < appealFee) {
+    return appealFee;
   }
 
-  return allowance < appealFee ? appealFee : 0n;
+  await simulateFileAppeal(wallet, jobId);
+  return 0n;
 }
 
 export function useDisputeActions() {
@@ -537,6 +571,7 @@ export function useDisputeActions() {
             account: wallet,
           }),
         );
+        await simulateFileAppeal(wallet, jobId);
       }
 
       await tx.runTx('Filing appeal (starts round 2 panel)…', () =>
