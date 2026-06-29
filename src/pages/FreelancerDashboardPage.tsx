@@ -9,7 +9,8 @@ import { EarningsBarChart } from '@/components/shared/EarningsBarChart';
 import { useJobCounter } from '@/hooks/contracts/useContracts';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { sortByDateDesc } from '@/lib/utils/dates';
-import { buildBidStatusSlices, buildEarningsByMonth } from '@/lib/utils/jobStatusChart';
+import { buildBidStatusSlices, buildEarningsByMonth, pickRecentBids } from '@/lib/utils/jobStatusChart';
+import { normalizeBidStatus } from '@/lib/api/normalize';
 
 export function FreelancerDashboardPage() {
   const { user, isAuthenticated } = useAuth();
@@ -58,7 +59,7 @@ export function FreelancerDashboardPage() {
   const safeBids = useMemo(() => bids.filter(Boolean), [bids]);
 
   const recentBids = useMemo(
-    () => sortByDateDesc(safeBids, (bid) => bid.createdAt).slice(0, 5),
+    () => pickRecentBids(safeBids, 5),
     [safeBids],
   );
 
@@ -134,7 +135,10 @@ export function FreelancerDashboardPage() {
                 <li key={bid._id} className="bid-item">
                   <strong>{bid.title || 'Proposal'}</strong>
                   <span className="muted">
-                    {bid.bidAmount} USDC · {bid.status}
+                    {bid.bidAmount} USDC ·{' '}
+                    <span className={`badge bid-status-${normalizeBidStatus(bid.status)}`}>
+                      {normalizeBidStatus(bid.status)}
+                    </span>
                   </span>
                   <Link to={`/jobs/${jobLinkId}`} className="btn ghost">
                     View job

@@ -451,6 +451,60 @@ export async function updateArbitratorApplicationStatus(
   return parseJson<{ success: boolean; application?: ArbitratorApplication; error?: string }>(res);
 }
 
+export type DelegatedRole = 'pauser' | 'force_resolver' | 'arbitrator_manager';
+export type RoleApplicationStatus = 'pending' | 'approved' | 'rejected';
+
+export interface RoleApplication {
+  _id: string;
+  walletAddress: string;
+  desiredRole: DelegatedRole;
+  reason: string;
+  status: RoleApplicationStatus;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export async function submitRoleApplication(payload: {
+  desiredRole: DelegatedRole;
+  reason: string;
+}) {
+  const res = await apiFetch(`${API_URL}/api/admin/role-applications`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  return parseJson<{ success: boolean; application?: RoleApplication; error?: string }>(res);
+}
+
+export async function fetchMyRoleApplications() {
+  const res = await apiFetch(`${API_URL}/api/admin/role-applications/me`, {
+    headers: authHeaders(),
+  });
+  return parseJson<{ success: boolean; applications: RoleApplication[] }>(res);
+}
+
+export async function fetchRoleApplications(status = 'pending') {
+  const qs = new URLSearchParams({ status });
+  const res = await apiFetch(`${API_URL}/api/admin/role-applications?${qs}`);
+  return parseJson<{
+    success: boolean;
+    applications: RoleApplication[];
+    count: number;
+  }>(res);
+}
+
+export async function updateRoleApplicationStatus(
+  id: string,
+  status: 'approved' | 'rejected',
+) {
+  const res = await apiFetch(`${API_URL}/api/admin/role-applications/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+  return parseJson<{ success: boolean; application?: RoleApplication; error?: string }>(res);
+}
+
 export interface DisputeRecord {
   _id: string;
   jobId: string;

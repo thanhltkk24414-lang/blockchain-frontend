@@ -19,6 +19,8 @@ import { withGasLimit, type GasEstimateInput } from '@/lib/utils/contractGas';
 const REVERT_HINTS: Record<string, string> = {
   WrongStatus:
     'Invalid on-chain job status. depositEscrow requires OPEN; if already ASSIGNED (often from assignFreelancer), create a new job.',
+  InsufficientQuorum:
+    'Fewer than 3 valid reveal votes (quorum not met). An admin must use Force resolve on /admin — see quorum-failed section.',
   OnlyClient: 'Only the on-chain client (JobRegistry creator) can call this function.',
   OnlyFreelancer:
     'Only the freelancer assigned at escrow deposit can call this — check MetaMask wallet.',
@@ -93,7 +95,8 @@ const REVERT_HINTS_BY_FN: Record<string, Record<string, string>> = {
   },
   finalizeDisputeVoting: {
     VotingStillActive: 'Reveal phase still active — wait until it ends.',
-    InsufficientQuorum: 'Fewer than 3 valid reveal votes — need more arbitrator reveals.',
+    InsufficientQuorum:
+      'Fewer than 3 valid reveal votes — quorum failed. Use Admin force resolve at /admin#quorum-failed.',
     AlreadyResolved: 'Voting was already finalized.',
   },
   stakeAsArbitrator: {
@@ -117,6 +120,12 @@ const REVERT_HINTS_BY_FN: Record<string, Record<string, string>> = {
 };
 
 function formatDecodedMessage(msg: string, functionName?: string): string {
+  if (/0x50884582/i.test(msg)) {
+    return (
+      'InsufficientQuorum: fewer than 3 valid reveal votes — quorum failed. ' +
+      'Use Admin force resolve at /admin#quorum-failed.'
+    );
+  }
   if (/invalid address/i.test(msg)) {
     return (
       'Invalid wallet address (need 0x + 40 hex chars). ' +

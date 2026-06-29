@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { Job } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useOnChainJob } from '@/hooks/useOnChainJob';
@@ -171,7 +172,11 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
 
   const canCommit = currentPhase === 'commit' && isAssigned;
   const canReveal = currentPhase === 'reveal' && isAssigned && !hasRevealed;
-  const canFinalize = currentPhase === 'finalize' && !isResolved && resultAtSec === 0;
+  const revealWindowEnded = currentPhase === 'finalize' || currentPhase === 'execute' || currentPhase === 'appeal';
+  const hasQuorum = revealCount >= 3;
+  const quorumFailed = revealWindowEnded && !hasQuorum && !isResolved && resultAtSec === 0;
+  const canFinalize =
+    currentPhase === 'finalize' && !isResolved && resultAtSec === 0 && hasQuorum;
   const canExecute = currentPhase === 'execute' && isResolved && resultAtSec > 0;
   const showVoteTally =
     voteTally != null &&
@@ -327,14 +332,18 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
         </div>
       )}
 
-      {(canFinalize || canExecute) && (
+      {(canFinalize || canExecute || quorumFailed) && (
         <div className="form-actions dispute-admin-actions">
           <button
             className="btn ghost"
             type="button"
             disabled={!canFinalize || actionLoading || txStatus === 'pending' || !isAuthenticated}
             onClick={() => runAction('finalize')}
-            title="Anyone can call this after the reveal phase ends"
+            title={
+              quorumFailed
+                ? 'Quorum not met — finalize will revert with InsufficientQuorum'
+                : 'Anyone can call this after the reveal phase ends when ≥3 votes are revealed'
+            }
           >
             Finalize voting
           </button>
@@ -348,6 +357,15 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
             Execute result
           </button>
         </div>
+      )}
+
+      {quorumFailed && (
+        <p className="error phase-note">
+          Quorum not met ({revealCount}/3 valid reveals). <code>finalizeDisputeVoting</code> will
+          revert with <code>InsufficientQuorum</code> (selector <code>0x50884582</code>).{' '}
+          <Link to="/admin#quorum-failed">Use Admin force resolve</Link> if the reveal window has
+          ended.
+        </p>
       )}
 
       {isResolved && pendingResult === 0 && (
