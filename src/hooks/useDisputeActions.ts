@@ -14,7 +14,7 @@ import { sendExecuteArbitrationResultTx } from '@/lib/utils/sendExecuteArbitrati
 import { sendFileAppealTx } from '@/lib/utils/sendFileAppealTx';
 import { CONTRACT_ADDRESSES } from '@/lib/contracts/addresses';
 import { executeContractWrite } from '@/lib/utils/contractWrite';
-import { getDisputePhaseInfo } from '@/lib/utils/disputePhase';
+import { getDisputePhaseInfo, isInAppealWindow } from '@/lib/utils/disputePhase';
 import {
   addVoteToTally,
   emptyVoteTally,
@@ -339,7 +339,11 @@ async function preflightFileAppeal(wallet: Address, jobId: bigint): Promise<bigi
     throw new Error('No on-chain dispute record — wait for raiseDispute / indexer sync.');
   }
 
-  if (!finalized && !dispute.isResolved) {
+  const createdAtSec = Number(dispute.createdAt);
+  const resultAtSec = Number(dispute.resultAt);
+  const votingDone = finalized || dispute.isResolved;
+
+  if (!votingDone) {
     throw new Error('VotingNotFinalized: call Finalize voting first (needs ≥3 valid reveals).');
   }
 
@@ -351,10 +355,8 @@ async function preflightFileAppeal(wallet: Address, jobId: bigint): Promise<bigi
     throw new Error('AppealAlreadyFiled: an appeal was already submitted for this job.');
   }
 
-  const createdAtSec = Number(dispute.createdAt);
-  const resultAtSec = Number(dispute.resultAt);
-  const phase = getDisputePhaseInfo(createdAtSec, resultAtSec, dispute.isResolved);
-  if (phase.phase !== 'appeal') {
+  if (!isInAppealWindow(resultAtSec)) {
+    const phase = getDisputePhaseInfo(createdAtSec, resultAtSec, dispute.isResolved);
     if (phase.phase === 'execute') {
       throw new Error('AppealWindowClosed: appeal window ended — call Execute result instead.');
     }
