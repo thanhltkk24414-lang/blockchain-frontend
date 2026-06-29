@@ -126,7 +126,7 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
 
     const tick = () => {
       const nowSec = Math.floor(Date.now() / 1000);
-      const info = getDisputePhaseInfo(createdAtSec, resultAtSec, false, nowSec);
+      const info = getDisputePhaseInfo(createdAtSec, resultAtSec, isResolved, nowSec);
       setCurrentPhase(info.phase);
       setPhaseLabel(info.label);
       setCountdown(
@@ -147,7 +147,7 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [createdAtSec, resultAtSec]);
+  }, [createdAtSec, resultAtSec, isResolved]);
 
   if (!isDisputed || !isValidOnchainJobId(job.onchainJobId)) return null;
 

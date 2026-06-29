@@ -82,7 +82,7 @@ export function DisputeResultPanel({ job, onActionComplete }: DisputeResultPanel
     if (!createdAtSec) return;
 
     const tick = () => {
-      const info = getDisputePhaseInfo(createdAtSec, resultAtSec, false);
+      const info = getDisputePhaseInfo(createdAtSec, resultAtSec, isVotingDone);
       setCurrentPhase(info.phase);
       setPhaseLabel(info.label);
       setCountdown(
@@ -97,7 +97,7 @@ export function DisputeResultPanel({ job, onActionComplete }: DisputeResultPanel
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [createdAtSec, resultAtSec]);
+  }, [createdAtSec, resultAtSec, isVotingDone]);
 
   if (!isDisputed || !isValidOnchainJobId(job.onchainJobId)) return null;
 
