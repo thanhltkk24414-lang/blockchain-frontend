@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "sync-abis": "node scripts/sync-abis.mjs",
     "verify:create-job": "node scripts/verify-create-job-tx.mjs",
+    "test:dispute-phase": "node scripts/test-dispute-phase.mjs",
     "process-logos": "node scripts/process-logo-assets.mjs"
   },
   "dependencies": {

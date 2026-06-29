@@ -98,7 +98,7 @@ export function DisputeStatusPanel({ job }: DisputeStatusPanelProps) {
           Arbitrator reveal vote — tally is public after reveal
         </li>
         <li>
-          <strong>After {DISPUTE_PHASES.revealEndMin} min:</strong>{' '}
+          <strong>Strictly after {DISPUTE_PHASES.revealEndMin} min:</strong>{' '}
           <code>finalizeDisputeVoting</code> → <code>executeArbitrationResult</code>
         </li>
       </ul>

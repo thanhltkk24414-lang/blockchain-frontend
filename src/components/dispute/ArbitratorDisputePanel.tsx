@@ -21,7 +21,7 @@ import { ReputationBadge } from '@/components/shared/ReputationBadge';
 import { useReputation } from '@/hooks/useReputation';
 import { isValidOnchainJobId } from '@/lib/utils/etherscan';
 import { ONCHAIN_JOB_STATUS } from '@/lib/utils/onchainJob';
-import { formatCountdown, getDisputePhaseInfo } from '@/lib/utils/disputePhase';
+import { formatCountdown, getDisputePhaseInfo, isRevealWindowClosed, secondsUntilFinalizeAllowed } from '@/lib/utils/disputePhase';
 import { getAddress } from 'viem';
 
 const SALT_STORAGE_PREFIX = 'fapex-arb-salt-';
@@ -65,6 +65,7 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
   const [voteSalt, setVoteSalt] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [finalizeCountdown, setFinalizeCountdown] = useState('');
 
   const isDisputed =
     onchainStatus === ONCHAIN_JOB_STATUS.DISPUTED || job.status?.toUpperCase() === 'DISPUTED';
@@ -124,7 +125,8 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
     if (!createdAtSec) return;
 
     const tick = () => {
-      const info = getDisputePhaseInfo(createdAtSec, resultAtSec, false);
+      const nowSec = Math.floor(Date.now() / 1000);
+      const info = getDisputePhaseInfo(createdAtSec, resultAtSec, false, nowSec);
       setCurrentPhase(info.phase);
       setPhaseLabel(info.label);
       setCountdown(
@@ -134,6 +136,12 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
             ? '—'
             : '00:00',
       );
+      if (createdAtSec > 0 && info.phase === 'finalize' && resultAtSec === 0) {
+        const waitSec = secondsUntilFinalizeAllowed(createdAtSec, nowSec);
+        setFinalizeCountdown(waitSec > 0 ? formatCountdown(waitSec) : '');
+      } else {
+        setFinalizeCountdown('');
+      }
     };
 
     tick();
@@ -172,11 +180,17 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
 
   const canCommit = currentPhase === 'commit' && isAssigned;
   const canReveal = currentPhase === 'reveal' && isAssigned && !hasRevealed;
-  const revealWindowEnded = currentPhase === 'finalize' || currentPhase === 'execute' || currentPhase === 'appeal';
+  const revealWindowEnded = createdAtSec > 0 && isRevealWindowClosed(createdAtSec);
   const hasQuorum = revealCount >= 3;
   const quorumFailed = revealWindowEnded && !hasQuorum && !isResolved && resultAtSec === 0;
   const canFinalize =
-    currentPhase === 'finalize' && !isResolved && resultAtSec === 0 && hasQuorum;
+    currentPhase === 'finalize' &&
+    !isResolved &&
+    resultAtSec === 0 &&
+    hasQuorum &&
+    revealWindowEnded;
+  const finalizeWaiting =
+    currentPhase === 'finalize' && hasQuorum && !isResolved && resultAtSec === 0 && !revealWindowEnded;
   const canExecute = currentPhase === 'execute' && isResolved && resultAtSec > 0;
   const showVoteTally =
     voteTally != null &&
@@ -218,7 +232,7 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
           Reveal vote
         </li>
         <li>
-          <strong>After {DISPUTE_PHASES.revealEndMin} min:</strong> Finalize → appeal{' '}
+          <strong>After {DISPUTE_PHASES.revealEndMin} min (strictly):</strong> Finalize → appeal{' '}
           {formatAppealWindow()} → Execute
         </li>
       </ul>
@@ -332,7 +346,7 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
         </div>
       )}
 
-      {(canFinalize || canExecute || quorumFailed) && (
+      {(canFinalize || canExecute || quorumFailed || finalizeWaiting) && (
         <div className="form-actions dispute-admin-actions">
           <button
             className="btn ghost"
@@ -340,9 +354,11 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
             disabled={!canFinalize || actionLoading || txStatus === 'pending' || !isAuthenticated}
             onClick={() => runAction('finalize')}
             title={
-              quorumFailed
-                ? 'Quorum not met — finalize will revert with InsufficientQuorum'
-                : 'Anyone can call this after the reveal phase ends when ≥3 votes are revealed'
+              finalizeWaiting
+                ? 'VotingStillActive: reveal window still open on-chain — wait until after revealEnd'
+                : quorumFailed
+                  ? 'Quorum not met — finalize will revert with InsufficientQuorum'
+                  : 'Anyone can call this after the reveal phase ends when ≥3 votes are revealed'
             }
           >
             Finalize voting
@@ -357,6 +373,14 @@ export function ArbitratorDisputePanel({ job, onActionComplete }: ArbitratorDisp
             Execute result
           </button>
         </div>
+      )}
+
+      {finalizeWaiting && (
+        <p className="muted phase-note">
+          Quorum met ({revealCount}/3 reveals) but finalize is not open yet — contract requires{' '}
+          <code>block.timestamp &gt; revealEnd</code> (selector <code>0x3483eb63 VotingStillActive</code>
+          ). Opens in: <strong>{finalizeCountdown || '…'}</strong>
+        </p>
       )}
 
       {quorumFailed && (
